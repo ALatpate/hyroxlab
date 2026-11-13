@@ -1,0 +1,105 @@
+# HYROX Lab — iOS build + over-the-air distribution.
+#
+# Every push to main (and any manual dispatch) builds the NOOPiOS target unsigned on macOS 26,
+# packages it for sideloading, refreshes ONE rolling GitHub release (`latest`) so the download URL
+# never changes, and rewrites hyroxlab-source.json so AltStore / SideStore on the phone sees a new
+# build and offers the update. No secrets, no signing: the sideloader re-signs on the phone.
+#
+# When a paid Apple Developer account is in place, a sibling workflow signs the same build and
+# uploads it to TestFlight; this one stays as the fallback.
+name: HYROX Lab iOS
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'Strand/**'
+      - 'StrandiOS/**'
+      - 'StrandiOSShared/**'
+      - 'StrandiOSWidgets/**'
+      - 'Packages/**'
+      - 'Config/**'
+      - 'project.yml'
+      - '.github/workflows/hyroxlab-ios.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hyroxlab-ios
+  cancel-in-progress: true
+
+jobs:
+  ios:
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build NOOPiOS (device, unsigned, Release)
+        run: >-
+          xcodebuild -scheme NOOPiOS -configuration Release -destination 'generic/platform=iOS'
+          -derivedDataPath build/dd
+          CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+          build
+
+      - name: Package sideload .ipa
+        id: pkg
+        run: |
+          set -euo pipefail
+          APP=$(find build/dd/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' -type d | head -1)
+          test -n "$APP" || { echo "::error::.app (iphoneos) not found"; exit 1; }
+          rm -rf "$APP/Watch"
+          test -d "$APP/PlugIns/NOOPWidgets.appex" || { echo "::error::widget extension missing"; exit 1; }
+          Tools/prepare-ios-sideload-app.sh "$APP"
+          VER=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist")
+          BID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")
+          rm -rf Payload && mkdir Payload && cp -R "$APP" Payload/
+          zip -qr HYROXLab-ios.ipa Payload
+          SIZE=$(stat -f%z HYROXLab-ios.ipa)
+          echo "ver=$VER" >> "$GITHUB_OUTPUT"
+          echo "bid=$BID" >> "$GITHUB_OUTPUT"
+          echo "size=$SIZE" >> "$GITHUB_OUTPUT"
+          echo "built $BID $VER ($SIZE bytes)"
+
+      - name: Refresh rolling release `latest`
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VER: ${{ steps.pkg.outputs.ver }}
+        run: |
+          set -euo pipefail
+          TAG=latest
+          SHA="${GITHUB_SHA:0:7}"
+          DATE=$(date -u +%Y-%m-%d)
+          gh release delete "$TAG" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes 2>/dev/null || true
+          gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/$TAG" >/dev/null 2>&1 || true
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease --target "$GITHUB_SHA" \
+            --title "HYROX Lab iOS — ${VER} build ${GITHUB_RUN_NUMBER} · ${DATE} · ${SHA}" \
+            --notes "Rolling latest build of HYROX Lab for iPhone (unsigned; AltStore / SideStore re-sign on install). Bundle id \`${{ steps.pkg.outputs.bid }}\`, installs beside stock NOOP. Base NOOP ${VER}, build ${GITHUB_RUN_NUMBER}, commit \`${SHA}\`." \
+            HYROXLab-ios.ipa
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
+
+      - name: Rewrite hyroxlab-source.json (AltStore / SideStore source)
+        env:
+          VER: ${{ steps.pkg.outputs.ver }}
+          BID: ${{ steps.pkg.outputs.bid }}
+          SIZE: ${{ steps.pkg.outputs.size }}
+        run: |
+          set -euo pipefail
+          python3 Tools/hyroxlab_source.py \
+            --repo "$GITHUB_REPOSITORY" --version "$VER" --build "$GITHUB_RUN_NUMBER" \
+            --bundle-id "$BID" --size "$SIZE" --sha "${GITHUB_SHA:0:7}" \
+            --out hyroxlab-source.json
+          git config user.name "hyroxlab-ci"
+          git config user.email "hyroxlab-ci@users.noreply.github.com"
+          git add hyroxlab-source.json
+          if git diff --cached --quiet; then echo "source unchanged"; exit 0; fi
+          git commit -m "ci: hyroxlab-source.json → build ${GITHUB_RUN_NUMBER} [skip ci]"
+          git push origin HEAD:main

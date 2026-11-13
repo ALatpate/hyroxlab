@@ -1,0 +1,46 @@
+{
+  "name": "HYROX Lab",
+  "identifier": "ie.hyroxlab.noop.altstore",
+  "sourceURL": "https://raw.githubusercontent.com/ALatpate/hyroxlab/main/hyroxlab-source.json",
+  "subtitle": "WHOOP-powered HYROX, running and readiness \u2014 on your own phone.",
+  "description": "Personal AltStore / SideStore source for HYROX Lab, a fork of NOOP that adds a HYROX training system, a full running module and readiness coaching on top of NOOP's direct WHOOP connection. Add this source once; every new build appears as an update.",
+  "iconURL": "https://github.com/ALatpate/hyroxlab/raw/main/Strand/Resources/Assets.xcassets/AppIcon.appiconset/icon_512x512.png",
+  "website": "https://github.com/ALatpate/hyroxlab",
+  "tintColor": "C8FF2E",
+  "apps": [
+    {
+      "name": "HYROX Lab",
+      "bundleIdentifier": "ie.hyroxlab.noop",
+      "developerName": "ALatpate",
+      "subtitle": "HYROX, running and readiness from your WHOOP.",
+      "localizedDescription": "HYROX Lab reads a WHOOP strap you own directly over Bluetooth (via NOOP) and adds HYROX simulations and race mode, GPS running with splits and audio cues, readiness, training plans and a coach. Everything stays on the phone. Personal, non-commercial build; not affiliated with WHOOP or HYROX.",
+      "iconURL": "https://github.com/ALatpate/hyroxlab/raw/main/Strand/Resources/Assets.xcassets/AppIcon.appiconset/icon_512x512.png",
+      "tintColor": "C8FF2E",
+      "category": "healthcare-fitness",
+      "screenshotURLs": [],
+      "versions": [
+        {
+          "version": "12.1.0",
+          "buildVersion": "0",
+          "date": "2026-11-13",
+          "localizedDescription": "Build 0 from commit 0000000.",
+          "downloadURL": "https://github.com/ALatpate/hyroxlab/releases/download/latest/HYROXLab-ios.ipa",
+          "size": 0,
+          "minOSVersion": "17.0"
+        }
+      ],
+      "appPermissions": {
+        "entitlements": [
+          "com.apple.developer.healthkit",
+          "com.apple.security.application-groups"
+        ],
+        "privacy": {
+          "NSBluetoothAlwaysUsageDescription": "Talks to your WHOOP strap.",
+          "NSLocationWhenInUseUsageDescription": "Records your route during outdoor runs.",
+          "NSHealthShareUsageDescription": "Reads Apple Health data you authorise.",
+          "NSHealthUpdateUsageDescription": "Writes workouts you authorise to Apple Health."
+        }
+      }
+    }
+  ]
+}
