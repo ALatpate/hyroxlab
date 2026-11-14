@@ -118,3 +118,9 @@ tools/linux-capture/*.db
 tools/linux-capture/*.db-wal
 tools/linux-capture/*.db-shm
 tools/linux-capture/captures/
+
+# Luma gallery (generated)
+LumaGallery/Info.plist
+LumaGallery/*.xcodeproj
+/shots/
+/build.log

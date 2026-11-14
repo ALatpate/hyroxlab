@@ -1,7 +1,7 @@
 import SwiftUI
 import MapKit
 import Charts
-import HYROXCore
+import LumaCore
 
 /// The live run screen: edge-to-edge map, one giant number, a metrics sheet, lap and pause controls.
 struct HXRunLiveView: View {

@@ -1,5 +1,5 @@
 import SwiftUI
-import HYROXCore
+import LumaCore
 
 /// How am I, and what should I do today?
 struct HXTodayView: View {

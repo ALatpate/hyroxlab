@@ -1,0 +1,106 @@
+# Luma development loop. Runs on every push to a luma-* branch (never on main, so nothing is released):
+#   core     LumaCore unit tests on Linux (minutes).
+#   gallery  Builds the LumaGallery host (LumaUI + demo data only) for the simulator and photographs
+#            every screen in Tools/luma_screens.txt; the images land on the orphan `screens` branch.
+#   app      The full app (Debug, simulator). Slow, so it only runs when the commit message contains
+#            [app]. Its screenshots land on `screens-app`.
+name: Luma dev
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['luma-*']
+
+permissions:
+  contents: write
+
+jobs:
+  core:
+    runs-on: ubuntu-24.04
+    container: swift:6.0-noble
+    steps:
+      - uses: actions/checkout@v5
+      - name: swift test
+        working-directory: Packages/LumaCore
+        shell: bash
+        run: |
+          set -o pipefail
+          swift build --build-tests 2>&1 | grep -E "error|warning: var|Compiling|Build complete" | grep -v "^\[" | sort -u | head -150 || true
+          swift test 2>&1 | grep -vE "^Test Case .* (started|passed)|^Test Suite .* (started|passed)|Compiling|Build complete|^\[" | tail -80
+
+  gallery:
+    runs-on: macos-26
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Build LumaGallery (Debug, simulator)
+        run: |
+          set -o pipefail
+          (cd LumaGallery && xcodegen generate)
+          if ! xcodebuild -project LumaGallery/LumaGallery.xcodeproj -scheme LumaGallery -configuration Debug \
+               -destination 'generic/platform=iOS Simulator' -derivedDataPath build/gallery \
+               ARCHS=arm64 ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO build > build.log 2>&1; then
+            echo "=== COMPILE ERRORS ($(grep -cE ': error:' build.log)) ==="
+            grep -E ": error:" build.log | sed -E 's#^.*/Packages/##; s#^.*/LumaGallery/##' | awk '!seen[$0]++' | head -300
+            echo "=== LAST LINES ==="
+            tail -25 build.log
+            exit 1
+          fi
+          echo "build ok"
+          grep -E "\.swift:[0-9]+:[0-9]+: warning:" build.log | sed -E 's#^.*/Packages/##' | awk '!seen[$0]++' | head -40 || true
+      - name: Capture screens
+        run: Tools/luma_screens.sh build/gallery/Build/Products/Debug-iphonesimulator/LumaGallery.app shots Tools/luma_screens.txt
+      - name: Publish to the screens branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd shots
+          echo "${GITHUB_SHA}" > COMMIT
+          git init -q
+          git checkout -q -b screens
+          git add -A
+          git -c user.name=luma-ci -c user.email=luma-ci@users.noreply.github.com commit -qm "screens for ${GITHUB_SHA:0:7}"
+          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" screens
+          ls | head -100
+
+  app:
+    if: contains(github.event.head_commit.message, '[app]') || github.event_name == 'workflow_dispatch'
+    runs-on: macos-26
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        run: xcodegen generate
+      - name: Build NOOPiOS (Debug, simulator)
+        run: |
+          set -o pipefail
+          if ! xcodebuild -scheme NOOPiOS -configuration Debug -destination 'generic/platform=iOS Simulator' \
+               -derivedDataPath build/dd ARCHS=arm64 ONLY_ACTIVE_ARCH=NO \
+               CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build > build.log 2>&1; then
+            echo "=== COMPILE ERRORS ($(grep -cE ': error:' build.log)) ==="
+            grep -E ": error:" build.log | sed -E 's#^.*/hyroxlab/hyroxlab/##' | awk '!seen[$0]++' | head -300
+            echo "=== LAST LINES ==="
+            tail -30 build.log
+            exit 1
+          fi
+          echo "build ok"
+      - name: Capture screens
+        run: Tools/luma_screens.sh build/dd/Build/Products/Debug-iphonesimulator/NOOP.app shots Tools/luma_screens_app.txt --demo-seed
+      - name: Publish to the screens-app branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd shots
+          echo "${GITHUB_SHA}" > COMMIT
+          git init -q
+          git checkout -q -b screens-app
+          git add -A
+          git -c user.name=luma-ci -c user.email=luma-ci@users.noreply.github.com commit -qm "app screens for ${GITHUB_SHA:0:7}"
+          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" screens-app
+          ls | head -60

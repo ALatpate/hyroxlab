@@ -1,5 +1,5 @@
 import SwiftUI
-import HYROXCore
+import LumaCore
 
 /// Start something now. One grid, every session type two taps away.
 struct HXGoView: View {

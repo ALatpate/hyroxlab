@@ -1,0 +1,2 @@
+# name|screen|scrollY|data|waitSeconds   (full app, real data layer seeded by --demo-seed)
+app-today|today|0|live|8

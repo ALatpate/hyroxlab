@@ -1,5 +1,5 @@
 import SwiftUI
-import HYROXCore
+import LumaCore
 import WhoopStore
 
 /// What's my plan and what have I done?

@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 import Combine
-import HYROXCore
+import LumaCore
 import WhoopStore
 import WidgetKit
 

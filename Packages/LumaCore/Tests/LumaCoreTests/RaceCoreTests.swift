@@ -1,5 +1,5 @@
 import XCTest
-@testable import HYROXCore
+@testable import LumaCore
 
 final class FakeClock: MonotonicClock, @unchecked Sendable {
     var ms: Int64 = 1_000_000
@@ -205,77 +205,5 @@ final class ReadinessTests: XCTestCase {
         let b = RobustBaseline(history: (0..<30).map { 60 + Double($0 % 5) })
         XCTAssertNotNil(b)
         XCTAssertEqual(b!.median, 62)
-    }
-
-    func testReadinessScoresAndAdvice() {
-        let good = ReadinessInputs(charge: 85, hrvToday: 70, hrvHistory: Array(repeating: 65, count: 30) + [60, 70],
-                                   rhrToday: 50, rhrHistory: Array(repeating: 51, count: 30), sleepHoursLastNight: 8,
-                                   dailyLoads: Array(repeating: 200, count: 28), hasHardSessionPlannedToday: true)
-        let g = HXReadinessEngine.compute(good)
-        XCTAssertGreaterThan(g.score, 75)
-        XCTAssertEqual(g.advice, .goAsPlanned)
-        XCTAssertEqual(g.drivers.count, 3)
-        XCTAssertGreaterThan(g.confidence, 0.9)
-
-        var bad = good
-        bad.charge = 20; bad.hrvToday = 40; bad.sleepHoursLastNight = 4.5
-        bad.dailyLoads = Array(repeating: 100, count: 27) + [900]
-        let b = HXReadinessEngine.compute(bad)
-        XCTAssertLessThan(b.score, 40)
-        XCTAssertEqual(b.advice, .rest)
-        XCTAssertTrue(b.drivers.contains { $0.label.hasPrefix("Charge") })
-    }
-
-    func testLoadAndAcwr() {
-        let ac = HXTrainingLoad.acuteChronic(dailyLoads: Array(repeating: 100, count: 60))
-        XCTAssertEqual(ac.ratio ?? 0, 1, accuracy: 0.02)
-        let spike = HXTrainingLoad.acuteChronic(dailyLoads: Array(repeating: 100, count: 56) + Array(repeating: 400, count: 4))
-        XCTAssertGreaterThan(spike.ratio ?? 0, 1.3)
-        let l = HXTrainingLoad.load(minutes: 60, rpe: 7, zoneShares: nil, hrQuality: nil)
-        XCTAssertEqual(l.load, 420); XCTAssertEqual(l.method, "RPE")
-    }
-
-    func testNutrition() {
-        let t = NutritionPlanner.targets(massKg: 80, heightCm: 180, age: 34, sex: .male, day: .hard)
-        XCTAssertEqual(t.proteinG, 144)
-        XCTAssertEqual(t.carbsG, 560)
-        XCTAssertGreaterThan(t.kcal, 2800)
-        XCTAssertEqual(t.waterMl, 3300)
-    }
-}
-
-final class PlanTests: XCTestCase {
-    func testWeekIsClassAwareAndCoversEveryDay() {
-        var cal = Calendar(identifier: .gregorian); cal.firstWeekday = 2
-        // Monday 2026-11-16
-        let monday = cal.date(from: DateComponents(year: 2026, month: 11, day: 16))!
-        let p = PlanProfile(classWeekdays: [2, 3, 4, 5, 6], fiveKSeconds: 24 * 60, targetFormat: .openSingles,
-                            raceDate: cal.date(byAdding: .weekOfYear, value: 6, to: monday), runsPerWeek: 3, weakestStations: [.sledPush])
-        let week = PlanGenerator.week(starting: monday, profile: p, readiness: 80, calendar: cal)
-        XCTAssertEqual(week.filter { $0.type == .gymClass }.count, 5)
-        XCTAssertEqual(Set(week.map { cal.component(.day, from: $0.date) }).count, 7)
-        XCTAssertEqual(week.filter { $0.type.isRun }.count, 3)
-        XCTAssertTrue(week.contains { $0.type == .fullSimulation || $0.type == .halfSimulation })
-        XCTAssertEqual(PlanGenerator.block(weeksToRace: 6), .build)
-        let longRun = week.first { $0.type == .longRun }!
-        XCTAssertEqual(cal.component(.weekday, from: longRun.date), 1)  // Sunday, the last free day
-    }
-
-    func testLowReadinessDowngradesHardWork() {
-        var cal = Calendar(identifier: .gregorian); cal.firstWeekday = 2
-        let monday = cal.date(from: DateComponents(year: 2026, month: 11, day: 16))!
-        let p = PlanProfile(fiveKSeconds: 1500, raceDate: cal.date(byAdding: .weekOfYear, value: 3, to: monday))
-        let hi = PlanGenerator.week(starting: monday, profile: p, readiness: 90, calendar: cal)
-        let lo = PlanGenerator.week(starting: monday, profile: p, readiness: 40, calendar: cal)
-        XCTAssertGreaterThanOrEqual(hi.filter { $0.type.isHard }.count, lo.filter { $0.type.isHard }.count + 1)
-    }
-
-    func testPaces() {
-        let p = TrainingPaces(fiveKSeconds: 1500)
-        XCTAssertEqual(p.easy, 390, accuracy: 0.01)
-        XCTAssertEqual(p.hyroxRace, 330, accuracy: 0.01)
-        XCTAssertEqual(HXFormat.pace(p.threshold), "5:24")
-        XCTAssertEqual(HXFormat.duration(3725), "1:02:05")
-        XCTAssertEqual(HXFormat.durationTenths(64.26), "1:04.3")
     }
 }

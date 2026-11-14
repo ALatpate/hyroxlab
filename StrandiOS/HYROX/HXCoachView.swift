@@ -1,6 +1,6 @@
 import SwiftUI
 import PhotosUI
-import HYROXCore
+import LumaCore
 import WhoopStore
 
 // MARK: - Coach tab

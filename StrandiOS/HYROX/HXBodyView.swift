@@ -1,6 +1,6 @@
 import SwiftUI
 import Charts
-import HYROXCore
+import LumaCore
 import WhoopStore
 
 /// What is my body telling me over weeks?

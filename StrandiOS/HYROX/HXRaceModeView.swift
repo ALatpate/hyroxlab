@@ -1,6 +1,6 @@
 import SwiftUI
 import Charts
-import HYROXCore
+import LumaCore
 
 /// Race mode screen: one segment at a time, one giant timer, one giant button. Double-tap the strap
 /// or tap the button to move on.

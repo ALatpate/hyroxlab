@@ -1,5 +1,5 @@
 import SwiftUI
-import HYROXCore
+import LumaCore
 
 /// HYROX Lab's five-tab shell. Replaces NOOP's RootTabView when `hyrox.shellEnabled` is on; every
 /// NOOP screen stays reachable from Body (Trends, Sleep, Health, Stress…) and Train (Workouts, Lift

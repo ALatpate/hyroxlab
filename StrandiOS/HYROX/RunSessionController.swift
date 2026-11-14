@@ -3,7 +3,7 @@ import SwiftUI
 import Combine
 import AVFoundation
 import CoreLocation
-import HYROXCore
+import LumaCore
 
 /// Drives an outdoor, treadmill or interval run on top of NOOP's workout engine: NOOP records HR,
 /// GPS route and the WorkoutRow; this controller adds the 1 Hz sample timeline, auto-laps, smoothed

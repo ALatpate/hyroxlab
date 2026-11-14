@@ -2,7 +2,7 @@ import Foundation
 import SwiftUI
 import Combine
 import AVFoundation
-import HYROXCore
+import LumaCore
 
 /// Race mode: drives a HYROX-shaped session through its planned segments with millisecond splits,
 /// autosaves after every transition, takes the strap's double-tap as "next", buzzes the strap and
