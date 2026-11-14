@@ -190,13 +190,12 @@ struct SuggestedSessionPrompt: View {
                     Image(systemName: "waveform.path.ecg").font(.system(size: 15, weight: .bold)).foregroundStyle(Luma.ink)
                         .frame(width: 40, height: 40).background(Circle().fill(Luma.volt))
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Looks like a session").font(LumaFont.heading(15)).foregroundStyle(Luma.frost)
-                        Text(LumaText.line([LumaText.dayTitle(s.day, today: env.today), LumaText.time(s.start),
-                                            "\(Int((s.durationS / 60).rounded())) min", "average \(Int(s.avgHR.rounded())) bpm"]))
+                        Text("Looks like a session").font(LumaFont.heading(15)).foregroundStyle(Luma.frost).lineLimit(1).minimumScaleFactor(0.85)
+                        Text(LumaText.line(["\(LumaText.dayTitle(s.day, today: env.today)) \(LumaText.time(s.start))",
+                                            "\(Int((s.durationS / 60).rounded())) min", "\(Int(s.avgHR.rounded())) bpm"]))
                             .font(LumaFont.body(12.5)).foregroundStyle(Luma.mist).fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 6)
-                    Text("Review").font(LumaFont.body(14, .semibold)).foregroundStyle(Luma.volt)
                     Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Luma.volt)
                 }
                 .padding(14)

@@ -116,15 +116,14 @@ private struct SuggestedSessionCard: View {
                     }
                 }
                 .scrollIndicators(.hidden)
-                HStack(spacing: 10) {
-                    Button("Keep as \(sport)") {
-                        LumaHaptics.success()
-                        withAnimation(.easeOut(duration: 0.2)) { env.keep(stretch, sport: sport) }
-                    }
-                    .buttonStyle(LumaPrimaryButtonStyle(compact: true))
-                    Button("Not a session") { withAnimation(.easeOut(duration: 0.2)) { env.dismiss(stretch) } }
-                        .buttonStyle(LumaSecondaryButtonStyle(compact: true))
+                Button("Keep as \(sport)") {
+                    LumaHaptics.success()
+                    withAnimation(.easeOut(duration: 0.2)) { env.keep(stretch, sport: sport) }
                 }
+                .buttonStyle(LumaPrimaryButtonStyle())
+                Button("Not a session") { withAnimation(.easeOut(duration: 0.2)) { env.dismiss(stretch) } }
+                    .font(LumaFont.body(14, .semibold)).foregroundStyle(Luma.mist).buttonStyle(.plain)
+                    .frame(maxWidth: .infinity)
             }
         }
     }
