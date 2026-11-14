@@ -65,8 +65,19 @@ There is no local Apple toolchain in the usual working environment; CI is the co
 | `app` | The whole app compiles (Debug, simulator) and runs over seeded strap-layer data; screens in `Tools/luma_screens_app.txt` land on `screens-app`. Runs when the commit message contains `[app]`. |
 | `package` | A dry run of the release: Release device build and sideload packaging, nothing published. Runs with `app`. |
 
-`.github/workflows/hyroxlab-ios.yml` runs on a push to `main`: Release device build, the `.ipa` on the
-rolling `latest` release, and `hyroxlab-source.json` for AltStore or SideStore.
+`.github/workflows/hyroxlab-ios.yml` runs on a push to `main`: Release device build, the `.ipa`
+published as its own release (`build-<run number>`), and `hyroxlab-source.json` for AltStore or
+SideStore pointing at that release.
+
+- **A listing and the file it names are the same build, always.** AltStore refuses a download whose
+  build number is not the listed one. A build's file is never replaced by another build's (there is no
+  rolling download), the listing is written only after its file is published and checked, and
+  `Tools/hyroxlab_source.py` rejects any other download URL (`Tools/test_hyroxlab_source.py`).
+- **Publish once per finished piece of work.** Every push to `main` that touches the app is a build
+  the phone is offered. Verify on a `luma-*` branch and merge when it is ready to install.
+- **`docs/luma-whats-new.txt` is the next build's What's New**, shown in AltStore. Rewrite it with
+  each change that ships. It is not in the release's path filter, so editing it alone publishes nothing.
+- **The release workflow keeps its name and file name.** Its run number is the build number.
 
 None of this exercises a strap. Pairing, sync, buzzes, the double tap, live recording and the Lock
 Screen card's real cadence have to be checked on a phone with a strap, as do Health access under a

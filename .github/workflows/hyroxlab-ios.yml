@@ -1,9 +1,19 @@
-# HYROX Lab — iOS build + over-the-air distribution.
+# Luma — iOS build + over-the-air distribution.
 #
 # Every push to main (and any manual dispatch) builds the NOOPiOS target unsigned on macOS 26,
-# packages it for sideloading, refreshes ONE rolling GitHub release (`latest`) so the download URL
-# never changes, and rewrites hyroxlab-source.json so AltStore / SideStore on the phone sees a new
-# build and offers the update. No secrets, no signing: the sideloader re-signs on the phone.
+# packages it for sideloading, publishes it as its OWN GitHub release (`build-<run number>`), and
+# rewrites hyroxlab-source.json so AltStore / SideStore on the phone sees a new build and offers the
+# update. No secrets, no signing: the sideloader re-signs on the phone.
+#
+# Why one release per build, never a rolling one. The listing AltStore holds names one build and one
+# file, and AltStore refuses a download whose build number is not the listed one. With a single
+# rolling `latest` file, a phone that had not refreshed since the previous build downloaded the newer
+# file under the older listing and the update failed ("does not match the build number specified by
+# the source"). A build's file is therefore never replaced by another build's, and the listing is
+# written only after the file it names is published and checked.
+#
+# The workflow's name and file name must not change: the run number is the build number, and a
+# renamed workflow starts counting from 1 again, below every build already installed.
 #
 # When a paid Apple Developer account is in place, a sibling workflow signs the same build and
 # uploads it to TestFlight; this one stays as the fallback.
@@ -65,40 +75,49 @@ jobs:
           test "$BUILD" = "${GITHUB_RUN_NUMBER}" || { echo "::error::CFBundleVersion $BUILD != run number ${GITHUB_RUN_NUMBER}"; exit 1; }
           BID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")
           rm -rf Payload && mkdir Payload && cp -R "$APP" Payload/
-          zip -qr HYROXLab-ios.ipa Payload
-          SIZE=$(stat -f%z HYROXLab-ios.ipa)
+          zip -qr Luma.ipa Payload
+          SIZE=$(stat -f%z Luma.ipa)
           echo "ver=$VER" >> "$GITHUB_OUTPUT"
           echo "bid=$BID" >> "$GITHUB_OUTPUT"
           echo "size=$SIZE" >> "$GITHUB_OUTPUT"
           echo "built $BID $VER ($SIZE bytes)"
 
-      - name: Refresh rolling release `latest`
+      # The earlier rolling `latest` release is left exactly as it is: the last listing that pointed
+      # at it is still on phones that have not refreshed, and it keeps working for them.
+      - name: Publish this build as its own release
+        id: rel
         env:
           GH_TOKEN: ${{ github.token }}
           VER: ${{ steps.pkg.outputs.ver }}
+          SIZE: ${{ steps.pkg.outputs.size }}
         run: |
           set -euo pipefail
-          TAG=latest
+          TAG="build-${GITHUB_RUN_NUMBER}"
           SHA="${GITHUB_SHA:0:7}"
           DATE=$(date -u +%Y-%m-%d)
+          # Only a re-run of this same run number can find its tag taken; no other build's is touched.
           gh release delete "$TAG" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes 2>/dev/null || true
-          gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/$TAG" >/dev/null 2>&1 || true
-          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease --target "$GITHUB_SHA" \
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --latest \
             --title "Luma iOS — ${VER} build ${GITHUB_RUN_NUMBER} · ${DATE} · ${SHA}" \
-            --notes "Rolling latest build of Luma for iPhone (unsigned; AltStore / SideStore re-sign on install). Bundle id \`${{ steps.pkg.outputs.bid }}\`, version ${VER}, build ${GITHUB_RUN_NUMBER}, commit \`${SHA}\`. Built on the open-source NOOP project under the PolyForm Noncommercial licence." \
-            HYROXLab-ios.ipa
-          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
+            --notes "Luma for iPhone, build ${GITHUB_RUN_NUMBER} (unsigned; AltStore / SideStore re-sign on install). Bundle id \`${{ steps.pkg.outputs.bid }}\`, version ${VER}, commit \`${SHA}\`. Built on the open-source NOOP project under the PolyForm Noncommercial licence." \
+            Luma.ipa
+          # The listing is written only once the file it will name is there and is this build's file.
+          PUBLISHED=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" -q '.assets[] | select(.name=="Luma.ipa") | .size')
+          test "$PUBLISHED" = "$SIZE" || { echo "::error::published file is ${PUBLISHED:-missing} bytes, built ${SIZE}"; exit 1; }
+          echo "url=https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/Luma.ipa" >> "$GITHUB_OUTPUT"
 
       - name: Rewrite hyroxlab-source.json (AltStore / SideStore source)
         env:
           VER: ${{ steps.pkg.outputs.ver }}
           BID: ${{ steps.pkg.outputs.bid }}
           SIZE: ${{ steps.pkg.outputs.size }}
+          URL: ${{ steps.rel.outputs.url }}
         run: |
           set -euo pipefail
           python3 Tools/hyroxlab_source.py \
             --repo "$GITHUB_REPOSITORY" --version "$VER" --build "$GITHUB_RUN_NUMBER" \
             --bundle-id "$BID" --size "$SIZE" --sha "${GITHUB_SHA:0:7}" \
+            --download-url "$URL" --notes-file docs/luma-whats-new.txt \
             --out hyroxlab-source.json
           git config user.name "hyroxlab-ci"
           git config user.email "hyroxlab-ci@users.noreply.github.com"
@@ -106,3 +125,17 @@ jobs:
           if git diff --cached --quiet; then echo "source unchanged"; exit 0; fi
           git commit -m "ci: hyroxlab-source.json → build ${GITHUB_RUN_NUMBER} [skip ci]"
           git push origin HEAD:main
+
+      # After the new listing is live. Six builds is far more than a listing can lag by; a phone holding
+      # an older one than that sees a failed download and a refresh fixes it.
+      - name: Keep the six newest builds
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          OLD=$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" -q '.[].tag_name' \
+                  | { grep -E '^build-[0-9]+$' || true; } | sort -t- -k2,2nr | tail -n +7)
+          for tag in $OLD; do
+            echo "removing $tag"
+            gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes || true
+          done
