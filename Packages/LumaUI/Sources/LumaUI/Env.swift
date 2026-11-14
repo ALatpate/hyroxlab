@@ -388,6 +388,9 @@ public final class LumaEnv: ObservableObject {
     private var detectedStretches: [LSuggestedSession] = []
     private var stretchesSearchedAt: Date?
     private var dismissedStretches: Set<String>
+    /// Whether the app is on screen. The root view keeps this current; it is false until a scene
+    /// appears, so nothing that is only worth doing for someone looking runs during a background wake.
+    var isInFront = false
 
     // Athlete's own records
     @Published public var profile: LProfile { didSet { if profile != oldValue { disk.save(profile, "profile.json"); onProfileChange?(profile); refreshAnalysis() } } }
@@ -483,11 +486,12 @@ public final class LumaEnv: ObservableObject {
     }
 
     /// Looks for sessions the strap saw and nobody recorded. The search reads days of raw heart rate, so
-    /// it runs at most once every ten minutes; in between, the last result is checked again against what
-    /// is stored now, so a stretch disappears as soon as a session covers it.
+    /// it runs at most once every three minutes and only while the app is in front, never during a sync
+    /// in the background. In between, the last result is checked again against what is stored now, so a
+    /// stretch disappears as soon as a session covers it.
     private func refreshSuggestions() async {
         let now = Date()
-        if stretchesSearchedAt.map({ now.timeIntervalSince($0) >= 600 }) ?? true {
+        if isInFront, stretchesSearchedAt.map({ now.timeIntervalSince($0) >= 180 }) ?? true {
             stretchesSearchedAt = now
             detectedStretches = await source.suggestedSessions(days: 3)
         }

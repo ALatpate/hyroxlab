@@ -6,6 +6,7 @@ import LumaKit
 public struct LumaRootView: View {
     @ObservedObject private var env: LumaEnv
     @ObservedObject private var router: LumaRouter
+    @Environment(\.scenePhase) private var scenePhase
     private let launch: LumaLaunch
 
     public init(env: LumaEnv, launch: LumaLaunch = LumaLaunch()) {
@@ -66,9 +67,18 @@ public struct LumaRootView: View {
                 .preferredColorScheme(.dark)
         }
         .task {
+            env.isInFront = scenePhase != .background
             env.reload()
             LumaRoute.apply(launch.screen, env: env)
             if launch.screen == nil, !env.profile.isSetUp { router.cover = .onboarding }
+        }
+        // Coming back on screen reloads, so anything held back while the app was out of sight (the
+        // search for unrecorded sessions) runs for the person now looking.
+        .onChange(of: scenePhase) { _, phase in
+            let front = phase != .background
+            guard front != env.isInFront else { return }
+            env.isInFront = front
+            if front { env.reload() }
         }
     }
 }
