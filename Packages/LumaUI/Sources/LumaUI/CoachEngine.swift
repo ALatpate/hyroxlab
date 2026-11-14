@@ -75,8 +75,8 @@ public final class CoachEngine: ObservableObject {
     private var task: Task<Void, Never>?
     private let session: URLSession
 
-    static let maxSteps = 12
-    static let maxPhotos = 8
+    nonisolated static let maxSteps = 12
+    nonisolated static let maxPhotos = 8
 
     init(env: LumaEnv) {
         self.env = env
@@ -480,7 +480,7 @@ public final class CoachEngine: ObservableObject {
 
     /// Downscales to at most 1568 px on the long edge and re-encodes as JPEG, which is what the API
     /// reads best and keeps requests small.
-    static func prepare(_ data: Data) -> Data? {
+    nonisolated static func prepare(_ data: Data) -> Data? {
         #if canImport(UIKit)
         guard let image = UIImage(data: data) else { return nil }
         let longest = max(image.size.width, image.size.height) * image.scale
