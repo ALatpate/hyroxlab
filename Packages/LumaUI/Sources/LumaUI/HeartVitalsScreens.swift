@@ -90,9 +90,9 @@ struct LiveHeartHero: View {
             let color = zone.map { Luma.zone($0) } ?? Luma.coral
             HStack(alignment: .center, spacing: 16) {
                 ZStack {
-                    Circle().fill(color.opacity(0.18)).frame(width: 112, height: 112).scaleEffect(pulse && liveHR != nil ? 1.14 : 0.94)
-                    Circle().fill(color.opacity(0.26)).frame(width: 78, height: 78)
-                    Image(systemName: "heart.fill").font(.system(size: 34, weight: .bold)).foregroundStyle(color)
+                    Circle().fill(Luma.coral.opacity(0.16)).frame(width: 112, height: 112).scaleEffect(pulse && liveHR != nil ? 1.14 : 0.94)
+                    Circle().fill(Luma.coral.opacity(0.24)).frame(width: 78, height: 78)
+                    Image(systemName: "heart.fill").font(.system(size: 34, weight: .bold)).foregroundStyle(Luma.coral)
                         .scaleEffect(pulse && liveHR != nil ? 1.08 : 1)
                 }
                 .frame(width: 120, height: 120)
@@ -270,7 +270,7 @@ struct StressScreen: View {
                         LumaLabel("Hour by hour")
                         LumaBarChart(bars: s.hours.map { h in
                             LumaBarChart.Bar(id: h.hour, value: h.level, color: color(h.level ?? 0), label: "\(h.hour):00")
-                        }, yRange: 0...3, height: 170, format: { LStressDay.band($0) })
+                        }, yRange: 0...3, height: 170, format: { LStressDay.band($0) }, ticks: [0.5, 1.5, 2.5], axisWidth: 62)
                         LumaNote("Stress is read from heart rate and its variability while you are still. Hours spent training are left out, so a gap is a workout, not calm.")
                     }
                 }
@@ -286,7 +286,7 @@ struct StressScreen: View {
                     VStack(alignment: .leading, spacing: 10) {
                         LumaLabel("Daily stress load")
                         LumaLineChart(values: history.values, labels: history.keys.map { LumaText.shortDay($0) }, color: Luma.amber,
-                                      yRange: 0...3, height: 170, format: { LStressDay.band($0) })
+                                      yRange: 0...3, height: 170, format: { LStressDay.band($0) }, ticks: [0.5, 1.5, 2.5], axisWidth: 62)
                         LumaNote("An overnight view: how far your resting heart rate and HRV sat from baseline each morning. Use it to spot stretches where your body stayed switched on.")
                     }
                 }

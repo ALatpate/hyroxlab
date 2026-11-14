@@ -306,6 +306,7 @@ struct StrainHero: View {
         }
         .padding(.vertical, 6)
         .onAppear { withAnimation(.easeOut(duration: 1.0).delay(0.1)) { shown = strain ?? 0 } }
+        .onChange(of: strain) { _, new in withAnimation(.easeOut(duration: 0.8)) { shown = new ?? 0 } }
     }
 
     private var band: String {
@@ -392,7 +393,8 @@ struct StrainRecoveryCard: View {
                     LumaLineChart(series: [
                         LumaLineChart.Series(id: "strain", values: strain.values.map { $0.map { $0 / 21 * 100 } }, color: Luma.ember),
                         LumaLineChart.Series(id: "recovery", values: recovery.values, color: Luma.volt),
-                    ], labels: strain.keys.map { LumaText.shortDay($0) }, yRange: 0...100, height: 170, format: { String(format: "%.0f%%", $0) })
+                    ], labels: strain.keys.map { LumaText.shortDay($0) }, yRange: 0...100, height: 170, format: { String(format: "%.0f%%", $0) },
+                    tickFormat: { String(format: "%.0f", $0) })
                     LumaNote("When strain stays high while recovery falls for several days, you are spending more than you are restoring.")
                 }
             }

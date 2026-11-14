@@ -122,21 +122,22 @@ public enum RecoveryModel {
 
         let band = d.recovery.map(RecoveryBand.of)
         let toBaseline = max(0, LBaseline.established - b.nights)
-        let worst = factors.filter { $0.effect < -0.5 }.sorted { $0.effect < $1.effect }.first
-        let best = factors.filter { $0.effect > 0.5 }.sorted { $0.effect > $1.effect }.first
+        // Only a clear departure from baseline is named as the reason; small wobbles are not.
+        let worst = factors.filter { $0.effect <= -1 }.sorted { $0.effect < $1.effect }.first
+        let best = factors.filter { $0.effect >= 1 }.sorted { $0.effect > $1.effect }.first
 
         let headline: String
         let detail: String
         switch band {
         case .high?:
             headline = "Recovered and ready"
-            detail = best.map { "\($0.metric.title) is leading the way: \($0.note.lowercased())." } ?? "Your overnight signals are at or above baseline."
+            detail = best.map { "\($0.metric.title) is leading the way: \($0.note.prefix(1).lowercased() + $0.note.dropFirst())." } ?? "Your overnight signals are at or above baseline."
         case .moderate?:
             headline = "Partly recovered"
-            detail = worst.map { "\($0.metric.title) is holding you back: \($0.note.lowercased())." } ?? "Signals are close to baseline. A normal day."
+            detail = worst.map { "\($0.metric.title) is holding you back: \($0.note.prefix(1).lowercased() + $0.note.dropFirst())." } ?? "No single signal stands out; several sit a little under your baseline."
         case .low?:
             headline = "Running low"
-            detail = worst.map { "\($0.metric.title) is the main drag: \($0.note.lowercased())." } ?? "Several overnight signals are below baseline."
+            detail = worst.map { "\($0.metric.title) is the main drag: \($0.note.prefix(1).lowercased() + $0.note.dropFirst())." } ?? "Several overnight signals are below baseline."
         case nil:
             headline = d.hasNight ? "Recovery is calibrating" : "No night recorded yet"
             detail = d.hasNight ? "Luma needs a few nights of data to score recovery against your own baseline."

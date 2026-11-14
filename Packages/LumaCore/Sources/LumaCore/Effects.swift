@@ -29,9 +29,8 @@ public struct EffectFinding: Equatable, Sendable, Identifiable {
 
     public var sentence: String {
         let dir = delta > 0 ? "higher" : "lower"
-        let size = "\(outcome.format(abs(delta))) \(outcome.unit)".trimmingCharacters(in: .whitespaces)
         let certainty = reliable ? "" : " Early signal: too few nights to be sure."
-        return "After \(phrase), your \(outcome.title.lowercased()) runs \(size) \(dir) (\(outcome.format(withMean)) vs \(outcome.format(withoutMean)), \(nWith) and \(nWithout) nights).\(certainty)"
+        return "After \(phrase), your \(outcome.phrase) runs \(outcome.show(abs(delta))) \(dir) (\(outcome.format(withMean)) vs \(outcome.format(withoutMean)), \(nWith) and \(nWithout) nights).\(certainty)"
     }
 }
 

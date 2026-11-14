@@ -37,7 +37,7 @@ struct LumaHypnogram: View {
         GeometryReader { geo in
             let start = stages.first?.start ?? 0
             let end = max(start + 60, stages.last?.end ?? 1)
-            let labelW: CGFloat = 44
+            let labelW: CGFloat = 52
             let plot = CGRect(x: labelW, y: 6, width: max(10, geo.size.width - labelW), height: max(10, geo.size.height - 30))
             let lane = plot.height / 4
             ZStack(alignment: .topLeading) {

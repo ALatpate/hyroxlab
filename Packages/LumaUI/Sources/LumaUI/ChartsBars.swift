@@ -30,6 +30,10 @@ struct LumaBarChart: View {
     var format: (Double) -> String = { String(format: "%.0f", $0) }
     var replay: AnyHashable = 0
     var onSelect: ((Int?) -> Void)? = nil
+    /// Explicit axis ticks and their labels, for scales that are not plain numbers (clock times, bands).
+    var ticks: [Double]? = nil
+    var tickFormat: ((Double) -> String)? = nil
+    var axisWidth: CGFloat = 34
 
     @State private var grown = false
     @State private var selected: Int? = nil
@@ -47,14 +51,14 @@ struct LumaBarChart: View {
 
     var body: some View {
         GeometryReader { geo in
-            let axisW: CGFloat = showAxis ? 34 : 0
+            let axisW: CGFloat = showAxis ? axisWidth : 0
             let hasLabels = bars.contains { !$0.label.isEmpty }
             let plot = CGRect(x: 0, y: 12, width: max(10, geo.size.width - axisW), height: max(10, geo.size.height - 12 - (hasLabels ? 26 : 6)))
             let scale = self.scale
             let slot = plot.width / CGFloat(max(1, bars.count))
             let barW = max(2, min(26, slot * widthRatio))
             ZStack(alignment: .topLeading) {
-                if showAxis { ChartGrid(scale: scale, plot: plot, width: geo.size.width, format: format) }
+                if showAxis { ChartGrid(scale: scale, plot: plot, width: geo.size.width, ticks: ticks, format: tickFormat ?? format) }
                 ForEach(Array(bars.enumerated()), id: \.element.id) { i, bar in
                     barView(bar, index: i, scale: scale, plot: plot, barW: barW)
                         .position(x: plot.minX + slot * (CGFloat(i) + 0.5), y: plot.midY)

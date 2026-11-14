@@ -213,6 +213,22 @@ struct TonightCard: View {
 struct ScheduleCard: View {
     let summary: SleepSummary
 
+    /// The clock range covering every bar, snapped out to whole hours.
+    private func scheduleRange(_ nights: [SleepNight]) -> ClosedRange<Double> {
+        let lo = nights.compactMap { $0.bedtime }.min() ?? -120
+        let hi = nights.compactMap { $0.wake }.max() ?? 480
+        return ((lo - 20) / 60).rounded(.down) * 60...((hi + 20) / 60).rounded(.up) * 60
+    }
+
+    private func scheduleTicks(_ nights: [SleepNight]) -> [Double] {
+        let r = scheduleRange(nights)
+        let step: Double = r.upperBound - r.lowerBound > 600 ? 180 : 120
+        var out: [Double] = []
+        var t = (r.lowerBound / step).rounded(.up) * step
+        while t <= r.upperBound { out.append(t); t += step }
+        return out
+    }
+
     var body: some View {
         let nights = Array(summary.nights.suffix(14)).filter { $0.bedtime != nil && $0.wake != nil }
         LumaCard {
@@ -235,7 +251,8 @@ struct ScheduleCard: View {
                 if nights.count >= 3 {
                     LumaBarChart(bars: nights.enumerated().map { i, n in
                         LumaBarChart.Bar(id: i, value: n.wake, color: Luma.dusk, label: LumaText.weekdayLetter(n.day), low: n.bedtime)
-                    }, height: 170, format: { LFormat.timeOfDay(minutes: $0) })
+                    }, yRange: scheduleRange(nights), height: 170, format: { LFormat.timeOfDay(minutes: $0) },
+                    ticks: scheduleTicks(nights), axisWidth: 40)
                 }
                 if let j = summary.socialJetlagMin, abs(j) >= 30 {
                     LumaNote("Your sleep midpoint runs \(LFormat.hm(minutes: abs(j))) \(j > 0 ? "later" : "earlier") at weekends than on weekdays.")

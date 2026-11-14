@@ -87,6 +87,14 @@ struct LumaTabScreen<Trailing: View, Content: View>: View {
             }
             .scrollIndicators(.hidden)
         }
+        .overlay(alignment: .top) {
+            // Keeps the status bar legible when content scrolls beneath it.
+            LinearGradient(stops: [.init(color: Luma.night.opacity(0.96), location: 0), .init(color: Luma.night.opacity(0.88), location: 0.72),
+                                   .init(color: Luma.night.opacity(0), location: 1)], startPoint: .top, endPoint: .bottom)
+                .frame(height: 16)
+                .ignoresSafeArea(edges: .top)
+                .allowsHitTesting(false)
+        }
         .toolbar(.hidden, for: .navigationBar)
     }
 }
@@ -115,7 +123,8 @@ struct LumaDetailScreen<Content: View>: View {
                 Text(title).font(LumaFont.heading(15)).foregroundStyle(Luma.frost)
             }
         }
-        .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
         .toolbarRole(.editor)
     }
 }

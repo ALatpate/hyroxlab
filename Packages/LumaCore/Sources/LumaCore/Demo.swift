@@ -70,7 +70,7 @@ public final class LumaDemoSource: LumaDataSource {
             var temp = rng.gauss() * 0.16
             if alcoholLastNight { hrv *= 0.84; rhr += 3.4; resp += 0.4; temp += 0.2 }
             if unwell { hrv *= 0.72; rhr += 6.2; resp += 1.3; temp += 0.75 }
-            let recovery = LStat.clamp(57 + (hrv - hrvBase) * 2.3 - (rhr - rhrBase) * 3.2 + (asleep - 440) * 0.07
+            let recovery = LStat.clamp(58 + (hrv - hrvBase) * 1.5 - (rhr - rhrBase) * 2.1 + (asleep - 440) * 0.07
                                        - (priorStrain - 55) * 0.2 + rng.gauss() * 3, 6, 98)
             sleeps.append(LSleep(start: start, end: end, day: key, efficiency: efficiency, restingHR: rhr.rounded(),
                                  hrv: hrv, stages: stages))

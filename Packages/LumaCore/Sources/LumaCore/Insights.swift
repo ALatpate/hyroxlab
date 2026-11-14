@@ -113,17 +113,20 @@ public enum InsightEngine {
             }
         }
 
-        for e in effects.prefix(4) {
-            guard let helps = e.helps else { continue }
+        // One card per habit: its strongest measured effect.
+        var seenFactors = Set<String>()
+        for e in effects {
+            guard seenFactors.count < 3, !seenFactors.contains(e.factorKey), let helps = e.helps else { continue }
+            seenFactors.insert(e.factorKey)
             out.append(Insight(id: "effect-\(e.id)", topic: .habits, tone: helps ? .good : .caution,
-                               title: "\(e.factor) \(helps ? "helps" : "costs") your \(e.outcome.title.lowercased())",
+                               title: "\(e.factor) \(helps ? "helps" : "costs") your \(e.outcome.phrase)",
                                body: e.sentence,
                                evidence: .compare(aLabel: e.factor, a: e.withMean, bLabel: "Otherwise", b: e.withoutMean, metric: e.outcome),
                                priority: (e.reliable ? 75 : 42) + min(10, abs(e.g) * 5)))
         }
 
         for l in links.prefix(2) where l.reliable {
-            out.append(Insight(id: "link-\(l.key)", topic: .habits, tone: .neutral, title: "\(l.xLabel) and \(l.yLabel.lowercased()) move together",
+            out.append(Insight(id: "link-\(l.key)", topic: .habits, tone: .neutral, title: "\(l.xLabel) and \(l.yLabel == "HRV" ? "HRV" : l.yLabel.lowercased()) move together",
                                body: l.sentence, evidence: .scatter(key: l.key), priority: 48 + abs(l.r) * 10))
         }
 

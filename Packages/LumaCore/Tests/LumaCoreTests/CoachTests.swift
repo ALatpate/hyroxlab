@@ -216,7 +216,7 @@ final class InsightTests: XCTestCase {
         let rhr = effects.first { $0.factorKey == "alcohol" && $0.outcome == .restingHR }
         XCTAssertNotNil(rhr)
         XCTAssertGreaterThan(rhr!.delta, 0)
-        XCTAssertTrue(hrv!.sentence.hasPrefix("After alcohol, your hrv"))
+        XCTAssertTrue(hrv!.sentence.hasPrefix("After alcohol, your HRV runs"))
     }
 
     func testTrendFitnessAndInsightFeed() {

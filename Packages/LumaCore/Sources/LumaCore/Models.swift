@@ -186,6 +186,23 @@ public enum LMetric: String, CaseIterable, Codable, Sendable, Identifiable {
         }
     }
 
+    /// The metric as it reads mid-sentence.
+    public var phrase: String {
+        switch self {
+        case .hrv: return "HRV"
+        case .remMin: return "REM sleep"
+        case .sleepHours: return "sleep"
+        default: return title.lowercased()
+        }
+    }
+
+    /// A value with its unit, ready for a sentence: "64 ms", "38%", "7.4 h".
+    public func show(_ v: Double, signed: Bool = false) -> String {
+        let number = signed && self != .skinTempDev ? (v >= 0 ? "+" : "−") + format(abs(v)) : format(v)
+        if unit.isEmpty { return number }
+        return unit == "%" ? number + "%" : number + " " + unit
+    }
+
     public func format(_ v: Double) -> String {
         if self == .skinTempDev { return String(format: "%+.1f", v) }
         if self == .steps || self == .activeKcal { return LFormat.grouped(v) }

@@ -148,11 +148,12 @@ struct ChartGrid: View {
     let scale: ChartScale
     let plot: CGRect
     let width: CGFloat
+    var ticks: [Double]? = nil
     var format: (Double) -> String
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            ForEach(scale.ticks, id: \.self) { t in
+            ForEach(ticks ?? scale.ticks, id: \.self) { t in
                 let y = scale.y(t, in: plot)
                 Path { p in
                     p.move(to: CGPoint(x: plot.minX, y: y))
@@ -162,6 +163,8 @@ struct ChartGrid: View {
                 Text(format(t))
                     .font(LumaFont.label(9.5))
                     .foregroundStyle(Luma.smoke)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
                     .frame(width: width - plot.maxX - 4, alignment: .trailing)
                     .position(x: plot.maxX + (width - plot.maxX) / 2 + 2, y: y)
             }
@@ -245,6 +248,10 @@ struct LumaLineChart: View {
     var format: (Double) -> String = { String(format: "%.0f", $0) }
     var replay: AnyHashable = 0
     var onSelect: ((Int?) -> Void)? = nil
+    /// Explicit axis ticks and their labels, for scales that are not plain numbers (clock times, bands).
+    var ticks: [Double]? = nil
+    var tickFormat: ((Double) -> String)? = nil
+    var axisWidth: CGFloat = 34
 
     @State private var progress: CGFloat = 0
     @State private var selected: Int? = nil
@@ -269,11 +276,11 @@ struct LumaLineChart: View {
 
     var body: some View {
         GeometryReader { geo in
-            let axisW: CGFloat = showAxis ? 34 : 0
+            let axisW: CGFloat = showAxis ? axisWidth : 0
             let plot = CGRect(x: 0, y: 12, width: max(10, geo.size.width - axisW), height: max(10, geo.size.height - 12 - (labels.isEmpty ? 6 : 26)))
             let scale = self.scale
             ZStack(alignment: .topLeading) {
-                if showAxis { ChartGrid(scale: scale, plot: plot, width: geo.size.width, format: format) }
+                if showAxis { ChartGrid(scale: scale, plot: plot, width: geo.size.width, ticks: ticks, format: tickFormat ?? format) }
                 if let b = band {
                     let top = scale.y(b.upperBound, in: plot), bottom = scale.y(b.lowerBound, in: plot)
                     RoundedRectangle(cornerRadius: 4)
@@ -372,8 +379,9 @@ extension LumaLineChart {
     init(values: [Double?], labels: [String] = [], color: Color, fill: Bool = true, band: ClosedRange<Double>? = nil,
          goal: Double? = nil, yRange: ClosedRange<Double>? = nil, height: CGFloat = 190,
          format: @escaping (Double) -> String = { String(format: "%.0f", $0) }, replay: AnyHashable = 0,
-         onSelect: ((Int?) -> Void)? = nil) {
+         onSelect: ((Int?) -> Void)? = nil, ticks: [Double]? = nil, axisWidth: CGFloat = 34) {
         self.init(series: [Series(id: "main", values: values, color: color, fill: fill)], labels: labels, band: band,
-                  bandColor: color, goal: goal, yRange: yRange, height: height, format: format, replay: replay, onSelect: onSelect)
+                  bandColor: color, goal: goal, yRange: yRange, height: height, format: format, replay: replay, onSelect: onSelect,
+                  ticks: ticks, axisWidth: axisWidth)
     }
 }
