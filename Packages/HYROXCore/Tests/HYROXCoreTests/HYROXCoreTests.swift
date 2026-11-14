@@ -227,11 +227,11 @@ final class ReadinessTests: XCTestCase {
     }
 
     func testLoadAndAcwr() {
-        let ac = TrainingLoad.acuteChronic(dailyLoads: Array(repeating: 100, count: 60))
+        let ac = HXTrainingLoad.acuteChronic(dailyLoads: Array(repeating: 100, count: 60))
         XCTAssertEqual(ac.ratio ?? 0, 1, accuracy: 0.02)
-        let spike = TrainingLoad.acuteChronic(dailyLoads: Array(repeating: 100, count: 56) + Array(repeating: 400, count: 4))
+        let spike = HXTrainingLoad.acuteChronic(dailyLoads: Array(repeating: 100, count: 56) + Array(repeating: 400, count: 4))
         XCTAssertGreaterThan(spike.ratio ?? 0, 1.3)
-        let l = TrainingLoad.load(minutes: 60, rpe: 7, zoneShares: nil, hrQuality: nil)
+        let l = HXTrainingLoad.load(minutes: 60, rpe: 7, zoneShares: nil, hrQuality: nil)
         XCTAssertEqual(l.load, 420); XCTAssertEqual(l.method, "RPE")
     }
 

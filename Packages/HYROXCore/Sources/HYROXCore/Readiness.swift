@@ -4,7 +4,7 @@ import Foundation
 
 /// A session's training load. Preference order: HR-zone TRIMP when HR coverage is good, then
 /// duration × RPE (session-RPE), then duration alone at a conservative weight.
-public enum TrainingLoad {
+public enum HXTrainingLoad {
     /// Edwards-style zone-weighted TRIMP: minutes in zone × zone number.
     public static func trimp(zoneShares: [HRZoneShare]) -> Double {
         zoneShares.reduce(0) { $0 + ($1.seconds / 60) * Double($1.zone) }
@@ -110,7 +110,7 @@ public enum HXReadinessEngine {
         }
 
         if i.dailyLoads.count >= 7 {
-            let ac = TrainingLoad.acuteChronic(dailyLoads: i.dailyLoads)
+            let ac = HXTrainingLoad.acuteChronic(dailyLoads: i.dailyLoads)
             if let ratio = ac.ratio {
                 // 0.8–1.3 sweet spot; above 1.5 is a spike.
                 let s: Double

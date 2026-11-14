@@ -24,6 +24,11 @@ public struct RunLap: Codable, Equatable, Sendable, Identifiable {
     public let paceSPerKm: Double
     public let avgHR: Double?
     public let isPartial: Bool
+
+    public init(index: Int, distanceM: Double, seconds: Double, paceSPerKm: Double, avgHR: Double?, isPartial: Bool) {
+        self.index = index; self.distanceM = distanceM; self.seconds = seconds
+        self.paceSPerKm = paceSPerKm; self.avgHR = avgHR; self.isPartial = isPartial
+    }
 }
 
 public struct HRZoneShare: Equatable, Sendable, Identifiable {
@@ -37,6 +42,7 @@ public struct PersonalBest: Codable, Equatable, Sendable, Identifiable {
     public var id: Double { distanceM }
     public let distanceM: Double
     public let seconds: Double
+    public init(distanceM: Double, seconds: Double) { self.distanceM = distanceM; self.seconds = seconds }
     public var label: String {
         switch distanceM {
         case 1000: return "1 km"
