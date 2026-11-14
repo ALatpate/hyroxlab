@@ -3,6 +3,7 @@ import SwiftUI
 import Combine
 import HYROXCore
 import WhoopStore
+import WidgetKit
 
 // MARK: - Profile
 
@@ -49,7 +50,7 @@ final class HXStore: ObservableObject {
     @Published var profile: HXProfile { didSet { save(profile, "profile.json") } }
     @Published private(set) var sessions: [HXSession] = []
     @Published private(set) var benchmarks = Benchmarks()
-    @Published var plan: [PlannedSession] = [] { didSet { save(plan, "plan.json") } }
+    @Published var plan: [PlannedSession] = [] { didSet { save(plan, "plan.json"); publishWidget() } }
     @Published var food: [HXFoodEntry] = [] { didSet { save(food, "food.json") } }
     @Published private(set) var readiness: HXReadiness?
     @Published private(set) var readinessInputs: ReadinessInputs?
@@ -181,6 +182,16 @@ final class HXStore: ObservableObject {
                                      dailyLoads: loads.map(\.load), hasHardSessionPlannedToday: plannedHard)
         readinessInputs = inputs
         readiness = HXReadinessEngine.compute(inputs)
+        publishWidget()
+    }
+
+    /// Mirrors readiness and today's session into the App Group for HXReadinessWidget.
+    func publishWidget() {
+        let p = todayPlanned()
+        let days = profile.raceDate.map { Calendar.current.dateComponents([.day], from: Calendar.current.startOfDay(for: Date()), to: Calendar.current.startOfDay(for: $0)).day ?? 0 }
+        HXWidgetState(score: readiness?.score, advice: readiness?.advice.title, sessionTitle: p?.title, sessionPurpose: p?.purpose,
+                      sessionDone: p?.completedSessionID != nil, raceDaysLeft: days.flatMap { $0 >= 0 ? $0 : nil }, updated: Date()).save()
+        WidgetCenter.shared.reloadTimelines(ofKind: HXWidgetState.kind)
     }
 
     private func recomputeRaceReadiness() {
