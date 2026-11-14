@@ -21,11 +21,11 @@
       "versions": [
         {
           "version": "12.1.0",
-          "buildVersion": "10",
+          "buildVersion": "11",
           "date": "2026-11-14",
-          "localizedDescription": "Build 10 from commit a8e423f.",
+          "localizedDescription": "Build 11 from commit 76980a0.",
           "downloadURL": "https://github.com/ALatpate/hyroxlab/releases/download/latest/HYROXLab-ios.ipa",
-          "size": 24452836,
+          "size": 24493600,
           "minOSVersion": "17.0"
         }
       ],
