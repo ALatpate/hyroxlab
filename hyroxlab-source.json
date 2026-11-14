@@ -1,31 +1,31 @@
 {
-  "name": "HYROX Lab",
+  "name": "Luma",
   "identifier": "ie.hyroxlab.noop.altstore",
   "sourceURL": "https://raw.githubusercontent.com/ALatpate/hyroxlab/main/hyroxlab-source.json",
-  "subtitle": "WHOOP-powered HYROX, running and readiness \u2014 on your own phone.",
-  "description": "Personal AltStore / SideStore source for HYROX Lab, a fork of NOOP that adds a HYROX training system, a full running module and readiness coaching on top of NOOP's direct WHOOP connection. Add this source once; every new build appears as an update.",
-  "iconURL": "https://github.com/ALatpate/hyroxlab/raw/main/Strand/Resources/Assets.xcassets/AppIcon.appiconset/icon_512x512.png",
+  "subtitle": "Luma \u2014 WHOOP-powered HYROX, running and readiness, on your own phone.",
+  "description": "Personal AltStore / SideStore source for Luma (HYROX Lab), a fork of NOOP that adds a HYROX training system, a full running module and readiness coaching on top of NOOP's direct WHOOP connection. Add this source once; every new build appears as an update.",
+  "iconURL": "https://github.com/ALatpate/hyroxlab/raw/main/Design/luma-icon-1024.png",
   "website": "https://github.com/ALatpate/hyroxlab",
   "tintColor": "C8FF2E",
   "apps": [
     {
-      "name": "HYROX Lab",
+      "name": "Luma",
       "bundleIdentifier": "ie.hyroxlab.noop",
       "developerName": "ALatpate",
       "subtitle": "HYROX, running and readiness from your WHOOP.",
-      "localizedDescription": "HYROX Lab reads a WHOOP strap you own directly over Bluetooth (via NOOP) and adds HYROX simulations and race mode, GPS running with splits and audio cues, readiness, training plans and a coach. Everything stays on the phone. Personal, non-commercial build; not affiliated with WHOOP or HYROX.",
-      "iconURL": "https://github.com/ALatpate/hyroxlab/raw/main/Strand/Resources/Assets.xcassets/AppIcon.appiconset/icon_512x512.png",
+      "localizedDescription": "Luma reads a WHOOP strap you own directly over Bluetooth (via NOOP) and adds HYROX simulations and race mode, GPS running with splits and audio cues, readiness, training plans and a coach. Everything stays on the phone. Personal, non-commercial build; not affiliated with WHOOP or HYROX.",
+      "iconURL": "https://github.com/ALatpate/hyroxlab/raw/main/Design/luma-icon-1024.png",
       "tintColor": "C8FF2E",
       "category": "healthcare-fitness",
       "screenshotURLs": [],
       "versions": [
         {
           "version": "12.1.0",
-          "buildVersion": "7",
+          "buildVersion": "9",
           "date": "2026-11-14",
-          "localizedDescription": "Build 7 from commit 41abe0f.",
+          "localizedDescription": "Build 9 from commit 4f939d9.",
           "downloadURL": "https://github.com/ALatpate/hyroxlab/releases/download/latest/HYROXLab-ios.ipa",
-          "size": 22741445,
+          "size": 23266918,
           "minOSVersion": "17.0"
         }
       ],
