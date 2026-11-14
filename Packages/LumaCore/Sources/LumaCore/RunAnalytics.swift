@@ -106,6 +106,15 @@ public struct HXZones: Codable, Equatable, Sendable {
         for (i, b) in bounds.enumerated() where hr >= b { z = i + 1 }
         return min(5, max(1, z))
     }
+
+    /// Seconds in zones 1…5 from heart-rate readings `spacing` seconds apart. Time under the first
+    /// zone is not counted, so the five can sum to less than the session.
+    public func seconds(from points: [LHRPoint], spacing: Double) -> [Double] {
+        var out = [Double](repeating: 0, count: 5)
+        let floor: Double = bounds.first ?? 0
+        for p in points where p.bpm >= floor { out[zone(for: p.bpm) - 1] += spacing }
+        return out
+    }
 }
 
 // MARK: - Run analytics

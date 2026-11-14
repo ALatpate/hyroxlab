@@ -71,7 +71,7 @@ struct WorkoutScreen: View {
         }
         .task(id: id) {
             guard let w = workout else { return }
-            hr = await env.source.heartRate(from: w.start, to: w.end, bucketSeconds: max(15, Int(w.durationS / 120)))
+            hr = await env.source.heartRate(from: w.start, to: w.end, bucketSeconds: Self.bucketSeconds(w))
             route = await env.source.route(for: w)
             recovery = await env.source.heartRateRecovery(for: w, maxHR: env.profile.resolvedMaxHR())
         }
@@ -99,7 +99,7 @@ struct WorkoutScreen: View {
         StatGrid {
             StatCell(label: "Duration", value: LumaText.duration(w.durationS))
             if let s = w.strain {
-                StatCell(label: "Strain", value: String(format: env.profile.strainOn21 ? "%.1f" : "%.0f", env.profile.strainOn21 ? LScale.strain21(s) : s))
+                StatCell(label: "Strain", value: LScale.text(s, on21: env.profile.strainOn21))
             }
             if let d = w.distanceM, d > 100 { StatCell(label: "Distance", value: LumaText.km(d), unit: "km") }
             if let p = w.paceSPerKm, w.kind == .run { StatCell(label: "Average pace", value: LumaText.pace(p), unit: "/km") }
@@ -111,14 +111,26 @@ struct WorkoutScreen: View {
 
     @ViewBuilder
     private func zonesCard(_ w: LWorkout) -> some View {
-        if let z = w.zonePct, z.count == 5, z.reduce(0, +) > 1 {
+        if let seconds = zoneSeconds(w) {
             LumaCard {
                 VStack(alignment: .leading, spacing: 12) {
                     LumaLabel("Time in zones")
-                    LumaZoneBars(seconds: z.map { $0 / 100 * w.durationS }, bounds: env.profile.zones().bounds)
+                    LumaZoneBars(seconds: seconds, bounds: env.profile.zones().bounds)
                 }
             }
         }
+    }
+
+    /// The spacing of the heart-rate trace: about 120 readings across the session, never finer than 15 s.
+    private static func bucketSeconds(_ w: LWorkout) -> Int { max(15, Int(w.durationS / 120)) }
+
+    /// Time in each zone: what was stored with the session or, for one kept or logged after the fact,
+    /// what the strap's heart-rate record for that time says.
+    private func zoneSeconds(_ w: LWorkout) -> [Double]? {
+        if let z = w.zonePct, z.count == 5, z.reduce(0, +) > 1 { return z.map { $0 / 100 * w.durationS } }
+        guard hr.count > 4 else { return nil }
+        let seconds = env.profile.zones().seconds(from: hr, spacing: Double(Self.bucketSeconds(w)))
+        return seconds.reduce(0, +) >= 60 ? seconds : nil
     }
 
     private func recoveryStat(_ label: String, _ v: Double?, _ unit: String) -> some View {

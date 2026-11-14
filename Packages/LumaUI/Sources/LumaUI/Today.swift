@@ -25,7 +25,10 @@ struct TodayScreen: View {
             TodayHero(analysis: a, strainOn21: env.profile.strainOn21)
             CallCard(call: a.call, strain21: a.day?.strain.map(LScale.strain21), on21: env.profile.strainOn21)
             CoachBriefCard()
-            PlanCard()
+            Group {
+                SuggestedSessionPrompt()
+                PlanCard()
+            }
             HeartStrip(points: hr)
             TodayVitals(analysis: a, stress: stress)
             FuelGlance()
@@ -116,7 +119,7 @@ struct TodayHero: View {
             }
 
             HStack(spacing: 10) {
-                heroStat("Strain", value: analysis.day?.strain.map { strainOn21 ? LScale.strain21($0) : $0 }, decimals: strainOn21 ? 1 : 0, unit: "", tone: .strain, dest: .strain)
+                heroStat("Strain", value: analysis.day?.strain.map { LScale.shown($0, on21: strainOn21) }, decimals: strainOn21 ? 1 : 0, unit: "", tone: .strain, dest: .strain)
                 heroStat("Sleep", value: analysis.sleep.last.flatMap { $0.day == analysis.today ? $0.asleepMin / 60 : nil }, decimals: 1, unit: "h", tone: .sleep, dest: .sleep)
                 heroStat("HRV", value: scored?.hrv, decimals: 0, unit: "ms", tone: .hrv, dest: .heart)
             }
@@ -171,6 +174,36 @@ struct SwitchedOffNote: View {
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(LumaPanel(tint: Luma.sky, radius: 22))
+        }
+    }
+}
+
+/// A pointer on Today to a session the strap saw and nobody recorded. The choice is made on Train.
+struct SuggestedSessionPrompt: View {
+    @EnvironmentObject private var env: LumaEnv
+    @EnvironmentObject private var router: LumaRouter
+
+    var body: some View {
+        if let s = env.suggestions.first {
+            Button { router.tab = .train } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "waveform.path.ecg").font(.system(size: 15, weight: .bold)).foregroundStyle(Luma.ink)
+                        .frame(width: 40, height: 40).background(Circle().fill(Luma.volt))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Looks like a session").font(LumaFont.heading(15)).foregroundStyle(Luma.frost)
+                        Text(LumaText.line([LumaText.dayTitle(s.day, today: env.today), LumaText.time(s.start),
+                                            "\(Int((s.durationS / 60).rounded())) min", "average \(Int(s.avgHR.rounded())) bpm"]))
+                            .font(LumaFont.body(12.5)).foregroundStyle(Luma.mist).fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 6)
+                    Text("Review").font(LumaFont.body(14, .semibold)).foregroundStyle(Luma.volt)
+                    Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Luma.volt)
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(LumaPanel(tint: Luma.volt.opacity(0.4), radius: 20))
+            }
+            .buttonStyle(.plain)
         }
     }
 }

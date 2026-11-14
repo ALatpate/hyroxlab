@@ -24,6 +24,7 @@ struct TrainScreen: View {
                 LumaIconButton(symbol: "plus") { router.sheet = .plan(nil, day) }
             }
         } content: {
+            SuggestedSessions()
             WeekStrip(days: days, selected: day, today: env.today, onSelect: { selected = $0 },
                       onShift: { delta in
                           let next = LDate.adding(delta * 7, to: week)
@@ -68,6 +69,64 @@ struct TrainScreen: View {
         guard let first = keys.first, let last = keys.last else { return "" }
         if first == LDate.weekStart(env.today) { return "This week" }
         return "\(LumaText.shortDay(first)) – \(LumaText.shortDay(last))"
+    }
+}
+
+/// Sessions the strap saw and nobody recorded, one at a time, newest first. Each can be kept, as the
+/// sport the athlete picks, or dismissed for good. Shows nothing when there are none.
+struct SuggestedSessions: View {
+    @EnvironmentObject private var env: LumaEnv
+
+    var body: some View {
+        if let stretch = env.suggestions.first {
+            SuggestedSessionCard(stretch: stretch, more: env.suggestions.count - 1).id(stretch.id)
+        }
+    }
+}
+
+private struct SuggestedSessionCard: View {
+    let stretch: LSuggestedSession
+    /// How many more are waiting behind this one.
+    let more: Int
+    @EnvironmentObject private var env: LumaEnv
+    @State private var picked: String?
+
+    private static let sports = ["Conditioning", "Strength", "HYROX", "Running", "Cycling", "Rowing", "Walking", "Mobility"]
+
+    var body: some View {
+        let plan = env.likelyPlan(for: stretch)
+        let sport = picked ?? plan.map { SessionSuggestions.sport(for: $0.kind) } ?? "Conditioning"
+        LumaCard(tint: Luma.volt.opacity(0.5)) {
+            VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    LumaLabel(more > 0 ? "Looks like a session · \(more) more after this" : "Looks like a session", color: Luma.volt)
+                    Text("\(LumaText.dayTitle(stretch.day, today: env.today)), \(LumaText.time(stretch.start)) – \(LumaText.time(stretch.end))")
+                        .font(LumaFont.heading(17)).foregroundStyle(Luma.frost)
+                    Text(LumaText.line(["\(Int((stretch.durationS / 60).rounded())) min", "average \(Int(stretch.avgHR.rounded())) bpm",
+                                        "peak \(Int(stretch.peakHR.rounded())) bpm"]))
+                        .font(LumaFont.body(13.5)).foregroundStyle(Luma.mist)
+                }
+                LumaNote(plan.map { "Your strap recorded this and nothing is logged for it. It fits \($0.title) on your calendar." }
+                         ?? "Your strap recorded this and nothing is logged for it. Keep it and it joins your sessions with its heart rate and strain.")
+                ScrollView(.horizontal) {
+                    HStack(spacing: 6) {
+                        ForEach(Self.sports, id: \.self) { name in
+                            LumaChip(title: name, symbol: LSportKind.classify(name).symbol, isOn: sport == name) { picked = name }
+                        }
+                    }
+                }
+                .scrollIndicators(.hidden)
+                HStack(spacing: 10) {
+                    Button("Keep as \(sport)") {
+                        LumaHaptics.success()
+                        withAnimation(.easeOut(duration: 0.2)) { env.keep(stretch, sport: sport) }
+                    }
+                    .buttonStyle(LumaPrimaryButtonStyle(compact: true))
+                    Button("Not a session") { withAnimation(.easeOut(duration: 0.2)) { env.dismiss(stretch) } }
+                        .buttonStyle(LumaSecondaryButtonStyle(compact: true))
+                }
+            }
+        }
     }
 }
 
@@ -524,7 +583,7 @@ struct ManualWorkoutSheet: View {
 
     var body: some View {
         LumaSheet(title: "Log a session", tone: .run) {
-            LumaNote("For sessions the strap missed. Recorded sessions carry heart rate and strain; a hand-logged one counts towards load from its duration.")
+            LumaNote("Set when it started and how long it ran. If you were wearing the strap, Luma reads the heart rate, zones and strain for that time from what it recorded; type an average only for a session without it.")
             FlowLayout(spacing: 8) {
                 ForEach(sports, id: \.self) { s in
                     LumaChip(title: s, symbol: LSportKind.classify(s).symbol, isOn: sport == s) { sport = s }

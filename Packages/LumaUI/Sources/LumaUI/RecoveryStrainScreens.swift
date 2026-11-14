@@ -232,7 +232,7 @@ struct StrainScreen: View {
     var body: some View {
         let a = env.analysis
         let on21 = env.profile.strainOn21
-        let strain = a.day?.strain.map { on21 ? LScale.strain21($0) : $0 }
+        let strain = a.day?.strain.map { LScale.shown($0, on21: on21) }
         let todays = env.workouts.filter { $0.day == a.today }.sorted { $0.start < $1.start }
         LumaDetailScreen(title: "Strain", tone: .strain) {
             StrainHero(strain: strain, top: on21 ? 21 : 100, target: on21 ? a.call.strainTarget : nil)
@@ -334,7 +334,7 @@ struct WorkoutRow: View {
             Spacer(minLength: 6)
             if let s = workout.strain {
                 VStack(alignment: .trailing, spacing: 0) {
-                    Text(String(format: on21 ? "%.1f" : "%.0f", on21 ? LScale.strain21(s) : s)).font(LumaFont.numeral(22, .semibold)).foregroundStyle(Luma.frost)
+                    Text(LScale.text(s, on21: on21)).font(LumaFont.numeral(22, .semibold)).foregroundStyle(Luma.frost)
                     Text("strain").font(LumaFont.body(10.5)).foregroundStyle(Luma.smoke)
                 }
             }

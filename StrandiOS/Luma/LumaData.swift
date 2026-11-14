@@ -1,5 +1,6 @@
 #if os(iOS)
 import Foundation
+import WhoopProtocol
 import WhoopStore
 import StrandAnalytics
 import StrandDesign
@@ -140,6 +141,30 @@ final class LumaRepoSource: LumaDataSource {
         guard let row = rows[workout.id] else { return }
         await repo.deleteWorkout(row)
         await repo.refresh()
+    }
+
+    // MARK: Suggested sessions
+
+    /// Stretches of raised heart rate that no stored session covers, found by the strap layer's own
+    /// detector over the raw heart-rate record: heart rate held thirty beats above resting for twelve
+    /// minutes, short dips tolerated, with every stored session's window excluded. A pure read; the
+    /// detector's opt-in prompt in the earlier shell is not involved and nothing is stored here.
+    func suggestedSessions(days: Int) async -> [LSuggestedSession] {
+        let now = Int(Date().timeIntervalSince1970)
+        let from = now - max(1, days) * 86_400
+        // One reading a second: three days is about 260,000.
+        let samples: [HRSample] = await repo.hrSamples(from: from, to: now, limit: 320_000)
+        guard samples.count >= 2 else { return [] }
+        let resting: Int? = repo.days.last(where: { $0.restingHr != nil })?.restingHr
+        let stored = await repo.workoutRows(days: max(1, days) + 1)
+        let saved = stored.map { SavedWorkoutSpan(startSec: $0.startTs, endSec: $0.endTs) }
+        let hr: [(ts: Int, bpm: Int)] = samples.map { (ts: $0.ts, bpm: $0.bpm) }
+        let found: [DetectedWorkout] = await Task.detached(priority: .utility) {
+            AutoWorkoutDetector.detect(hr: hr, restingBpm: resting, savedSpans: saved)
+        }.value
+        return found.map {
+            LSuggestedSession(start: Double($0.startSec), end: Double($0.endSec), avgHR: Double($0.avgBpm), peakHR: Double($0.peakBpm))
+        }
     }
 
     // MARK: Series

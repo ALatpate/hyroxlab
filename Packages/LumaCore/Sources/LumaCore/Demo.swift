@@ -278,6 +278,13 @@ public final class LumaDemoSource: LumaDataSource {
 
     public func saveWorkout(_ workout: LWorkout, replacing old: LWorkout?) async {}
     public func deleteWorkout(_ workout: LWorkout) async {}
+
+    /// One evening stretch the demo athlete never recorded, so the prompt has something to show.
+    public func suggestedSessions(days: Int) async -> [LSuggestedSession] {
+        guard self.days.count > 40, let midnight = LDate.startOfDay(today, calendar: calendar)?.timeIntervalSince1970 else { return [] }
+        let start: Double = midnight - 86_400 + 18 * 3600 + 40 * 60
+        return [LSuggestedSession(start: start, end: start + 54 * 60, avgHR: 138, peakHR: 167)]
+    }
 }
 
 /// Demo content for the parts of Luma the athlete fills in: routine, plan, fuel, supplements, lifts.

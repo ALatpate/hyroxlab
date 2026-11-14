@@ -345,6 +345,24 @@ public struct LWorkout: Codable, Equatable, Sendable, Identifiable {
     }
 }
 
+/// A stretch of raised heart rate the strap recorded that no stored session accounts for. Luma offers it
+/// to the athlete to keep as a session or dismiss; nothing is stored until they choose.
+public struct LSuggestedSession: Codable, Equatable, Hashable, Sendable, Identifiable {
+    /// Unix seconds.
+    public var start: Double
+    public var end: Double
+    public var avgHR: Double
+    public var peakHR: Double
+
+    public init(start: Double, end: Double, avgHR: Double, peakHR: Double) {
+        self.start = start; self.end = end; self.avgHR = avgHR; self.peakHR = peakHR
+    }
+
+    public var id: String { "\(Int(start)):\(Int(end))" }
+    public var durationS: Double { max(0, end - start) }
+    public var day: String { LDate.key(Date(timeIntervalSince1970: start)) }
+}
+
 /// Coarse sport families used for colour, icons, load factors and plan matching.
 public enum LSportKind: String, Codable, Sendable, CaseIterable {
     case run, hyrox, strength, conditioning, cycle, row, swim, walk, mobility, other
@@ -463,4 +481,11 @@ public protocol LumaDataSource: AnyObject {
     func heartRateRecovery(for workout: LWorkout, maxHR: Double) async -> LHRRecovery?
     func saveWorkout(_ workout: LWorkout, replacing old: LWorkout?) async
     func deleteWorkout(_ workout: LWorkout) async
+    /// Stretches of raised heart rate in the last `days` days that no stored session covers. A read
+    /// of days of raw heart rate, so callers ask sparingly.
+    func suggestedSessions(days: Int) async -> [LSuggestedSession]
+}
+
+public extension LumaDataSource {
+    func suggestedSessions(days: Int) async -> [LSuggestedSession] { [] }
 }

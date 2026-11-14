@@ -382,6 +382,12 @@ public final class LumaEnv: ObservableObject {
     @Published public private(set) var workouts: [LWorkout] = []
     @Published public private(set) var analysis: LumaAnalysis = .empty
     @Published public private(set) var loaded = false
+    /// Sessions the strap saw and nobody recorded, waiting to be kept or dismissed. Newest first.
+    @Published public private(set) var suggestions: [LSuggestedSession] = []
+    /// Everything the last search of the strap record found, before Luma's own rules are applied.
+    private var detectedStretches: [LSuggestedSession] = []
+    private var stretchesSearchedAt: Date?
+    private var dismissedStretches: Set<String>
 
     // Athlete's own records
     @Published public var profile: LProfile { didSet { if profile != oldValue { disk.save(profile, "profile.json"); onProfileChange?(profile); refreshAnalysis() } } }
@@ -419,6 +425,8 @@ public final class LumaEnv: ObservableObject {
         lifts = disk.load([LiftSession].self, "lifts.json") ?? []
         runPBs = disk.load([PersonalBest].self, "runpbs.json") ?? []
         benchmarks = disk.load(Benchmarks.self, "benchmarks.json") ?? Benchmarks()
+        dismissedStretches = SessionSuggestions.prune(Set(disk.load([String].self, "stretches-dismissed.json") ?? []),
+                                                      now: Date().timeIntervalSince1970)
         sessions = disk.list(prefix: "session-").compactMap { disk.load(HXSession.self, $0) }.sorted { $0.startedAt > $1.startedAt }
     }
 
@@ -470,7 +478,21 @@ public final class LumaEnv: ObservableObject {
             self.refreshPlan()
             self.refreshAnalysis()
             if self.isDemo { self.coach.seedDemo() }
+            await self.refreshSuggestions()
         }
+    }
+
+    /// Looks for sessions the strap saw and nobody recorded. The search reads days of raw heart rate, so
+    /// it runs at most once every ten minutes; in between, the last result is checked again against what
+    /// is stored now, so a stretch disappears as soon as a session covers it.
+    private func refreshSuggestions() async {
+        let now = Date()
+        if stretchesSearchedAt.map({ now.timeIntervalSince($0) >= 600 }) ?? true {
+            stretchesSearchedAt = now
+            detectedStretches = await source.suggestedSessions(days: 3)
+        }
+        suggestions = SessionSuggestions.open(detectedStretches, workouts: workouts, dismissed: dismissedStretches,
+                                              maxHR: profile.resolvedMaxHR(), now: Date().timeIntervalSince1970)
     }
 
     func refreshAnalysis() {
@@ -642,7 +664,7 @@ public final class LumaEnv: ObservableObject {
         if schedule.count > 1, let first = schedule[1].planned.first(where: { $0.kind != .rest }) {
             tomorrow = first.startMinutes.map { first.title + " · " + LFormat.timeOfDay(minutes: Double($0)) } ?? first.title
         }
-        let strain = a.day?.strain.map { profile.strainOn21 ? LScale.strain21($0) : $0 }
+        let strain = a.day?.strain.map { LScale.shown($0, on21: profile.strainOn21) }
         let totals = fuelTotals(on: today), targets = fuelTargets(on: today)
         let week = LumaAnalysis.series(.recovery, days: days, ending: today, count: 7).values.map { $0.map { Int($0.rounded()) } }
         let brief: String? = coach.briefDay == today ? coach.brief : nil
@@ -704,5 +726,28 @@ public final class LumaEnv: ObservableObject {
             await source.deleteWorkout(w)
             reload()
         }
+    }
+
+    // MARK: Suggested sessions
+
+    /// The plan entry a suggested stretch most likely was: an entry for that day nothing has fulfilled yet.
+    func likelyPlan(for stretch: LSuggestedSession) -> PlannedSession? {
+        guard let day = scheduleDays([stretch.day]).first else { return nil }
+        return SessionSuggestions.likelyPlan(for: stretch, among: day.planned.filter { !day.isDone($0) })
+    }
+
+    /// Keeps a suggested stretch as a session. It is stored like a hand-logged one, and the strap layer
+    /// then reads its heart rate and strain from what it recorded in that window.
+    func keep(_ stretch: LSuggestedSession, sport: String) {
+        suggestions.removeAll { $0.id == stretch.id }
+        saveWorkout(LWorkout(start: stretch.start, end: stretch.end, sport: sport, source: "manual",
+                             avgHR: stretch.avgHR, maxHR: stretch.peakHR))
+    }
+
+    /// The athlete says a suggested stretch was not a session; it is not offered again.
+    func dismiss(_ stretch: LSuggestedSession) {
+        dismissedStretches.insert(stretch.id)
+        disk.save(Array(dismissedStretches).sorted(), "stretches-dismissed.json")
+        suggestions.removeAll { $0.id == stretch.id }
     }
 }
