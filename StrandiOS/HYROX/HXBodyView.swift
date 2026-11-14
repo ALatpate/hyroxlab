@@ -38,7 +38,7 @@ struct HXBodyView: View {
     private var trendCards: some View {
         HStack(spacing: HX.gap) {
             miniTrend("HRV", last14.map { $0.avgHrv ?? .nan }, unit: "ms", color: HX.good)
-            miniTrend("Resting HR", last14.map { $0.restingHr.map(Double.init) ?? .nan }, unit: "bpm", color: HX.run)
+            miniTrend("Resting HR", last14.map { $0.restingHr.map { Double($0) } ?? .nan }, unit: "bpm", color: HX.run)
             miniTrend("Charge", last14.map { $0.recovery ?? .nan }, unit: "", color: HX.volt)
         }
     }

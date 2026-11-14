@@ -90,7 +90,10 @@ struct HXOnboardingView: View {
             VStack(spacing: 0) {
                 ProgressView(value: Double(step + 1), total: 4).tint(HX.volt).padding()
                 TabView(selection: $step) {
-                    page0.tag(0); page1.tag(1); page2.tag(2); page3.tag(3)
+                    page0.tag(0)
+                    page1.tag(1)
+                    page2.tag(2)
+                    page3.tag(3)
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
                 Button(step == 3 ? "Start" : "Continue") {

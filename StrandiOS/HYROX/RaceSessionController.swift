@@ -119,7 +119,7 @@ final class RaceSessionController: ObservableObject, Identifiable {
         if let p = planned { store.markPlanned(p, completedBy: s) }
         let allHR = s.segments.compactMap(\.hr)
         let avg = allHR.isEmpty ? nil : Int(allHR.map(\.avg).reduce(0, +) / Double(allHR.count))
-        let mx = allHR.map(\.max).max().map(Int.init)
+        let mx = allHR.map(\.max).max().map { Int($0) }
         let dist = s.segments.filter { $0.kind == .run }.compactMap(\.distanceM).reduce(0, +)
         if model.activeWorkout != nil {
             // NOOP's own record carries HR and Effort; we discard its auto row and write ours with the

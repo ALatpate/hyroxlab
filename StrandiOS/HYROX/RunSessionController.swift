@@ -124,7 +124,7 @@ final class RunSessionController: ObservableObject, Identifiable {
         if !isTreadmill { distanceM = model.gpsRecorder.distanceM }
         if w.isPaused { return }
 
-        samples.append(RunSample(tS: elapsedS, distanceM: distanceM, hr: hr.map(Double.init)))
+        samples.append(RunSample(tS: elapsedS, distanceM: distanceM, hr: hr.map { Double($0) }))
         smoothedPace = isTreadmill ? nil : smoother.push(tS: elapsedS, distanceM: distanceM)
         avgPace = distanceM > 50 ? elapsedS / (distanceM / 1000) : nil
 

@@ -163,7 +163,7 @@ final class HXStore: ObservableObject {
         let today = sorted.last { $0.day == todayKey }
         let history = sorted.filter { $0.day < todayKey }
         let hrvHist = history.compactMap(\.avgHrv)
-        let rhrHist = history.compactMap(\.restingHr).map(Double.init)
+        let rhrHist = history.compactMap(\.restingHr).map { Double($0) }
         // Daily load: NOOP Effort (strain) per day, zero for missing days, last 28 days ending yesterday.
         var loads: [(day: String, load: Double)] = []
         let cal = Calendar.current
@@ -176,7 +176,7 @@ final class HXStore: ObservableObject {
         let sleepH: Double? = (today?.totalSleepMin).map { $0 / 60 }
         let plannedHard = plan.first { cal.isDateInToday($0.date) }?.type.isHard ?? false
         let inputs = ReadinessInputs(charge: today?.recovery, hrvToday: today?.avgHrv, hrvHistory: hrvHist,
-                                     rhrToday: today?.restingHr.map(Double.init), rhrHistory: rhrHist,
+                                     rhrToday: today?.restingHr.map { Double($0) }, rhrHistory: rhrHist,
                                      sleepHoursLastNight: sleepH, sleepNeedHours: profile.sleepNeedHours,
                                      dailyLoads: loads.map(\.load), hasHardSessionPlannedToday: plannedHard)
         readinessInputs = inputs
