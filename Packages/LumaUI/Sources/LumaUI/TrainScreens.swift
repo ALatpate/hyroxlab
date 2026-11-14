@@ -492,7 +492,7 @@ struct HistoryRow: View {
             }
             Spacer(minLength: 6)
             if let s = workout.strain {
-                Text(String(format: on21 ? "%.1f" : "%.0f", on21 ? LScale.strain21(s) : s)).font(LumaFont.numeral(20, .semibold)).foregroundStyle(Luma.frost)
+                Text(LScale.text(s, on21: on21)).font(LumaFont.numeral(20, .semibold)).foregroundStyle(Luma.frost)
             }
             Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(Luma.smoke)
         }

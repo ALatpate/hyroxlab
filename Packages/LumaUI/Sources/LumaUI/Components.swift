@@ -670,9 +670,14 @@ enum LumaText {
 
     static func km(_ metres: Double, decimals: Int = 2) -> String { String(format: "%.\(decimals)f", metres / 1000) }
 
-    /// Facts on one line, separated by dots. A value and its unit stay together when the line wraps.
+    /// Facts on one line, separated by dots. When the line wraps, a value stays with its unit and the
+    /// dot stays at the end of the line it closes rather than opening the next one.
     static func line(_ parts: [String]) -> String {
-        parts.filter { !$0.isEmpty }.map { $0.replacingOccurrences(of: " ", with: "\u{00A0}") }.joined(separator: " · ")
+        // A no-break space inside each fact and before each dot, and a word joiner either side of a
+        // slash ("5:29/km"), so the only place the line can break is after a dot.
+        parts.filter { !$0.isEmpty }
+            .map { $0.replacingOccurrences(of: " ", with: "\u{00A0}").replacingOccurrences(of: "/", with: "\u{2060}/\u{2060}") }
+            .joined(separator: "\u{00A0}· ")
     }
 
     static func greeting(_ date: Date = Date()) -> String {

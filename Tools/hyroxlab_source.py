@@ -40,9 +40,10 @@ def build(repo: str, version: str, build_no: str, bundle_id: str, size: int, sha
                 "localizedDescription": (
                     "Luma reads a WHOOP strap you own directly over Bluetooth and turns it into recovery, "
                     "sleep and strain each morning, GPS running with splits and spoken cues, HYROX race "
-                    "mode and readiness, a food and supplement log, and a coach. Everything stays on the "
-                    "phone. A personal, non-commercial build on open-source foundations, credited in the "
-                    "app's About screen; not affiliated with WHOOP or HYROX."
+                    "mode and readiness, a food and supplement log, and a coach. Your data stays on the "
+                    "phone; the coach runs on your own Anthropic key and reads only what you let it. A "
+                    "personal, non-commercial build on open-source foundations, credited in the app's "
+                    "About screen; not affiliated with WHOOP or HYROX."
                 ),
                 "iconURL": f"https://github.com/{owner}/{name}/raw/main/Design/luma-icon-1024.png",
                 "tintColor": TINT,

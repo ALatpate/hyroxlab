@@ -199,8 +199,11 @@ struct DevicesScreen: View {
                         Spacer()
                         if let b = s.battery {
                             VStack(alignment: .trailing, spacing: 0) {
-                                Text("\(Int(b.rounded()))%").font(LumaFont.numeral(40)).foregroundStyle(b <= 20 ? Luma.coral : Luma.frost)
-                                Text(s.charging ? "Charging" : "Battery").font(LumaFont.label(10)).foregroundStyle(Luma.mist)
+                                // Away from the phone the strap reports nothing, so the figure is the last one it sent.
+                                Text("\(Int(b.rounded()))%").font(LumaFont.numeral(40))
+                                    .foregroundStyle(!s.connected ? Luma.mist : (b <= 20 ? Luma.coral : Luma.frost))
+                                Text(!s.connected ? "Battery when last connected" : (s.charging ? "Charging" : "Battery"))
+                                    .font(LumaFont.label(10)).foregroundStyle(Luma.mist)
                             }
                         }
                     }

@@ -153,6 +153,9 @@ public final class LumaLive: ObservableObject {
     @Published public var paired: [LumaPairedStrap] = []
     @Published public var health: LumaHealthAccess = .off
     @Published public var batteryAlerts = false
+    /// What an earlier version of the app had been left doing on its own and this one switched off,
+    /// each named for the athlete ("the wake alarm"). Today shows it once.
+    @Published public var switchedOff: [String] = []
     public init() {}
 }
 

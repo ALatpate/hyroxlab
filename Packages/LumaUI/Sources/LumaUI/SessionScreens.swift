@@ -43,12 +43,14 @@ struct GoSheet: View {
                 tile("timer", "Intervals", "6 × 1 km") { launch(.run(RunPlan(mode: .intervals, title: "Intervals"))) }
                 tile("figure.run.treadmill", "Treadmill", "Time and heart rate") { launch(.run(RunPlan(mode: .treadmill, title: "Treadmill run", sport: "Treadmill run"))) }
             }
+            .fixedSize(horizontal: false, vertical: true)
             LumaSection(title: "HYROX")
             HStack(spacing: 10) {
                 tile("flag.checkered", "Full race", "8 runs, 8 stations") { launch(.race(.fullSimulation)) }
                 tile("1.circle", "First half", "Stations 1–4") { launch(.race(.halfSimulation(secondHalf: false))) }
                 tile("2.circle", "Second half", "Stations 5–8") { launch(.race(.halfSimulation(secondHalf: true))) }
             }
+            .fixedSize(horizontal: false, vertical: true)
             LumaCard(padding: 14) {
                 VStack(alignment: .leading, spacing: 10) {
                     LumaLabel("One station")
@@ -72,6 +74,7 @@ struct GoSheet: View {
                 tile("bolt.heart.fill", "Class", "Time, heart rate, strain") { launch(.run(RunPlan(mode: .session, title: "Class", sport: "Conditioning"))) }
                 tile("figure.rower", "Other", "Ride, row, anything") { launch(.run(RunPlan(mode: .session, title: "Workout", sport: "Workout"))) }
             }
+            .fixedSize(horizontal: false, vertical: true)
             Button {
                 dismiss()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { router.sheet = .manualWorkout }
@@ -98,7 +101,9 @@ struct GoSheet: View {
                 Text(subtitle).font(LumaFont.body(11.5)).foregroundStyle(Luma.mist).lineLimit(2).fixedSize(horizontal: false, vertical: true)
             }
             .padding(13)
-            .frame(maxWidth: .infinity, minHeight: 104, alignment: .topLeading)
+            // Every tile in a row takes the height of the tallest, so a two-line caption does not leave
+            // its neighbours short.
+            .frame(maxWidth: .infinity, minHeight: 104, maxHeight: .infinity, alignment: .topLeading)
             .background(LumaPanel(radius: 20))
         }
         .buttonStyle(.plain)

@@ -4,6 +4,8 @@
 #            every screen in Tools/luma_screens.txt; the images land on the orphan `screens` branch.
 #   app      The full app (Debug, simulator). Slow, so it only runs when the commit message contains
 #            [app]. Its screenshots land on `screens-app`.
+#   package  A dry run of the release: the same Release device build and sideload packaging a push to
+#            main performs, publishing nothing. Runs with `app`.
 name: Luma dev
 
 on:
@@ -104,3 +106,50 @@ jobs:
           git -c user.name=luma-ci -c user.email=luma-ci@users.noreply.github.com commit -qm "app screens for ${GITHUB_SHA:0:7}"
           git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" screens-app
           ls | head -60
+
+  package:
+    if: contains(github.event.head_commit.message, '[app]') || github.event_name == 'workflow_dispatch'
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        run: xcodegen generate
+      - name: Build NOOPiOS (device, unsigned, Release)
+        run: |
+          set -o pipefail
+          if ! xcodebuild -scheme NOOPiOS -configuration Release -destination 'generic/platform=iOS' \
+               -derivedDataPath build/dd CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+               CURRENT_PROJECT_VERSION=1 build > build.log 2>&1; then
+            echo "=== COMPILE ERRORS ($(grep -cE ': error:' build.log)) ==="
+            grep -E ": error:" build.log | sed -E 's#^.*/hyroxlab/hyroxlab/##' | awk '!seen[$0]++' | head -300
+            echo "=== LAST LINES ==="
+            tail -30 build.log
+            exit 1
+          fi
+          echo "build ok"
+      - name: Package for sideloading and inspect the bundle
+        run: |
+          set -euo pipefail
+          APP=$(find build/dd/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' -type d | head -1)
+          test -n "$APP" || { echo "::error::.app (iphoneos) not found"; exit 1; }
+          rm -rf "$APP/Watch"
+          test -d "$APP/PlugIns/NOOPWidgets.appex" || { echo "::error::widget extension missing"; exit 1; }
+          Tools/prepare-ios-sideload-app.sh "$APP"
+          P=/usr/libexec/PlistBuddy
+          W="$APP/PlugIns/NOOPWidgets.appex"
+          echo "app name:          $($P -c 'Print :CFBundleDisplayName' "$APP/Info.plist")"
+          echo "widget name:       $($P -c 'Print :CFBundleDisplayName' "$W/Info.plist")"
+          echo "frequent updates:  $($P -c 'Print :NSSupportsLiveActivitiesFrequentUpdates' "$APP/Info.plist")"
+          echo "camera text:       $($P -c 'Print :NSCameraUsageDescription' "$APP/Info.plist")"
+          echo "alternate icons:   $($P -c 'Print :CFBundleIcons:CFBundleAlternateIcons' "$APP/Info.plist" 2>/dev/null || echo none)"
+          echo "--- sentences in either Info.plist that still carry the earlier name"
+          for f in "$APP/Info.plist" "$W/Info.plist"; do
+            plutil -convert xml1 -o - "$f" | grep -E "<string>[^<]* [^<]*NOOP|NOOP [^<]*</string>" || echo "none in $(basename "$(dirname "$f")")"
+          done
+          rm -rf Payload && mkdir Payload && cp -R "$APP" Payload/
+          zip -qr dry-run.ipa Payload
+          echo "ipa size: $(stat -f%z dry-run.ipa) bytes"
+

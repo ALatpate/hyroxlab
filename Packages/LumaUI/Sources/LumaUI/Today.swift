@@ -20,6 +20,7 @@ struct TodayScreen: View {
                 LumaIconButton(symbol: "person.fill") { router.sheet = .you }
             }
         } content: {
+            SwitchedOffNote()
             if a.watch.level >= .watch, a.lastNight?.day == a.today { WatchBanner(watch: a.watch) }
             TodayHero(analysis: a, strainOn21: env.profile.strainOn21)
             CallCard(call: a.call, strain21: a.day?.strain.map(LScale.strain21), on21: env.profile.strainOn21)
@@ -55,7 +56,8 @@ struct StrapChip: View {
                 Circle().fill(s.connected ? (s.secure ? Luma.volt : Luma.amber) : Luma.smoke).frame(width: 7, height: 7)
                     .shadow(color: s.connected ? Luma.volt.opacity(0.8) : .clear, radius: 4)
                 if let b = s.battery {
-                    Text("\(Int(b.rounded()))%").font(LumaFont.numeral(15, .semibold)).foregroundStyle(Luma.frost)
+                    // Dimmed while the strap is away: the figure is then the last one it sent.
+                    Text("\(Int(b.rounded()))%").font(LumaFont.numeral(15, .semibold)).foregroundStyle(s.connected ? Luma.frost : Luma.mist)
                     Image(systemName: s.charging ? "battery.100.bolt" : (b > 60 ? "battery.75" : b > 25 ? "battery.50" : "battery.25"))
                         .font(.system(size: 12, weight: .medium)).foregroundStyle(b <= 20 ? Luma.coral : Luma.mist)
                 } else {
@@ -139,6 +141,37 @@ struct TodayHero: View {
             .background(LumaPanel(radius: 20))
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Carried over
+
+/// After an update from an earlier version of the app: what that version had been left doing on its
+/// own (an alarm, a reminder) and this one switched off, because nothing here could manage it.
+struct SwitchedOffNote: View {
+    @EnvironmentObject private var live: LumaLive
+
+    var body: some View {
+        if !live.switchedOff.isEmpty {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "bell.slash.fill").font(.system(size: 15, weight: .bold)).foregroundStyle(Luma.sky)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Switched off after the update").font(LumaFont.heading(15)).foregroundStyle(Luma.frost)
+                    Text("Luma has no screen yet for alarms and reminders set up in the earlier version, so what was on there has been switched off: \(live.switchedOff.joined(separator: ", ")).")
+                        .font(LumaFont.body(13.5)).foregroundStyle(Luma.mist).fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+                Button { withAnimation(.easeOut(duration: 0.2)) { live.switchedOff = [] } } label: {
+                    Image(systemName: "xmark").font(.system(size: 12, weight: .bold)).foregroundStyle(Luma.mist)
+                        .frame(width: 30, height: 30).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Dismiss")
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(LumaPanel(tint: Luma.sky, radius: 22))
+        }
     }
 }
 

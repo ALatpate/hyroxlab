@@ -46,6 +46,7 @@ final class LumaBridge: ObservableObject, LumaDeviceControl {
         env.device = self
         env.recorder = recorder
         Self.settleEarlierShell()
+        retireEarlierAutomations()
         adoptStrapProfileIfNew()
         wire()
     }
@@ -66,6 +67,49 @@ final class LumaBridge: ObservableObject, LumaDeviceControl {
             d.set(false, forKey: "noop.coachEnabled")
             CoachBriefScheduler.applyMasterSwitch(false)
         }
+    }
+
+    /// The earlier shell could act on its own once asked to: a wake alarm, a wind-down reminder, strain
+    /// and early-warning notifications, haptic check-ins, zone buzzes, a double-tap action. Luma has no
+    /// screen for any of them, so one left on would go on buzzing and notifying with nothing in the app
+    /// to explain it or stop it. Each one found on is switched off, through the same calls its own
+    /// switch used, and the athlete is told which (`LumaLive.switchedOff`). All are off by default, so
+    /// for most installs this does nothing, and after the first launch it has nothing left to do.
+    private func retireEarlierAutomations() {
+        var off: [String] = []
+        let behavior = model.behavior
+        if behavior.smartAlarmEnabled {
+            behavior.smartAlarmEnabled = false
+            // Disarms the strap (now, or as soon as it next connects) and removes the backup notification.
+            model.applySmartAlarm()
+            off.append("the wake alarm")
+        }
+        if WindDownNudge.isEnabled {
+            WindDownNudge.setEnabled(false)
+            off.append("the wind-down reminder")
+        }
+        if behavior.strainTargetNudge {
+            behavior.strainTargetNudge = false
+            off.append("the strain target notification")
+        }
+        if behavior.illnessWatch {
+            behavior.illnessWatch = false
+            off.append("the early-warning notification")
+        }
+        if behavior.stressCheckIn {
+            behavior.stressCheckIn = false
+            behavior.stressAutoNudge = false
+            off.append("stress check-ins")
+        }
+        if behavior.zoneCoaching {
+            behavior.zoneCoaching = false
+            off.append("zone buzzes")
+        }
+        if behavior.doubleTapAction != .none {
+            behavior.doubleTapAction = .none
+            off.append("the double-tap action")
+        }
+        if !off.isEmpty { live.switchedOff = off }
     }
 
     /// Before Luma's own setup has run, start from what the strap layer already knows about the
@@ -132,6 +176,10 @@ final class LumaBridge: ObservableObject, LumaDeviceControl {
 
     /// Called when the app comes to the front.
     func becameActive() {
+        // An icon picked in the earlier shell is no longer shipped; return to Luma's own.
+        if UIApplication.shared.alternateIconName != nil {
+            UIApplication.shared.setAlternateIconName(nil, completionHandler: nil)
+        }
         env.reload()
         refreshStrap()
         publishGlance()

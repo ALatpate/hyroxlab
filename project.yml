@@ -253,16 +253,6 @@ targets:
         AppGroupIdentifier: "$(APP_GROUP_ID)"
         LSApplicationCategoryType: public.app-category.healthcare-fitness
         UILaunchScreen: {}
-        # Alternate app icons (v3 "Titanium & Gold"). The primary icon stays the asset-catalog
-        # AppIcon (machined titanium); the alternate "AppIcon-Navy" (blued titanium) is declared
-        # here so UIApplication.setAlternateIconName("AppIcon-Navy") can switch to it at runtime.
-        # CFBundleIconFiles is intentionally empty — the artwork lives in the asset catalog, shipped
-        # via ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS, so no loose PNGs are listed here.
-        CFBundleIcons:
-          CFBundleAlternateIcons:
-            AppIcon-Navy:
-              CFBundleIconFiles: []
-              UIPrerenderedIcon: false
         NSSupportsLiveActivities: true
         # The heart-rate card on the Lock Screen is updated every few seconds while the strap streams.
         NSSupportsLiveActivitiesFrequentUpdates: true
@@ -306,9 +296,9 @@ targets:
           # the re-score task, which is submitted only when a re-score is OWED, and a missing strap owes
           # none, so that task would never run in the one case the warning exists for.
           - $(PRODUCT_BUNDLE_IDENTIFIER).stalebattery
-        NSBluetoothAlwaysUsageDescription: "Luma connects directly to your WHOOP strap over Bluetooth to read heart rate, heart-rate variability, battery and sensor data on your iPhone. Nothing leaves your device."
+        NSBluetoothAlwaysUsageDescription: "Luma connects directly to your WHOOP strap over Bluetooth to read heart rate, heart-rate variability, battery and sensor data. It is stored on this iPhone."
         NSLocationWhenInUseUsageDescription: "Luma records your route during an outdoor run to show distance, pace and a map, and keeps recording while the screen is off. The route stays on your device."
-        NSHealthShareUsageDescription: "Luma reads your own Apple Health data on this iPhone, such as steps and body mass, to complete your picture. Nothing leaves your device."
+        NSHealthShareUsageDescription: "Luma reads your own Apple Health data on this iPhone, such as steps and body mass, to complete your picture. It stays on this iPhone unless you choose to share your numbers with the coach."
         NSHealthUpdateUsageDescription: "Luma writes the sessions and nightly metrics it computes from your strap into Apple Health, on this iPhone and only when you allow it."
         NSMotionUsageDescription: "Luma reads your iPhone's step count during a walk or run to show steps in the session summary. It stays on your device."
         # K4: Coach voice input. Speech is transcribed ON-DEVICE ONLY (requiresOnDeviceRecognition);
@@ -357,9 +347,8 @@ targets:
         # keeps both halves deliberately (#39) and is unaffected.
         PRODUCT_NAME: NOOP
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        # Ship every *.appiconset (not just the primary AppIcon) so the alternate "AppIcon-Navy"
-        # set is compiled into the bundle and is available to UIApplication.setAlternateIconName.
-        ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
+        # One icon: the alternate that the earlier shell could switch to is no longer shipped.
+        ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: NO
         GENERATE_INFOPLIST_FILE: NO
         TARGETED_DEVICE_FAMILY: "1,2"
         SWIFT_EMIT_LOC_STRINGS: YES
