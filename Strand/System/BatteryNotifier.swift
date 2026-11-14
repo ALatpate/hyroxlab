@@ -222,7 +222,7 @@ enum BatteryNotifier {
         let age = StaleBatteryAlertPolicy.ageLabel(decision.ageSeconds)
         post(identifier: "battery-stale",
              title: String(localized: "WHOOP last seen low"),
-             body: String(localized: "\(lastSocPct)% when it was last heard from, \(age) ago. Charge it before tonight."),
+             body: String(localized: "\(lastSocPct)% when NOOP last heard from it, \(age) ago. Charge it before tonight."),
              interruptionLevel: .timeSensitive)
         // Persisted AFTER posting, keyed on the reading, so a failed post retries on the next wake.
         d.set(lastTsSec, forKey: staleAlertedTsKey)
@@ -282,8 +282,8 @@ enum BatteryNotifier {
         center.getNotificationSettings { settings in
             guard settings.authorizationStatus == .authorized else { return }
             let content = UNMutableNotificationContent()
-            content.title = title
-            content.body = body
+            content.title = BatteryNotifier.named(title)
+            content.body = BatteryNotifier.named(body)
             content.sound = .default
             // The two escalation alerts ask for .timeSensitive so they can break through a sleep Focus —
             // the whole point is reaching the user in the hour before bed. Without the time-sensitive
@@ -292,5 +292,15 @@ enum BatteryNotifier {
             center.add(UNNotificationRequest(identifier: identifier,
                                              content: content, trigger: nil))
         }
+    }
+
+    /// The catalogue keeps the upstream sentences and their translations. On iPhone this fork's app is
+    /// called Luma, so its name is swapped into the finished text rather than into the catalogue keys.
+    private static func named(_ text: String) -> String {
+        #if os(iOS)
+        return text.replacingOccurrences(of: "NOOP", with: "Luma")
+        #else
+        return text
+        #endif
     }
 }

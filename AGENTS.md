@@ -7,6 +7,9 @@ rules, add-a-metric/screen/command recipes), [`docs/BUILD.md`](docs/BUILD.md) co
 specific WHOOP-app features that stay out of scope (and their local equivalents). Read this first;
 follow the links for depth.
 
+In this fork the iPhone app's interface is **Luma**, a separate layer over the strap layer described
+below: [`docs/LUMA.md`](docs/LUMA.md) covers its layout, its rules and how it is verified.
+
 ## What NOOP is (and the hard scope limits)
 
 NOOP is an **offline-by-default, on-device** companion app for WHOOP 4.0 and 5.0/MG straps (with
