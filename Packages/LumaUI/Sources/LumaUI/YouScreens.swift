@@ -333,6 +333,7 @@ struct HealthAccessCard: View {
 
 struct SettingsScreen: View {
     @EnvironmentObject private var env: LumaEnv
+    @EnvironmentObject private var live: LumaLive
     @EnvironmentObject private var router: LumaRouter
     @State private var exportURL: URL?
 
@@ -344,10 +345,12 @@ struct SettingsScreen: View {
                 toggle("A cue every kilometre", "Off: a cue every five minutes instead.", $env.profile.cueEveryKm)
                 toggle("Auto-pause outdoor runs", "Pauses when you stop moving and resumes when you set off.", $env.profile.autoPause)
             }
-            LumaSection(title: "Display")
+            LumaSection(title: "Display and alerts")
             LumaGroup {
                 toggle("Strain on the 0–21 scale", "Off: strain is shown from 0 to 100.", $env.profile.strainOn21)
-                toggle("Heart rate on the Lock Screen", "Shows live heart rate and today's numbers while the strap is streaming.", $env.profile.lockScreenHeartRate)
+                toggle("Heart rate on the Lock Screen", "A card with your heart rate and today's numbers. iOS starts it when you open Luma and keeps it for up to eight hours.", $env.profile.lockScreenHeartRate)
+                toggle("Strap battery alerts", "A notification when the strap needs charging.",
+                       Binding(get: { live.batteryAlerts }, set: { env.device?.setBatteryAlerts($0) }))
             }
             LumaSection(title: "Coach")
             LumaGroup {

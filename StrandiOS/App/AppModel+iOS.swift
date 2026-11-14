@@ -21,7 +21,7 @@ extension AppModel {
     /// Execute any actions queued by App Intents while the app was suspended (mark moment, buzz,
     /// ask coach). Call when the app becomes active. The optional `router` lets the ask-coach
     /// intent navigate to the Coach tab after sending the question.
-    func drainPendingIntents(router: NavRouter? = nil) {
+    func drainPendingIntents(router: NavRouter? = nil, askCoach: ((String) -> Void)? = nil) {
         for item in PendingIntents.drain() {
             switch item.action {
             case .markMoment: markMoment(at: item.date ?? Date())
@@ -34,9 +34,14 @@ extension AppModel {
             // dedicated key (one at a time).
             case .askCoach:
                 if let question = PendingIntents.consumeCoachQuestion() {
-                    router?.openCoach()
-                    Task { @MainActor in
-                        await coach.send(question)
+                    // The interface decides where a spoken question goes when it supplies a handler.
+                    if let askCoach {
+                        askCoach(question)
+                    } else {
+                        router?.openCoach()
+                        Task { @MainActor in
+                            await coach.send(question)
+                        }
                     }
                 }
             }

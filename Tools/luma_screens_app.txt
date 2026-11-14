@@ -1,2 +1,19 @@
-# name|screen|scrollY|data|waitSeconds   (full app, real data layer seeded by --demo-seed)
-app-today|today|0|live|8
+# name|screen|scrollY|data|waitSeconds   (the full app, launched with --demo-seed)
+app-01-today|today|0|live|10
+app-02-today-b|today|640|live|8
+app-03-sleep|today.sleep|0|live|8
+app-04-recovery|today.recovery|0|live|8
+app-05-strain|today.strain|0|live|8
+app-06-heart|today.heart|0|live|8
+app-07-trends|today.trends|0|live|8
+app-08-insights|today.insights|0|live|8
+app-09-train|train|0|live|8
+app-10-workout|train.workout|0|live|8
+app-11-history|train.history|0|live|8
+app-12-fuel|fuel|0|live|8
+app-13-coach|coach|0|live|8
+app-14-devices|you.devices|0|live|8
+app-15-settings|you.settings|0|live|8
+app-16-onboarding|cover.onboarding|0|live|8
+app-17-go|sheet.go|0|live|8
+app-18-first-run||0|live|10

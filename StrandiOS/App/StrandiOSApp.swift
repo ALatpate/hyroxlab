@@ -6,12 +6,9 @@ import UserNotifications
 /// iOS entry point. Unlike the macOS app (which adds a `MenuBarExtra` scene), iOS uses a single
 /// `WindowGroup`; the glanceable menu-bar role is filled by the Home/Lock-Screen widget instead.
 ///
-/// The iOS shell is `RootTabView` (a `TabView`), NOT the macOS `ContentView`. `ContentView` embeds
-/// `RootView()` — the `NavigationSplitView` sidebar shell — and `RootView.swift` is excluded from the
-/// iOS target in `project.yml` (the sidebar has no iPhone analogue), so `ContentView` cannot compile
-/// on iOS. The first-run onboarding/pairing wizard, the Terms acknowledgment gate, and the post-update
-/// "What's New" sheet that `ContentView` layers on are reproduced here as `iOSRootView`, wrapped around
-/// `RootTabView` so the iOS app keeps the same gating without depending on the macOS-only shell.
+/// The interface is Luma (`Packages/LumaUI`), mounted by `iOSRootView` through `LumaShell`. This type
+/// still owns the strap layer underneath it: the app model, BLE, Apple Health, the background tasks and
+/// the Live Activity controllers. `LumaBridge` (StrandiOS/Luma) connects the two.
 @main
 struct StrandiOSApp: App {
     /// UIKit bridge for Home Screen quick actions. SwiftUI keeps ownership of the scene and window.
@@ -36,6 +33,8 @@ struct StrandiOSApp: App {
     /// swiping the workout sheet away must not stop the clock, silence the strap or drop the
     /// double-tap handler. See `LiftSessionController`.
     @StateObject private var liftSession: LiftSessionController
+    /// Luma: the app's interface and the bridge between it and the strap layer below.
+    @StateObject private var luma: LumaBridge
     @Environment(\.scenePhase) private var scenePhase
     /// Appearance preference (System/Light/Dark). Default follows the OS; the Settings picker writes it.
     @AppStorage(AppearanceMode.storageKey) private var appearanceRaw = AppearanceMode.system.rawValue
@@ -175,6 +174,8 @@ struct StrandiOSApp: App {
         model.healthWriteBack = { [weak bridge] in
             _ = await bridge?.writeBackAfterNewData()
         }
+        // Luma's interface, built last: it reads the model, Apple Health and the Lock Screen card above.
+        _luma = StateObject(wrappedValue: LumaBridge(model: model, health: bridge, liveActivity: liveActivity))
     }
 
     /// The Shortcut-import alert's presentation binding, hoisted OUT of the `.alert` chain.
@@ -231,6 +232,7 @@ struct StrandiOSApp: App {
                 .environmentObject(router)
                 .environmentObject(UpdateStore.shared)
                 .environmentObject(liftSession)
+                .environmentObject(luma)
                 // v5 L3: the shared stress check-in nudge surface, so the Breathe screen's passive
                 // card observes the SAME instance the central detector (AppModel.evaluateStress) posts to.
                 .environment(\.stressNudgeCenter, model.stressNudgeCenter)
@@ -321,6 +323,9 @@ struct StrandiOSApp: App {
                 .onOpenURL { url in
                     if url.host == "import-health" {
                         model.handleHealthImportURL(url)
+                    } else if url.host == "luma" {
+                        // A tap on a widget or the Lock Screen card.
+                        luma.open(url)
                     }
                 }
                 .alert("Import Apple Health data?", isPresented: healthImportAlertPresented) {
@@ -347,8 +352,8 @@ struct StrandiOSApp: App {
         // safe no-op until the user opts in.
         .onChange(of: scenePhase, initial: true) { _, phase in
             if phase == .active {
-                CoachBriefScheduler.activateIfEnabled { await model.coach.generateBrief() }
-                model.drainPendingIntents(router: router)
+                luma.becameActive()
+                model.drainPendingIntents(router: router, askCoach: { question in luma.askCoach(question) })
                 // iOS starts a Lift Log banner only for an app on screen, so a banner lost while NOOP was in
                 // the background comes back now, whether or not the strap is sending anything.
                 pushLiftActivity()
@@ -444,21 +449,9 @@ struct StrandiOSApp: App {
     }
 }
 
-/// iOS root — the `RootTabView` shell with the first-run onboarding/pairing wizard overlaid until
-/// complete, the Terms acknowledgment gate over everything until the current version is accepted, and
-/// a "What's New" changelog sheet shown automatically after an update.
-///
-/// This mirrors the macOS `ContentView` (same `@AppStorage` keys, same gate ordering) but swaps the
-/// excluded `RootView()` sidebar for `RootTabView()`. The shared `OnboardingWizard`, `TermsGateView`,
-/// `WhatsNewView`, `AppChangelog`, and `Terms` symbols all compile into the iOS target unchanged.
+/// iOS root: Luma (`LumaShell`). In DEBUG builds the `--demo-screen` harness can still render one of the
+/// underlying strap-layer screens on its own for verification.
 private struct iOSRootView: View {
-    @AppStorage("noop.onboarded") private var onboarded = false
-    @AppStorage("noop.lastSeenChangelogVersion") private var lastSeenChangelog = ""
-    @AppStorage("noop.acceptedTermsVersion") private var acceptedTerms = ""
-    @State private var showWhatsNew = false
-    /// Starts false so a cold-launch external action can't race this view's onAppear decision about the
-    /// automatic What's New sheet. It becomes true only when no sheet is due or its dismissal completes.
-    @State private var automaticLaunchSheetResolved = false
 
     var body: some View {
         #if DEBUG
@@ -480,95 +473,10 @@ private struct iOSRootView: View {
         return AnyView(shell)
     }
 
-    /// HYROX Lab: the five-tab HYROX shell is the default; the stock NOOP shell stays one toggle away.
-    @AppStorage("hyrox.shellEnabled") private var hyroxShell = true
-
-    private var shell: some View {
-        ZStack {
-            if hyroxShell {
-                HXRootView()
-            } else {
-                RootTabView(homeScreenQuickActionsEnabled:
-                    demoBypass || (onboarded && acceptedTerms == Terms.currentVersion
-                        && automaticLaunchSheetResolved))
-            }
-            if !onboarded && !demoBypass {
-                OnboardingWizard(onFinished: {
-                    onboarded = true
-                    // A brand-new user just saw the expectations in onboarding — don't also pop the
-                    // changelog at them; mark them current.
-                    lastSeenChangelog = AppChangelog.currentVersion
-                })
-                .transition(.opacity)
-                .zIndex(1)
-            }
-            // Terms acknowledgment gate — over EVERYTHING (before onboarding/pairing/Bluetooth) until
-            // the current terms version is accepted; re-appears if the terms materially change.
-            if acceptedTerms != Terms.currentVersion && !demoBypass {
-                TermsGateView(onAccept: {
-                    // Keep any external action behind the gate while the accepted-terms change decides
-                    // whether What's New must present next. This write must precede acceptedTerms.
-                    automaticLaunchSheetResolved = false
-                    acceptedTerms = Terms.currentVersion
-                })
-                    .transition(.opacity)
-                    .zIndex(2)
-            }
-        }
-        .animation(.easeInOut(duration: 0.35), value: onboarded)
-        .animation(.easeInOut(duration: 0.35), value: acceptedTerms)
-        .sheet(isPresented: $showWhatsNew, onDismiss: { automaticLaunchSheetResolved = true }) {
-            WhatsNewView(onClose: {
-                lastSeenChangelog = AppChangelog.currentVersion
-                showWhatsNew = false
-            })
-        }
-        // The Terms gate must stay "over everything" — don't pop What's New on top of it after a
-        // combined terms+version update. Gate on terms being current, and re-check when they're
-        // accepted (onAppear already fired before acceptance), so What's New shows right after.
-        .onAppear {
-            showWhatsNewIfDue()
-            // Seed the current What's New into the Updates inbox (idempotent per version) so the bell
-            // collects it even if the user dismisses the auto sheet.
-            UpdateStore.shared.seedWhatsNewIfNeeded()
-            // #1659: iOS cannot auto-update a sideloaded build - no API lets an app install or re-sign an
-            // .ipa - so the most NOOP can do is NOTICE a release and say so.
-            //
-            // Gated on the SAME condition as showWhatsNewIfDue above, and the Android hook. This matters
-            // now that the check is on by default: without it a brand-new install would reach the network
-            // during first run, before the Terms gate the user has not accepted yet. While the default was
-            // off, nothing made that visible.
-            if onboarded && acceptedTerms == Terms.currentVersion {
-                UpdateWatch.runIfDue(currentVersion: UpdateWatch.installedVersion, sideloadHint: true)
-            }
-        }
-        .onChange(of: acceptedTerms) { _, _ in showWhatsNewIfDue() }
-    }
-
-    /// DEBUG: launched with --demo-seed, skip the first-run gates (onboarding / terms / What's New) so the
-    /// FULL shell with the tab bar renders populated for verification + screenshots. No-op in Release.
-    private var demoBypass: Bool {
-        #if DEBUG
-        return CommandLine.arguments.contains("--demo-seed")
-        #else
-        return false
-        #endif
-    }
-
-    private func showWhatsNewIfDue() {
-        if demoBypass {
-            automaticLaunchSheetResolved = true
-            return
-        }
-        // Existing users who updated: their last-seen version is behind the current one.
-        if onboarded && acceptedTerms == Terms.currentVersion
-            && lastSeenChangelog != AppChangelog.currentVersion {
-            automaticLaunchSheetResolved = false
-            showWhatsNew = true
-        } else {
-            automaticLaunchSheetResolved = true
-        }
-    }
+    /// The app's one interface is Luma. The first-run wizard, terms gate, What's New sheet and update
+    /// check of the shell this app was built on are not shown: Luma has its own setup, and
+    /// `LumaBridge` marks those gates settled.
+    private var shell: some View { LumaShell() }
 }
 
 #if DEBUG

@@ -85,7 +85,7 @@ jobs:
           gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/$TAG" >/dev/null 2>&1 || true
           gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease --target "$GITHUB_SHA" \
             --title "Luma iOS — ${VER} build ${GITHUB_RUN_NUMBER} · ${DATE} · ${SHA}" \
-            --notes "Rolling latest build of Luma (HYROX Lab) for iPhone (unsigned; AltStore / SideStore re-sign on install). Bundle id \`${{ steps.pkg.outputs.bid }}\`, installs beside stock NOOP. Base NOOP ${VER}, build ${GITHUB_RUN_NUMBER}, commit \`${SHA}\`." \
+            --notes "Rolling latest build of Luma for iPhone (unsigned; AltStore / SideStore re-sign on install). Bundle id \`${{ steps.pkg.outputs.bid }}\`, version ${VER}, build ${GITHUB_RUN_NUMBER}, commit \`${SHA}\`. Built on the open-source NOOP project under the PolyForm Noncommercial licence." \
             HYROXLab-ios.ipa
           gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
 

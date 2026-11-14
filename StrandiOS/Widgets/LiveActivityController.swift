@@ -168,9 +168,12 @@ final class LiveActivityController {
         // Link down: the dash, never the last number (`bonded` stays true across a disconnect, and keying off it once
         // left a fabricated "live" HR standing). No timed end: a timer in a suspended app fires at its next wake,
         // which is typically the strap coming back — exactly when the banner should stay.
-        var state = NOOPActivityAttributes.ContentState(bpm: connected ? bpm : nil, recovery: recovery,
+        if connected, let bpm { lastReading = (bpm, lastArrival ?? now) }
+        // A reading stays the current one for `staleAfter` after it arrived. The heart-rate layer clears its own
+        // number after ten quiet seconds, which suits a screen being watched and not a banner being glanced at.
+        let current = lastReading.flatMap { now.timeIntervalSince($0.at) <= Self.staleAfter ? $0.bpm : nil }
+        var state = NOOPActivityAttributes.ContentState(bpm: connected ? (bpm ?? current) : nil, recovery: recovery,
                                                         bonded: connected, effort: effort)
-        if let live = state.bpm { lastReading = (live, lastArrival ?? now) }
         decorate?(&state)
         // The reading's own time is left out of `state`: it moves with every reading, and comparing it would turn
         // each one into a push. It is stamped on as a push goes out (`stamped`).
@@ -187,14 +190,18 @@ final class LiveActivityController {
         } else if let activity {
             // The number giving way to the dash (the strap off the wrist, the link dropping) is pushed at once: no
             // tick follows it, so a push skipped for spacing would leave the last number standing.
+            // iOS meters how often a banner may be updated and drops updates past its budget without saying so; the
+            // banner then sat on an old number until it went stale. A heart rate every few seconds stays inside the
+            // budget. A number appearing or going is never held back.
+            let flipped = (shownState?.bpm == nil) != (state.bpm == nil)
+            guard flipped || now.timeIntervalSince(lastPush) >= Self.pushSpacing(inSession: state.session != nil) else { return }
             guard LiveHRBannerPushPolicy.due(shown: shownState, next: state, reading: \.bpm,
                                              sinceLastPush: now.timeIntervalSince(lastPush),
                                              staleAfter: Self.staleAfter) else { return }
             if let shown = shownState, (shown.bpm == nil) != (state.bpm == nil) { logReading(state) }
             lastPush = now
             shownState = state
-            let staleDate = now.addingTimeInterval(Self.staleAfter)
-            let content = ActivityContent(state: stamped(state), staleDate: staleDate)
+            let content = ActivityContent(state: stamped(state), staleDate: staleDate(for: state, now: now))
             Task { await activity.update(content) }
         } else if start(state, at: now) {
             log(state.bpm == nil ? "started, showing – until a heart rate arrives" : "started")
@@ -229,7 +236,7 @@ final class LiveActivityController {
         do {
             let started = try Activity.request(
                 attributes: NOOPActivityAttributes(title: "Heart rate"),
-                content: ActivityContent(state: stamped(state), staleDate: now.addingTimeInterval(Self.staleAfter)),
+                content: ActivityContent(state: stamped(state), staleDate: staleDate(for: state, now: now)),
                 pushType: nil
             )
             activity = started
@@ -246,6 +253,17 @@ final class LiveActivityController {
             }
             return false
         }
+    }
+
+    /// The shortest time between two ordinary pushes: tighter while a session is being recorded, when the number is
+    /// being watched.
+    static func pushSpacing(inSession: Bool) -> TimeInterval { inSession ? 4 : 8 }
+
+    /// When iOS should treat a pushed banner as stale: `staleAfter` after the reading it shows ARRIVED, not after
+    /// the push, so re-pushing an old number does not make it look current.
+    private func staleDate(for state: NOOPActivityAttributes.ContentState, now: Date) -> Date {
+        guard state.bpm != nil, let at = lastReading?.at else { return now.addingTimeInterval(Self.staleAfter) }
+        return max(now.addingTimeInterval(2), at.addingTimeInterval(Self.staleAfter))
     }
 
     /// `state` with the time of the reading it carries, as it goes out to iOS.

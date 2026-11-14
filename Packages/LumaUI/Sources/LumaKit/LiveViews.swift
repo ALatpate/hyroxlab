@@ -62,13 +62,19 @@ struct LiveStatusLine: View {
     let state: LumaLiveState
     var size: CGFloat = 11.5
 
+    private var dot: Color {
+        if state.isLive { return Luma.volt }
+        return state.connected && state.lastAt != nil ? Luma.amber : Luma.smoke
+    }
+
     var body: some View {
         HStack(spacing: 5) {
-            Circle().fill(state.isLive ? Luma.volt : (state.lastAt == nil ? Luma.smoke : Luma.amber)).frame(width: 6, height: 6)
+            Circle().fill(dot).frame(width: 6, height: 6)
             if state.isLive {
                 Text(state.zone.map { "Zone \($0)" } ?? "Live").foregroundStyle(state.zone == nil ? Luma.mist : state.zoneColor)
             } else if let at = state.lastAt {
-                Text("Last reading \(Text(at, style: .timer)) ago").foregroundStyle(Luma.mist).monospacedDigit()
+                // A system-driven clock: the age keeps counting while the app is suspended.
+                Text("\(state.connected ? "Last reading" : "Not connected ·") \(Text(at, style: .timer)) ago").foregroundStyle(Luma.mist).monospacedDigit()
             } else {
                 Text(state.connected ? "Waiting for a reading" : "Strap not connected").foregroundStyle(Luma.mist)
             }

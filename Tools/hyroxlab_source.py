@@ -22,11 +22,11 @@ def build(repo: str, version: str, build_no: str, bundle_id: str, size: int, sha
         "name": "Luma",
         "identifier": f"{bundle_id}.altstore",
         "sourceURL": f"{raw}/hyroxlab-source.json",
-        "subtitle": "Luma — WHOOP-powered HYROX, running and readiness, on your own phone.",
+        "subtitle": "Luma — recovery, running, HYROX and fuelling from your strap, on your own phone.",
         "description": (
-            "Personal AltStore / SideStore source for Luma (HYROX Lab), a fork of NOOP that adds a HYROX "
-            "training system, a full running module and readiness coaching on top of NOOP's direct "
-            "WHOOP connection. Add this source once; every new build appears as an update."
+            "Personal AltStore / SideStore source for Luma: recovery, sleep, strain, running, HYROX and "
+            "fuelling from a WHOOP strap you own, computed on your phone. Add this source once; every "
+            "new build appears as an update."
         ),
         "iconURL": f"https://github.com/{owner}/{name}/raw/main/Design/luma-icon-1024.png",
         "website": f"https://github.com/{owner}/{name}",
@@ -36,12 +36,13 @@ def build(repo: str, version: str, build_no: str, bundle_id: str, size: int, sha
                 "name": "Luma",
                 "bundleIdentifier": bundle_id,
                 "developerName": owner,
-                "subtitle": "HYROX, running and readiness from your WHOOP.",
+                "subtitle": "Recovery, running, HYROX and fuelling from your WHOOP.",
                 "localizedDescription": (
-                    "Luma reads a WHOOP strap you own directly over Bluetooth (via NOOP) and adds "
-                    "HYROX simulations and race mode, GPS running with splits and audio cues, readiness, "
-                    "training plans and a coach. Everything stays on the phone. Personal, non-commercial "
-                    "build; not affiliated with WHOOP or HYROX."
+                    "Luma reads a WHOOP strap you own directly over Bluetooth and turns it into recovery, "
+                    "sleep and strain each morning, GPS running with splits and spoken cues, HYROX race "
+                    "mode and readiness, a food and supplement log, and a coach. Everything stays on the "
+                    "phone. A personal, non-commercial build on open-source foundations, credited in the "
+                    "app's About screen; not affiliated with WHOOP or HYROX."
                 ),
                 "iconURL": f"https://github.com/{owner}/{name}/raw/main/Design/luma-icon-1024.png",
                 "tintColor": TINT,
@@ -68,6 +69,10 @@ def build(repo: str, version: str, build_no: str, bundle_id: str, size: int, sha
                         "NSLocationWhenInUseUsageDescription": "Records your route during outdoor runs.",
                         "NSHealthShareUsageDescription": "Reads Apple Health data you authorise.",
                         "NSHealthUpdateUsageDescription": "Writes workouts you authorise to Apple Health.",
+                        "NSMotionUsageDescription": "Counts steps during a walk or run.",
+                        "NSCameraUsageDescription": "Photographs a meal, label or supplement to log it.",
+                        "NSMicrophoneUsageDescription": "Lets you ask the coach a question by voice.",
+                        "NSSpeechRecognitionUsageDescription": "Transcribes a spoken question on the phone.",
                     },
                 },
             }

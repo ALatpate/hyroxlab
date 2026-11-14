@@ -19,7 +19,7 @@ public struct LumaLaunch {
     public static func fromArguments() -> LumaLaunch {
         let d = UserDefaults.standard
         scrollOffset = CGFloat(d.double(forKey: "lumaScroll"))
-        return LumaLaunch(screen: d.string(forKey: "lumaScreen"))
+        return LumaLaunch(screen: d.string(forKey: "lumaScreen").flatMap { $0.isEmpty ? nil : $0 })
     }
 }
 
@@ -95,10 +95,15 @@ public protocol LumaDeviceControl: AnyObject {
     func pair(_ strap: LumaFoundStrap, generation: LumaStrapGeneration)
     func makeActive(_ id: String)
     func forget(_ id: String)
+    /// A deliberate buzz the athlete asked for (finding the strap, testing it).
     func buzz()
+    /// A short buzz that marks a moment inside a session: an interval change, the next race segment.
+    func cue()
     /// Ask the strap for its fast heart-rate stream while a live screen is open.
     func setLiveHeartRate(_ on: Bool)
     func connectHealth() async
+    /// Notifications when the strap's battery runs low.
+    func setBatteryAlerts(_ on: Bool)
 }
 
 public struct LumaRoutePoint: Codable, Equatable, Sendable {
@@ -147,6 +152,7 @@ public final class LumaLive: ObservableObject {
     @Published public var found: [LumaFoundStrap] = []
     @Published public var paired: [LumaPairedStrap] = []
     @Published public var health: LumaHealthAccess = .off
+    @Published public var batteryAlerts = false
     public init() {}
 }
 
@@ -273,6 +279,31 @@ public final class LumaRouter: ObservableObject {
         sheet = nil
         coachPrompt = prompt
         tab = .coach
+    }
+
+    /// Opens what a widget, the Lock Screen card or a shortcut points at.
+    public func open(link: String) {
+        sheet = nil
+        switch link {
+        case "fuel": tab = .fuel
+        case "train": tab = .train
+        case "coach": tab = .coach
+        case "heart": show(.heart)
+        case "stress": show(.stress)
+        case "strap": show(.devices)
+        case "go":
+            tab = .today
+            sheet = .go
+        case "checkin":
+            tab = .today
+            sheet = .checkIn(LumaAnalysis.todayKey())
+        default: tab = .today
+        }
+    }
+
+    private func show(_ dest: LumaDest) {
+        tab = .today
+        if todayPath.last != dest { todayPath = [dest] }
     }
 }
 

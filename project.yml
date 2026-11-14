@@ -58,6 +58,9 @@ packages:
     path: Packages/StrandDesign
   LumaCore:
     path: Packages/LumaCore
+  # Luma's interface (LumaUI) and the slice of it the widget extension draws with (LumaKit).
+  LumaUI:
+    path: Packages/LumaUI
   # Clean-room local Oura ring BLE protocol (framing, auth, decoders, driver). Pure value types,
   # zero CoreBluetooth, so it stays headless/JVM-testable; the app target imports it for OuraLiveSource.
   OuraProtocol:
@@ -261,6 +264,8 @@ targets:
               CFBundleIconFiles: []
               UIPrerenderedIcon: false
         NSSupportsLiveActivities: true
+        # The heart-rate card on the Lock Screen is updated every few seconds while the strap streams.
+        NSSupportsLiveActivitiesFrequentUpdates: true
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         UISupportedInterfaceOrientations~ipad:
@@ -301,17 +306,19 @@ targets:
           # the re-score task, which is submitted only when a re-score is OWED, and a missing strap owes
           # none, so that task would never run in the one case the warning exists for.
           - $(PRODUCT_BUNDLE_IDENTIFIER).stalebattery
-        NSBluetoothAlwaysUsageDescription: "NOOP connects directly to your WHOOP strap over Bluetooth to read heart rate, R-R intervals, battery, and sensor data locally on your iPhone. Nothing leaves your device."
-        NSLocationWhenInUseUsageDescription: "NOOP records your route during an outdoor workout to show distance, pace, and a map, and keeps recording while the screen is off. The route stays on your device. Nothing leaves it."
-        NSHealthShareUsageDescription: "NOOP reads your own Apple Health data on-device to compute recovery, strain, and sleep. Nothing leaves your device."
-        NSHealthUpdateUsageDescription: "NOOP writes the metrics it computes from your strap back into Apple Health, on-device and only when you allow it."
-        NSMotionUsageDescription: "NOOP reads your iPhone's step count for a walking or running workout to show steps in the activity summary. It stays on your device. Nothing leaves it."
+        NSBluetoothAlwaysUsageDescription: "Luma connects directly to your WHOOP strap over Bluetooth to read heart rate, heart-rate variability, battery and sensor data on your iPhone. Nothing leaves your device."
+        NSLocationWhenInUseUsageDescription: "Luma records your route during an outdoor run to show distance, pace and a map, and keeps recording while the screen is off. The route stays on your device."
+        NSHealthShareUsageDescription: "Luma reads your own Apple Health data on this iPhone, such as steps and body mass, to complete your picture. Nothing leaves your device."
+        NSHealthUpdateUsageDescription: "Luma writes the sessions and nightly metrics it computes from your strap into Apple Health, on this iPhone and only when you allow it."
+        NSMotionUsageDescription: "Luma reads your iPhone's step count during a walk or run to show steps in the session summary. It stays on your device."
         # K4: Coach voice input. Speech is transcribed ON-DEVICE ONLY (requiresOnDeviceRecognition);
         # the mic button is disabled where the locale doesn't support that, never falls back to
         # server transcription. Only the resulting TEXT reaches the provider, via the same channel
         # a typed question already uses.
-        NSSpeechRecognitionUsageDescription: "NOOP transcribes your question on-device so you can ask the coach out loud instead of typing. Audio never leaves your iPhone."
-        NSMicrophoneUsageDescription: "NOOP uses the microphone to let you ask the coach a question by voice. The audio is transcribed on-device and never leaves your iPhone."
+        NSSpeechRecognitionUsageDescription: "Luma transcribes your question on this iPhone so you can ask the coach out loud. Audio never leaves your iPhone."
+        NSMicrophoneUsageDescription: "Luma uses the microphone to let you ask the coach a question by voice. The audio is transcribed on this iPhone and never leaves it."
+        # Photos of meals, nutrition labels and supplements, taken from the food log and the coach.
+        NSCameraUsageDescription: "Luma uses the camera when you photograph a meal, a nutrition label or a supplement to log it. A photo leaves your iPhone only when you send it to the coach."
         # #187: the opt-in AI Coach's "Custom (OpenAI-compatible)" provider can point at a LOCAL LLM on
         # the LAN (Ollama / LM Studio at http://192.168.x.x:11434). ATS blocks cleartext by default;
         # NSAllowsLocalNetworking exempts loopback/.local/private-LAN hosts ONLY — public HTTPS endpoints
@@ -363,15 +370,16 @@ targets:
       - package: StrandImport
       - package: StrandDesign
       - package: LumaCore
+      - package: LumaUI
+        product: LumaUI
+      - package: LumaUI
+        product: LumaKit
       - package: MarkdownUI
       - package: ZIPFoundation
       - package: PolarProtocol
       - target: NOOPiOSWidgets
-      # Embed the watchOS app so the iPhone app carries it (NOOP.app/Watch/NOOPWatch.app). A watch app
-      # installs by riding inside its iOS companion; without this it would never reach a paired watch.
-      # Build-from-source delivers it for certain; sideload install of the embedded watch app under a free
-      # Apple ID is unproven (an Apple limitation), so the docs steer watch users to a source build for now.
-      - target: NOOPWatch
+      # The watchOS app is not embedded in this build: Luma has no watch interface yet, and the
+      # sideload packaging removed the embedded watch app in any case.
 
   # WidgetKit + Live Activity extension — the iOS analogue of the macOS menu-bar
   # extra. Reads a tiny snapshot the app publishes into the shared App Group.
@@ -388,7 +396,7 @@ targets:
     info:
       path: StrandiOSWidgets/Info.plist
       properties:
-        CFBundleDisplayName: NOOP
+        CFBundleDisplayName: Luma
         # Version keys MUST live here in the generated-Info.plist properties — NOT hand-edited into the
         # file — because xcodegen regenerates StrandiOSWidgets/Info.plist on every `xcodegen generate`
         # (which every release runs for the version bump) and would otherwise rewrite them to its
@@ -414,6 +422,8 @@ targets:
         TARGETED_DEVICE_FAMILY: "1,2"
     dependencies:
       - package: StrandDesign
+      - package: LumaUI
+        product: LumaKit
 
   # ---------------------------------------------------------------------------
   # watchOS app (M3 — Apple-only). The iPhone is the brain: M1 computes Charge/

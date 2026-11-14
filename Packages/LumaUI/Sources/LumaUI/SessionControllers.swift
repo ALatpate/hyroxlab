@@ -322,7 +322,7 @@ final class RunController: ObservableObject {
         if phaseIndex < phases.count {
             let next = phases[phaseIndex]
             phase = next
-            env.device?.buzz()
+            env.device?.cue()
             let target = next.targetPace.map { " Target " + SessionVoice.pace($0) + "." } ?? ""
             voice.say(next.label + "." + target)
         } else {
@@ -428,7 +428,7 @@ final class RaceController: ObservableObject {
         _ = strap.start(sport: "HYROX", gps: false)
         strap.onStrapDoubleTap = { [weak self] in self?.advance() }
         env.device?.setLiveHeartRate(true)
-        env.device?.buzz()
+        env.device?.cue()
         if env.isDemo { seedDemo() }
         voice.say("Go. \(current?.label ?? "")")
         timer = Timer.publish(every: 0.2, on: .main, in: .common).autoconnect().sink { [weak self] _ in self?.tick() }
@@ -449,7 +449,7 @@ final class RaceController: ObservableObject {
         if recorder.isFinished {
             complete()
         } else {
-            env.device?.buzz()
+            env.device?.cue()
             voice.say(cue(current))
         }
     }
@@ -481,7 +481,7 @@ final class RaceController: ObservableObject {
         if s.endedAt == nil { s.endedAt = Date() }
         env.upsert(s)
         env.device?.setLiveHeartRate(false)
-        env.device?.buzz()
+        env.device?.cue()
         voice.say("Finished. \(LumaText.duration(s.totalS ?? 0)).")
         let distance = s.runs.compactMap { $0.distanceM }.reduce(0, +)
         Task {

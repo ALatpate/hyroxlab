@@ -134,17 +134,21 @@ final class RaceAnalyticsTests: XCTestCase {
         XCTAssertNil(open.assumption)
         XCTAssertNotNil(doubles.assumption)
         XCTAssertNotNil(relay.assumption)
-        let mid = { (r: FormatReadiness) in (r.predictedLowS! + r.predictedHighS!) / 2 }
+        let mid: (FormatReadiness) -> Double = { r in ((r.predictedLowS ?? 0) + (r.predictedHighS ?? 0)) / 2 }
         XCTAssertLessThan(mid(doubles), mid(open))
         XCTAssertLessThan(mid(relay), mid(open))
         // Calibrated on the latest simulation, the solo prediction reproduces that simulation's time,
         // all fifteen transitions included.
-        XCTAssertEqual(mid(open), s2.totalS ?? 0, accuracy: 0.5)
-        XCTAssertEqual(s2.totalS ?? 0, 8 * 290 + 1850 + 15 * 30, accuracy: 0.01)
+        let simTotal: Double = s2.totalS ?? 0
+        let expectedSim: Double = 2320.0 + 1850.0 + 450.0          // eight runs, eight stations, fifteen transitions
+        XCTAssertEqual(mid(open), simTotal, accuracy: 0.5)
+        XCTAssertEqual(simTotal, expectedSim, accuracy: 0.01)
         // Relay kilometres are run near the fresh 1 km time, not at race pace.
-        XCTAssertEqual(mid(relay), 1830 + 20 * 0.15 + 250 * 1.03 * 8 + 15 * 30, accuracy: 0.5)
+        let relayRuns: Double = 250.0 * 1.03 * 8.0
+        let expectedRelay: Double = 1830.0 + 3.0 + relayRuns + 450.0
+        XCTAssertEqual(mid(relay), expectedRelay, accuracy: 0.5)
         // The running in a doubles race is still the athlete's own eight kilometres.
-        XCTAssertGreaterThan(mid(doubles), 8 * 290)
+        XCTAssertGreaterThan(mid(doubles), 2320.0)
     }
 }
 

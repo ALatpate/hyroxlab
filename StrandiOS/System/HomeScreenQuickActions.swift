@@ -20,10 +20,10 @@ enum HomeScreenQuickAction: String, CaseIterable {
 
     private var localizedTitle: String {
         switch self {
-        case .liveHeartRate: String(localized: "Live HR")
-        case .startWorkout: String(localized: "Start workout")
-        case .logJournal: String(localized: "Log journal")
-        case .breathe: String(localized: "Breathe")
+        case .liveHeartRate: "Heart rate"
+        case .startWorkout: "Start a session"
+        case .logJournal: "Check in"
+        case .breathe: "Breathe"
         }
     }
 
@@ -48,7 +48,8 @@ enum HomeScreenQuickAction: String, CaseIterable {
 
     @MainActor
     static func install(in application: UIApplication) {
-        application.shortcutItems = allCases.map(\.shortcutItem)
+        // The three that lead somewhere in Luma. The breathing exercise has no screen in it.
+        application.shortcutItems = [HomeScreenQuickAction.startWorkout, .liveHeartRate, .logJournal].map(\.shortcutItem)
     }
 }
 
