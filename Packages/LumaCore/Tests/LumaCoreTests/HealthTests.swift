@@ -262,8 +262,8 @@ final class FuelTests: XCTestCase {
     }
 
     func testTotalsAndDayClass() {
-        let e = LumaDemoContent.fuel(today: Date(timeIntervalSince1970: 1_794_657_600 + 20 * 3600))
-        let todayKey = LDate.key(Date(timeIntervalSince1970: 1_794_657_600 + 20 * 3600))
+        let e = LumaDemoContent.fuel(today: Date(timeIntervalSince1970: 1_794_657_600 + 3 * 3600))
+        let todayKey = LDate.key(Date(timeIntervalSince1970: 1_794_657_600 + 3 * 3600))
         let t = FuelTotals.of(e.filter { $0.day == todayKey })
         XCTAssertGreaterThan(t.proteinG, 60)
         XCTAssertEqual(t.waterMl, 1500)

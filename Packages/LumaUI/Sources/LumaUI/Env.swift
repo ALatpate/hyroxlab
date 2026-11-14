@@ -423,7 +423,8 @@ public final class LumaEnv: ObservableObject {
 
     func refreshAnalysis() {
         let today = LumaAnalysis.todayKey()
-        analysis = LumaAnalysis.build(days: days, sleeps: sleeps, workouts: workouts, profile: profile, planned: planned, today: today)
+        analysis = LumaAnalysis.build(days: days, sleeps: sleeps, workouts: workouts, profile: profile, planned: planned,
+                                       checkIns: checkIns, personalBests: runPBs, today: today)
         onGlanceChange?()
     }
 

@@ -1,5 +1,22 @@
 # name|screen|scrollY|data|waitSeconds
 01-today|today|0|demo|5
-02-today-b|today|560|demo|5
 03-today-c|today|1180|demo|5
-04-today-sparse|today|0|sparse|5
+10-sleep|today.sleep|0|demo|5
+11-sleep-b|today.sleep|700|demo|5
+12-sleep-c|today.sleep|1500|demo|5
+13-recovery|today.recovery|0|demo|5
+14-recovery-b|today.recovery|640|demo|5
+15-strain|today.strain|0|demo|5
+16-strain-b|today.strain|760|demo|5
+17-load|today.load|0|demo|5
+18-load-b|today.load|760|demo|5
+19-heart|today.heart|0|demo|5
+20-heart-b|today.heart|760|demo|5
+21-vitals|today.vitals|0|demo|5
+22-stress|today.stress|0|demo|5
+23-trends|today.trends|0|demo|5
+24-trends-b|today.trends|800|demo|5
+25-insights|today.insights|0|demo|5
+26-insights-b|today.insights|900|demo|5
+27-sleep-sparse|today.sleep|0|sparse|5
+28-trends-sparse|today.trends|0|sparse|5

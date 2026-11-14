@@ -50,6 +50,7 @@ public struct PersonalBest: Codable, Equatable, Sendable, Identifiable {
         case 5000: return "5 km"
         case 10000: return "10 km"
         case 21097: return "Half marathon"
+        case 42195: return "Marathon"
         default: return "\(Int(distanceM)) m"
         }
     }

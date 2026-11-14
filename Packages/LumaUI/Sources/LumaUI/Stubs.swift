@@ -24,42 +24,6 @@ struct CoachScreen: View {
     var body: some View { StubScreen(name: "CoachScreen") }
 }
 
-struct SleepScreen: View {
-    var body: some View { StubScreen(name: "SleepScreen") }
-}
-
-struct RecoveryScreen: View {
-    var body: some View { StubScreen(name: "RecoveryScreen") }
-}
-
-struct StrainScreen: View {
-    var body: some View { StubScreen(name: "StrainScreen") }
-}
-
-struct HeartScreen: View {
-    var body: some View { StubScreen(name: "HeartScreen") }
-}
-
-struct VitalsScreen: View {
-    var body: some View { StubScreen(name: "VitalsScreen") }
-}
-
-struct StressScreen: View {
-    var body: some View { StubScreen(name: "StressScreen") }
-}
-
-struct TrendsScreen: View {
-    var body: some View { StubScreen(name: "TrendsScreen") }
-}
-
-struct InsightsScreen: View {
-    var body: some View { StubScreen(name: "InsightsScreen") }
-}
-
-struct LoadScreen: View {
-    var body: some View { StubScreen(name: "LoadScreen") }
-}
-
 struct WorkoutScreen: View {
     let id: String
     var body: some View { StubScreen(name: "WorkoutScreen") }

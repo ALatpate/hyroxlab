@@ -363,14 +363,14 @@ struct TodayVitals: View {
                 tile("Respiratory rate", night?.respRate, 1, "rpm", .stress, "lungs.fill", baseline: analysis.baselines.respRate, better: nil, dest: .vitals)
                 tile("Skin temperature", night?.skinTempDev, 1, "°C", .stress, "thermometer.medium", baseline: nil, better: nil, dest: .vitals, signed: true)
                 stressTile
-                tile("Steps", analysis.day?.steps.map(Double.init), 0, "", .strain, "figure.walk", baseline: nil, better: nil, dest: .strain)
-                tile("Active energy", analysis.day?.activeKcal, 0, "kcal", .strain, "flame.fill", baseline: nil, better: nil, dest: .strain)
+                tile("Steps", analysis.day?.steps.map(Double.init), 0, "", .strain, "figure.walk", baseline: nil, better: nil, dest: .strain, grouped: true)
+                tile("Active energy", analysis.day?.activeKcal, 0, "kcal", .strain, "flame.fill", baseline: nil, better: nil, dest: .strain, grouped: true)
             }
         }
     }
 
     private func tile(_ label: String, _ value: Double?, _ decimals: Int, _ unit: String, _ tone: LumaTone, _ symbol: String,
-                      baseline: LBaseline?, better: Bool?, dest: LumaDest, signed: Bool = false) -> some View {
+                      baseline: LBaseline?, better: Bool?, dest: LumaDest, signed: Bool = false, grouped: Bool = false) -> some View {
         Button { router.push(dest) } label: {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 6) {
@@ -378,7 +378,7 @@ struct TodayVitals: View {
                     LumaLabel(label)
                     Spacer(minLength: 0)
                 }
-                LumaFigure(value: value, decimals: decimals, unit: unit, size: 34, signed: signed)
+                LumaFigure(value: value, decimals: decimals, unit: unit, size: 34, signed: signed, grouped: grouped)
                 if let value, let baseline {
                     DeltaBadge(delta: value - baseline.center, decimals: decimals, higherIsBetter: better, suffix: "vs usual")
                 } else {
@@ -431,9 +431,9 @@ struct FuelGlance: View {
             LumaCard {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack(alignment: .firstTextBaseline) {
-                        LumaFigure(value: totals.kcal, unit: "kcal", size: 38)
+                        LumaFigure(value: totals.kcal, unit: "kcal", size: 38, grouped: true)
                         Spacer()
-                        Text("of \(Int(target.kcal)) · \(target.dayClass.title.lowercased())").font(LumaFont.body(13)).foregroundStyle(Luma.mist)
+                        Text("of \(LFormat.grouped(target.kcal)) · \(target.dayClass.title.lowercased())").font(LumaFont.body(13)).foregroundStyle(Luma.mist)
                     }
                     LumaBar(value: totals.kcal, total: target.kcal, color: Luma.mint)
                     HStack(spacing: 14) {
@@ -441,13 +441,10 @@ struct FuelGlance: View {
                         macro("Carbs", totals.carbsG, target.carbsG, Luma.amber)
                         macro("Water", totals.waterMl / 1000, target.waterMl / 1000, Luma.sky, decimals: 1, unit: "L")
                     }
-                    HStack(spacing: 10) {
-                        Button { router.sheet = .fuelAdd(.photo) } label: { Label("Photo", systemImage: "camera.fill") }
-                            .buttonStyle(LumaSecondaryButtonStyle(compact: true))
-                        Button { router.sheet = .fuelAdd(.meal) } label: { Label("Type it", systemImage: "square.and.pencil") }
-                            .buttonStyle(LumaSecondaryButtonStyle(compact: true))
-                        Button { env.logWater(250); LumaHaptics.success() } label: { Label("250 ml", systemImage: "drop.fill") }
-                            .buttonStyle(LumaSecondaryButtonStyle(compact: true))
+                    HStack(spacing: 8) {
+                        LumaQuickAction(symbol: "camera.fill", title: "Photo", tint: Luma.mint) { router.sheet = .fuelAdd(.photo) }
+                        LumaQuickAction(symbol: "square.and.pencil", title: "Type", tint: Luma.mint) { router.sheet = .fuelAdd(.meal) }
+                        LumaQuickAction(symbol: "drop.fill", title: "250 ml", tint: Luma.sky) { env.logWater(250); LumaHaptics.success() }
                     }
                 }
             }

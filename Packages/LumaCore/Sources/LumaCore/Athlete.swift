@@ -309,6 +309,24 @@ public enum CheckInTag: String, Codable, CaseIterable, Sendable, Identifiable {
         }
     }
 
+    /// How the tag reads after the word "After".
+    public var phrase: String {
+        switch self {
+        case .alcohol: return "alcohol"
+        case .lateCaffeine: return "caffeine after 2 pm"
+        case .lateMeal: return "a late meal"
+        case .lateScreens: return "screens in bed"
+        case .sauna: return "a sauna"
+        case .coldPlunge: return "a cold plunge"
+        case .stretching: return "stretching"
+        case .massage: return "a massage"
+        case .travel: return "travel"
+        case .sick: return "feeling unwell"
+        case .highStress: return "a stressful day"
+        case .nap: return "a nap"
+        }
+    }
+
     public var symbol: String {
         switch self {
         case .alcohol: return "wineglass.fill"

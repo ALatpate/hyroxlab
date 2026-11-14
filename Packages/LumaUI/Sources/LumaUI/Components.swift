@@ -68,15 +68,15 @@ struct LumaTabScreen<Trailing: View, Content: View>: View {
             LumaBackdrop(tone: tone)
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    HStack(alignment: .center, spacing: 12) {
-                        VStack(alignment: .leading, spacing: 3) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(alignment: .center, spacing: 12) {
                             if let subtitle {
                                 Text(subtitle).font(LumaFont.label(12)).foregroundStyle(Luma.mist)
                             }
-                            Text(title).font(LumaFont.title(30)).foregroundStyle(Luma.frost)
+                            Spacer(minLength: 8)
+                            trailing()
                         }
-                        Spacer(minLength: 8)
-                        trailing()
+                        Text(title).font(LumaFont.title(30)).foregroundStyle(Luma.frost).lineLimit(1).minimumScaleFactor(0.6)
                     }
                     .padding(.top, 6)
                     content()
@@ -205,13 +205,16 @@ struct LumaFigure: View {
     var size: CGFloat = 44
     var color: Color = Luma.frost
     var signed: Bool = false
+    /// Thousands separators (steps, energy).
+    var grouped: Bool = false
     @State private var shown: Double = 0
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 3) {
             if let value {
                 RollingNumber(value: shown) { v in
-                    signed ? String(format: "%+.\(decimals)f", v) : String(format: "%.\(decimals)f", v)
+                    if grouped { return LFormat.grouped(v) }
+                    return signed ? String(format: "%+.\(decimals)f", v) : String(format: "%.\(decimals)f", v)
                 }
                 .font(LumaFont.numeral(size))
                 .foregroundStyle(color)
@@ -246,7 +249,7 @@ struct DeltaBadge: View {
             HStack(spacing: 4) {
                 Image(systemName: flat ? "minus" : (d > 0 ? "arrow.up.right" : "arrow.down.right"))
                     .font(.system(size: 10, weight: .bold))
-                Text("\(String(format: "%+.\(decimals)f", d))\(unit) \(suffix)")
+                Text(flat ? "Level \(suffix.replacingOccurrences(of: "vs", with: "with"))" : "\(String(format: "%+.\(decimals)f", d))\(unit) \(suffix)")
                     .font(LumaFont.body(12, .medium))
             }
             .foregroundStyle(color)
@@ -306,6 +309,28 @@ struct LumaSecondaryButtonStyle: ButtonStyle {
             .overlay(RoundedRectangle(cornerRadius: compact ? 14 : 18, style: .continuous).strokeBorder(Luma.line, lineWidth: 1))
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
+    }
+}
+
+/// One of a row of equal-width shortcuts: an icon and a short label on one line.
+struct LumaQuickAction: View {
+    let symbol: String
+    let title: String
+    var tint: Color = Luma.frost
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: symbol).font(.system(size: 13, weight: .semibold)).foregroundStyle(tint)
+                Text(title).font(LumaFont.body(13.5, .semibold)).foregroundStyle(Luma.frost).lineLimit(1).minimumScaleFactor(0.8)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Luma.raised))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Luma.line, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
     }
 }
 
