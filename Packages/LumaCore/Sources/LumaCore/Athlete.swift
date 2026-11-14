@@ -29,6 +29,10 @@ public struct LProfile: Codable, Equatable, Sendable {
     /// The athlete agreed to send the health data a question needs to the coach's AI provider.
     public var shareHealthWithCoach: Bool = false
     public var coachModel: String?
+    /// Write a short read of the day each morning (one coach request a day).
+    public var morningBrief: Bool = true
+    /// Show live heart rate and today's numbers on the Lock Screen while the strap is streaming.
+    public var lockScreenHeartRate: Bool = true
     /// 0 until the Luma setup flow has been completed.
     public var setupVersion: Int = 0
 
@@ -39,7 +43,7 @@ public struct LProfile: Codable, Equatable, Sendable {
     enum CodingKeys: String, CodingKey {
         case name, sex, birthYear, heightCm, weightKg, maxHR, lthr, format, fiveKSeconds, raceDate, raceName
         case sleepNeedHours, gym, goals, voiceCues, cueEveryKm, autoPause, strainOn21, shareHealthWithCoach
-        case coachModel, setupVersion
+        case coachModel, morningBrief, lockScreenHeartRate, setupVersion
     }
 
     public init(from decoder: Decoder) throws {
@@ -64,6 +68,8 @@ public struct LProfile: Codable, Equatable, Sendable {
         strainOn21 = try c.decodeIfPresent(Bool.self, forKey: .strainOn21) ?? true
         shareHealthWithCoach = try c.decodeIfPresent(Bool.self, forKey: .shareHealthWithCoach) ?? false
         coachModel = try c.decodeIfPresent(String.self, forKey: .coachModel)
+        morningBrief = try c.decodeIfPresent(Bool.self, forKey: .morningBrief) ?? true
+        lockScreenHeartRate = try c.decodeIfPresent(Bool.self, forKey: .lockScreenHeartRate) ?? true
         setupVersion = try c.decodeIfPresent(Int.self, forKey: .setupVersion) ?? 0
     }
 

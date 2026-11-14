@@ -382,3 +382,63 @@ public enum LumaDemoContent {
         }
     }
 }
+
+/// A clock that only moves when told to: for tests and for building demo race sessions.
+public final class ManualClock: MonotonicClock, @unchecked Sendable {
+    private var ms: Int64
+    public init(startMs: Int64 = 0) { ms = startMs }
+    public func nowMs() -> Int64 { ms }
+    public func advance(_ seconds: Double) { ms += Int64((seconds * 1000).rounded()) }
+}
+
+public extension LumaDemoContent {
+    /// Typical station times in seconds for a recreational open-division athlete, used as defaults
+    /// until the athlete has benchmarks of their own.
+    static func typicalStationSeconds(_ st: Station) -> Double {
+        switch st {
+        case .skiErg: return 262
+        case .sledPush: return 198
+        case .sledPull: return 244
+        case .burpeeBroadJump: return 302
+        case .rowing: return 271
+        case .farmersCarry: return 122
+        case .sandbagLunges: return 296
+        case .wallBalls: return 418
+        }
+    }
+
+    /// A complete race simulation with plausible splits, recorded through the real split recorder.
+    static func simulation(daysAgo: Int, runPace: Double, stationFactor: Double = 1, now: Date = Date()) -> HXSession {
+        let clock = ManualClock()
+        let plan = RacePlanBuilder.fullRace(format: .openSingles, sex: .male)
+        let started = now.addingTimeInterval(-Double(daysAgo) * 86_400 - 5 * 3600)
+        var rec = SplitRecorder(session: HXSession(kind: .fullSimulation, format: .openSingles, sex: .male, startedAt: started), plan: plan, clock: clock)
+        var rng = SeededRNG(seed: UInt64(daysAgo) &+ 41)
+        rec.start()
+        var run = 0
+        for p in plan {
+            let seconds: Double
+            let hr: Double
+            switch p.kind {
+            case .run:
+                run += 1
+                seconds = runPace * (1 + 0.014 * Double(run)) + rng.gauss() * 4
+                hr = 158 + Double(run) * 1.6
+            case .roxzone:
+                seconds = rng.range(27, 44)
+                hr = 160
+            case .station:
+                seconds = (p.station.map(typicalStationSeconds) ?? 240) * stationFactor * rng.range(0.95, 1.08)
+                hr = 166 + rng.range(0, 8)
+            default:
+                seconds = 60
+                hr = 120
+            }
+            clock.advance(seconds)
+            rec.advance(hr: HRSummary(avg: hr, max: hr + 7, min: hr - 14, sampleCount: Int(seconds), expectedCount: Int(seconds), source: .wristOptical))
+        }
+        var s = rec.session
+        s.endedAt = started.addingTimeInterval(s.totalS ?? 0)
+        return s
+    }
+}

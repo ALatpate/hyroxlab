@@ -11,6 +11,8 @@ public struct LumaLaunch {
     public var screen: String?
     /// Shifts scrolling content up by this many points so a screenshot can show below the fold.
     public static var scrollOffset: CGFloat = 0
+    /// The step a multi-step screen opens on.
+    public static var page = 0
 
     public init(screen: String? = nil) { self.screen = screen }
 
@@ -218,9 +220,12 @@ enum LumaCoverDest: Identifiable {
 
 /// What a run is meant to be, chosen before it starts.
 struct RunPlan: Equatable {
-    enum Mode: String, CaseIterable { case free, intervals, treadmill }
+    /// `session` is any timed, non-GPS workout (a class, a ride on a stationary bike…).
+    enum Mode: String, CaseIterable { case free, intervals, treadmill, session }
     var mode: Mode = .free
     var title: String = "Run"
+    /// The sport name the session is stored under.
+    var sport: String = "Running"
     var targetPaceSPerKm: Double?
     var intervalCount: Int = 6
     var intervalMeters: Double = 1000
@@ -353,6 +358,7 @@ public final class LumaEnv: ObservableObject {
     public var onGlanceChange: (() -> Void)?
 
     private var reloadTask: Task<Void, Never>?
+    private(set) lazy var coach = CoachEngine(env: self)
 
     public init(source: LumaDataSource, live: LumaLive, secrets: LumaSecrets, persistent: Bool = true) {
         self.source = source
@@ -395,6 +401,8 @@ public final class LumaEnv: ObservableObject {
             env.lifts = LumaDemoContent.lifts()
             env.runPBs = [PersonalBest(distanceM: 1000, seconds: 252), PersonalBest(distanceM: 1609, seconds: 421),
                           PersonalBest(distanceM: 5000, seconds: 1480), PersonalBest(distanceM: 10000, seconds: 3105)]
+            env.upsert(LumaDemoContent.simulation(daysAgo: 37, runPace: 334, stationFactor: 1.09))
+            env.upsert(LumaDemoContent.simulation(daysAgo: 9, runPace: 319))
         }
         return env
     }
@@ -564,6 +572,41 @@ public final class LumaEnv: ObservableObject {
         }
         if !improved.isEmpty { runPBs = all.sorted { $0.distanceM < $1.distanceM } }
         return improved
+    }
+
+    // MARK: Export and about
+
+    public var versionLine: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "–"
+        let build = info?["CFBundleVersion"] as? String ?? "–"
+        return "Version \(version), build \(build)"
+    }
+
+    private struct ExportFile: Encodable {
+        var exportedAt: Date
+        var profile: LProfile
+        var routine: [RoutineSlot]
+        var planned: [PlannedSession]
+        var fuel: [FuelEntry]
+        var supplements: [SupplementPlan]
+        var checkIns: [CheckIn]
+        var lifts: [LiftSession]
+        var personalBests: [PersonalBest]
+        var raceSessions: [HXSession]
+    }
+
+    /// Writes everything the athlete has entered to one JSON file and returns where it is.
+    func exportFile() -> URL? {
+        let file = ExportFile(exportedAt: Date(), profile: profile, routine: routine, planned: planned.filter { $0.status != .removed },
+                              fuel: fuel, supplements: supplements, checkIns: checkIns, lifts: lifts, personalBests: runPBs, raceSessions: sessions)
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        guard let data = try? encoder.encode(file) else { return nil }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("Luma records \(today).json")
+        do { try data.write(to: url, options: .atomic) } catch { return nil }
+        return url
     }
 
     // MARK: Strap data writes

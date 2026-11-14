@@ -229,6 +229,10 @@ enum LumaRoute {
                 if let w = all.first(where: { $0.kind == .run }) ?? all.first { r.push(.workout(w.id)) }
             }
         case "train.readiness": r.open(.train, .raceReadiness)
+        case "train.session":
+            if let first = env.sessions.first { r.open(.train, .session(first.id)) } else { r.tab = .train }
+        case "train.lift":
+            if let first = env.lifts.sorted(by: { $0.start > $1.start }).first { r.open(.train, .lift(first.id)) } else { r.tab = .train }
         case "train.strength": r.open(.train, .strength)
         case "train.history": r.open(.train, .history)
         case "fuel": r.tab = .fuel
@@ -251,7 +255,11 @@ enum LumaRoute {
         case "cover.run": r.cover = .run(RunPlan())
         case "cover.race": r.cover = .race(.fullSimulation)
         case "cover.lift": r.cover = .lift
-        case "cover.onboarding": r.cover = .onboarding
+        case "cover.onboarding", "cover.onboarding.1", "cover.onboarding.2", "cover.onboarding.3", "cover.onboarding.4":
+            LumaLaunch.page = Int(String(name.last ?? "0")) ?? 0
+            r.cover = .onboarding
+        case "sheet.manual": r.tab = .train; r.sheet = .manualWorkout
+        case "sheet.water": r.sheet = .fuelAdd(.water)
         default: break
         }
     }
