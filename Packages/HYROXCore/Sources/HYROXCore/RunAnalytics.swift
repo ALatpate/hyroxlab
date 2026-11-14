@@ -16,7 +16,7 @@ public struct RunSample: Codable, Equatable, Sendable {
     }
 }
 
-public struct Lap: Codable, Equatable, Sendable, Identifiable {
+public struct RunLap: Codable, Equatable, Sendable, Identifiable {
     public var id: Int { index }
     public let index: Int
     public let distanceM: Double
@@ -105,9 +105,9 @@ public struct HXZones: Codable, Equatable, Sendable {
 
 public enum RunAnalytics {
     /// Auto-laps at `lapM` from cumulative samples; the final partial lap is flagged.
-    public static func laps(_ samples: [RunSample], lapM: Double = 1000) -> [Lap] {
+    public static func laps(_ samples: [RunSample], lapM: Double = 1000) -> [RunLap] {
         guard samples.count >= 2, lapM > 0 else { return [] }
-        var laps: [Lap] = []
+        var laps: [RunLap] = []
         var lapStartT = samples[0].tS, lapStartD = samples[0].distanceM
         var nextMark = lapStartD + lapM
         var hrAcc: [Double] = []
@@ -119,7 +119,7 @@ public enum RunAnalytics {
                 let frac = (nextMark - prev.distanceM) / max(1e-6, s.distanceM - prev.distanceM)
                 let tCross = prev.tS + frac * (s.tS - prev.tS)
                 let secs = tCross - lapStartT
-                laps.append(Lap(index: laps.count + 1, distanceM: lapM, seconds: secs,
+                laps.append(RunLap(index: laps.count + 1, distanceM: lapM, seconds: secs,
                                 paceSPerKm: secs / (lapM / 1000), avgHR: HXStats.mean(hrAcc), isPartial: false))
                 lapStartT = tCross; lapStartD = nextMark; nextMark += lapM
                 hrAcc.removeAll()
@@ -129,7 +129,7 @@ public enum RunAnalytics {
         let remD = prev.distanceM - lapStartD
         if remD > 50 {
             let secs = prev.tS - lapStartT
-            laps.append(Lap(index: laps.count + 1, distanceM: remD, seconds: secs,
+            laps.append(RunLap(index: laps.count + 1, distanceM: remD, seconds: secs,
                             paceSPerKm: secs / (remD / 1000), avgHR: HXStats.mean(hrAcc), isPartial: true))
         }
         return laps

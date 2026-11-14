@@ -480,11 +480,18 @@ private struct iOSRootView: View {
         return AnyView(shell)
     }
 
+    /// HYROX Lab: the five-tab HYROX shell is the default; the stock NOOP shell stays one toggle away.
+    @AppStorage("hyrox.shellEnabled") private var hyroxShell = true
+
     private var shell: some View {
         ZStack {
-            RootTabView(homeScreenQuickActionsEnabled:
-                demoBypass || (onboarded && acceptedTerms == Terms.currentVersion
-                    && automaticLaunchSheetResolved))
+            if hyroxShell {
+                HXRootView()
+            } else {
+                RootTabView(homeScreenQuickActionsEnabled:
+                    demoBypass || (onboarded && acceptedTerms == Terms.currentVersion
+                        && automaticLaunchSheetResolved))
+            }
             if !onboarded && !demoBypass {
                 OnboardingWizard(onFinished: {
                     onboarded = true

@@ -953,9 +953,17 @@ final class AICoachEngine: ObservableObject {
 
     /// Full data context = the metrics summary + recent workouts (+ an OPT-IN on-device-signals summary
     /// when the second consent is on). Used when the user has granted data access.
+    /// HYROX Lab: an extra context block appended to every message (readiness, plan, sessions,
+    /// benchmarks). Installed by the HYROX shell; nil in the stock NOOP shell.
+    static var extraContextProvider: (() async -> String)?
+
     func buildFullContext() async -> String {
         var ctx = buildContext()
         ctx += "\n\n" + (await recentWorkoutsBlock())
+        if let extra = Self.extraContextProvider {
+            let block = await extra()
+            if !block.isEmpty { ctx += "\n\n" + block }
+        }
         // Derived stress: a single Baevsky Stress Index summary line over today's R-R, computed the same
         // way StressView does. Gated here under `dataConsent` (the caller only reaches buildFullContext()
         // with consent on), so it rides the SAME consent + text-only channel as the HRV/RHR summary, a
