@@ -258,8 +258,7 @@ struct RaceReadinessScreen: View {
     @EnvironmentObject private var router: LumaRouter
 
     var body: some View {
-        let fresh = env.runPBs.first { $0.distanceM == 1000 }?.seconds ?? env.benchmarks.bestRun1kS?.seconds
-        let ready = RaceReadiness.assess(benchmarks: env.benchmarks, sessions: env.sessions, sex: env.profile.sex, fresh1kS: fresh)
+        let ready = RaceReadiness.assess(benchmarks: env.benchmarks, sessions: env.sessions, sex: env.profile.sex, personalBests: env.runPBs)
         let sims = env.sessions.filter { $0.kind.isHyrox }
         LumaDetailScreen(title: "HYROX", tone: .run) {
             Text("Which race are you ready for?").font(LumaFont.title(26)).foregroundStyle(Luma.frost)
@@ -336,6 +335,9 @@ struct ReadinessCard: View {
                         Text("\(LumaText.duration(lo)) – \(LumaText.duration(hi))").font(LumaFont.numeral(34)).foregroundStyle(Luma.frost)
                         Text("predicted").font(LumaFont.body(12.5)).foregroundStyle(Luma.mist)
                     }
+                    if let assumption = readiness.assumption {
+                        Text(assumption).font(LumaFont.body(12.5)).foregroundStyle(Luma.mist).fixedSize(horizontal: false, vertical: true)
+                    }
                 } else {
                     Text("Not enough data to predict").font(LumaFont.body(15, .medium)).foregroundStyle(Luma.mist)
                 }
@@ -364,7 +366,7 @@ struct StationRadarCard: View {
             let load = st.loadKg(format: env.profile.format, sex: env.profile.sex)
             guard let best = env.benchmarks.bestStationS(st, loadKg: load) else { return (st.shortTitle, nil) }
             // Typical time maps to 0.6 of the radius; 30 % faster reaches the rim.
-            return (st.shortTitle, min(1, max(0.15, 0.6 * LumaDemoContent.typicalStationSeconds(st) / best)))
+            return (st.shortTitle, min(1, max(0.15, 0.6 * st.typicalSeconds / best)))
         }
         if spokes.contains(where: { $0.value != nil }) {
             LumaCard {

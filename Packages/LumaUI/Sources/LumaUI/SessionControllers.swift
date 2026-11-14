@@ -513,22 +513,14 @@ final class RaceController: ObservableObject {
         }
     }
 
-    /// Per-segment targets from the athlete's own benchmarks, falling back to typical times.
+    /// Per-segment targets: the athlete's own bests with their measured race fatigue, the same
+    /// numbers the finish prediction is built from.
     private func buildTargets(_ plan: [PlannedSegment]) {
-        let b = env.benchmarks
-        let fallbackRun = env.profile.fiveKSeconds.map { $0 / 5 * 1.12 } ?? 330
-        let run = (b.bestRun1kS?.seconds ?? fallbackRun) * 1.08
-        let rox = b.typicalRoxzoneS ?? 35
-        for p in plan {
-            switch p.kind {
-            case .run: targets[p.id] = run * (p.distanceM ?? 1000) / 1000
-            case .roxzone: targets[p.id] = rox
-            case .station:
-                if let st = p.station { targets[p.id] = (b.bestStationS(st, loadKg: p.loadKg) ?? LumaDemoContent.typicalStationSeconds(st)) * 1.1 }
-            case .rest: targets[p.id] = 180
-            default: break
-            }
-        }
+        var practice = false
+        if case .stationPractice = kind { practice = true }
+        targets = RaceReadiness.targets(for: plan, benchmarks: env.benchmarks, sessions: env.sessions,
+                                        fresh1kS: env.runPBs.first { $0.distanceM == 1000 }?.seconds,
+                                        fallbackRun1kS: env.profile.fiveKSeconds.map { $0 / 5 * 1.12 } ?? 330, raceEffort: !practice)
     }
 
     private func cue(_ p: PlannedSegment?) -> String {

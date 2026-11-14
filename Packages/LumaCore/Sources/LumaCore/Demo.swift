@@ -241,9 +241,10 @@ public final class LumaDemoSource: LumaDataSource {
         return Self.loop(distanceM: d, salt: workout.start)
     }
 
-    /// A closed loop of roughly `distanceM` around central Dublin's canal and squares.
+    /// A closed loop of roughly `distanceM` around a large city park (Hyde Park, London): a neutral
+    /// place for demo routes, unrelated to anyone using the app.
     public static func loop(distanceM: Double, salt: Double) -> [LCoord] {
-        let lat0 = 53.3318, lon0 = -6.2526
+        let lat0 = 51.5073, lon0 = -0.1657
         let radiusM = distanceM / (2 * Double.pi) / 1.12
         let n = 220
         let phase = salt.truncatingRemainder(dividingBy: 6.28)
@@ -392,18 +393,18 @@ public final class ManualClock: MonotonicClock, @unchecked Sendable {
 }
 
 public extension LumaDemoContent {
-    /// Typical station times in seconds for a recreational open-division athlete, used as defaults
-    /// until the athlete has benchmarks of their own.
-    static func typicalStationSeconds(_ st: Station) -> Double {
+    /// How the demo athlete compares with a typical time at each station: strong on the ergs, slower
+    /// under load, so the charts have a shape to show.
+    static func demoStationSkill(_ st: Station) -> Double {
         switch st {
-        case .skiErg: return 262
-        case .sledPush: return 198
-        case .sledPull: return 244
-        case .burpeeBroadJump: return 302
-        case .rowing: return 271
-        case .farmersCarry: return 122
-        case .sandbagLunges: return 296
-        case .wallBalls: return 418
+        case .skiErg: return 0.90
+        case .sledPush: return 1.16
+        case .sledPull: return 1.08
+        case .burpeeBroadJump: return 0.97
+        case .rowing: return 0.92
+        case .farmersCarry: return 0.88
+        case .sandbagLunges: return 1.05
+        case .wallBalls: return 1.19
         }
     }
 
@@ -428,7 +429,7 @@ public extension LumaDemoContent {
                 seconds = rng.range(27, 44)
                 hr = 160
             case .station:
-                seconds = (p.station.map(typicalStationSeconds) ?? 240) * stationFactor * rng.range(0.95, 1.08)
+                seconds = (p.station.map { $0.typicalSeconds * demoStationSkill($0) } ?? 240) * stationFactor * rng.range(0.97, 1.05)
                 hr = 166 + rng.range(0, 8)
             default:
                 seconds = 60

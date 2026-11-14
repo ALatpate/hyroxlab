@@ -180,6 +180,7 @@ struct DevicesScreen: View {
     @EnvironmentObject private var env: LumaEnv
     @EnvironmentObject private var live: LumaLive
     @State private var scanning = false
+    @State private var generation: LumaStrapGeneration = .fiveOrMG
 
     var body: some View {
         let s = live.strap
@@ -251,9 +252,11 @@ struct DevicesScreen: View {
             }
             LumaSection(title: "Pair a strap")
             LumaNote("Have the strap charged and close by. Luma supports WHOOP 4.0, 5.0 and MG straps directly, without a WHOOP membership.")
+            LumaSegmented(selection: $generation, options: LumaStrapGeneration.allCases.map { ($0, $0.title) }, tint: Luma.frost)
+                .disabled(scanning)
             Button {
                 scanning.toggle()
-                if scanning { env.device?.startScan() } else { env.device?.stopScan() }
+                if scanning { env.device?.startScan(generation) } else { env.device?.stopScan() }
             } label: {
                 if scanning { HStack(spacing: 10) { ProgressView().tint(Luma.frost); Text("Looking for straps… tap to stop") } } else { Text("Look for straps") }
             }
@@ -266,9 +269,9 @@ struct DevicesScreen: View {
                     }
                     ForEach(live.found) { f in
                         Button {
-                            env.device?.pair(f)
-                            scanning = false
                             env.device?.stopScan()
+                            env.device?.pair(f, generation: generation)
+                            scanning = false
                         } label: {
                             LumaRow(symbol: "dot.radiowaves.left.and.right", symbolColor: Luma.volt, title: f.name, subtitle: "Signal \(f.rssi) dBm") {
                                 Text("Pair").font(LumaFont.body(14, .semibold)).foregroundStyle(Luma.volt)
@@ -280,6 +283,7 @@ struct DevicesScreen: View {
             }
             HealthAccessCard()
         }
+        .onAppear { if let model = live.strap.model, model.contains("4") { generation = .four } }
         .onDisappear { if scanning { env.device?.stopScan() } }
     }
 

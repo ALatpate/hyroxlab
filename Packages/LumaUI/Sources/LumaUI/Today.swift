@@ -22,7 +22,7 @@ struct TodayScreen: View {
         } content: {
             if a.watch.level >= .watch, a.lastNight?.day == a.today { WatchBanner(watch: a.watch) }
             TodayHero(analysis: a, strainOn21: env.profile.strainOn21)
-            CallCard(call: a.call, strain21: a.day?.strain.map(LScale.strain21))
+            CallCard(call: a.call, strain21: a.day?.strain.map(LScale.strain21), on21: env.profile.strainOn21)
             CoachBriefCard()
             PlanCard()
             HeartStrip(points: hr)
@@ -168,6 +168,13 @@ struct WatchBanner: View {
 struct CallCard: View {
     let call: DayCall
     let strain21: Double?
+    var on21: Bool = true
+
+    private var targetText: String? {
+        guard let t = call.strainTarget else { return nil }
+        let lo = Int(LScale.shownFrom21(t.lowerBound, on21: on21).rounded()), hi = Int(LScale.shownFrom21(t.upperBound, on21: on21).rounded())
+        return "Aim for strain \(lo)–\(hi)"
+    }
 
     private var color: Color {
         switch call.level {
@@ -184,9 +191,7 @@ struct CallCard: View {
                 HStack {
                     LumaLabel("Today's call")
                     Spacer()
-                    if let t = call.strainTarget {
-                        LumaPill(text: "Aim for strain \(Int(t.lowerBound))–\(Int(t.upperBound))", color: color)
-                    }
+                    if let targetText { LumaPill(text: targetText, color: color) }
                 }
                 Text(call.title).font(LumaFont.title(24)).foregroundStyle(Luma.frost)
                 Text(call.body).font(LumaFont.body(15)).foregroundStyle(Luma.mist).fixedSize(horizontal: false, vertical: true)

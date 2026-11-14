@@ -74,10 +74,10 @@ final class SplitRecorderTests: XCTestCase {
 
 final class RaceAnalyticsTests: XCTestCase {
     /// Builds a complete simulation with given run seconds and station seconds.
-    func makeSim(runs: [Double], stations: [Double], rox: Double = 30, id: UUID = UUID()) -> HXSession {
+    func makeSim(runs: [Double], stations: [Double], rox: Double = 30, id: UUID = UUID(), startedAt: Date = Date()) -> HXSession {
         let clock = FakeClock()
         let plan = RacePlanBuilder.fullRace(format: .openSingles, sex: .male)
-        var rec = SplitRecorder(session: HXSession(id: id, kind: .fullSimulation, format: .openSingles, sex: .male, startedAt: Date()), plan: plan, clock: clock)
+        var rec = SplitRecorder(session: HXSession(id: id, kind: .fullSimulation, format: .openSingles, sex: .male, startedAt: startedAt), plan: plan, clock: clock)
         rec.start()
         var ri = 0, si = 0
         for p in plan {
@@ -108,8 +108,10 @@ final class RaceAnalyticsTests: XCTestCase {
 
     func testBenchmarksAndReadiness() {
         var b = Benchmarks()
-        let s1 = makeSim(runs: Array(repeating: 300, count: 8), stations: [240, 180, 200, 230, 250, 120, 260, 420])
-        let s2 = makeSim(runs: Array(repeating: 290, count: 8), stations: [230, 190, 210, 220, 240, 110, 250, 400])
+        let s1 = makeSim(runs: Array(repeating: 300, count: 8), stations: [240, 180, 200, 230, 250, 120, 260, 420],
+                         startedAt: Date(timeIntervalSince1970: 1_780_000_000))
+        let s2 = makeSim(runs: Array(repeating: 290, count: 8), stations: [230, 190, 210, 220, 240, 110, 250, 400],
+                         startedAt: Date(timeIntervalSince1970: 1_781_000_000))
         b.ingest(s1); b.ingest(s2); b.updateRoxzone(from: [s1, s2])
         XCTAssertEqual(b.bestStationS(.skiErg, loadKg: 0), 230)
         XCTAssertEqual(b.bestStationS(.sledPush, loadKg: 152), 180)
@@ -125,6 +127,24 @@ final class RaceAnalyticsTests: XCTestCase {
         let pro = RaceReadiness.assess(format: .proSingles, benchmarks: b, sessions: [s1, s2], sex: .male, fresh1kS: nil)
         XCTAssertNotEqual(pro.verdict, .ready)
         XCTAssertTrue(pro.gaps.contains { $0.contains("Sled Push") })
+
+        // A shared race is faster than a solo one on the same athlete's times, and says what it assumed.
+        let doubles = RaceReadiness.assess(format: .doubles, benchmarks: b, sessions: [s1, s2], sex: .male, fresh1kS: 250)
+        let relay = RaceReadiness.assess(format: .relay, benchmarks: b, sessions: [s1, s2], sex: .male, fresh1kS: 250)
+        XCTAssertNil(open.assumption)
+        XCTAssertNotNil(doubles.assumption)
+        XCTAssertNotNil(relay.assumption)
+        let mid = { (r: FormatReadiness) in (r.predictedLowS! + r.predictedHighS!) / 2 }
+        XCTAssertLessThan(mid(doubles), mid(open))
+        XCTAssertLessThan(mid(relay), mid(open))
+        // Calibrated on the latest simulation, the solo prediction reproduces that simulation's time,
+        // all fifteen transitions included.
+        XCTAssertEqual(mid(open), s2.totalS ?? 0, accuracy: 0.5)
+        XCTAssertEqual(s2.totalS ?? 0, 8 * 290 + 1850 + 15 * 30, accuracy: 0.01)
+        // Relay kilometres are run near the fresh 1 km time, not at race pace.
+        XCTAssertEqual(mid(relay), 1830 + 20 * 0.15 + 250 * 1.03 * 8 + 15 * 30, accuracy: 0.5)
+        // The running in a doubles race is still the athlete's own eight kilometres.
+        XCTAssertGreaterThan(mid(doubles), 8 * 290)
     }
 }
 

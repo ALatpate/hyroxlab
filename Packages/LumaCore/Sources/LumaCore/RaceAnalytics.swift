@@ -200,6 +200,14 @@ public struct FormatReadiness: Equatable, Sendable, Identifiable {
     public let gaps: [String]
     /// 0–1 coverage of the data the prediction needs.
     public let confidence: Double
+    /// What the prediction takes for granted beyond the athlete's own times (a partner, teammates).
+    public let assumption: String?
+
+    public init(format: RaceFormat, verdict: ReadinessVerdict, predictedLowS: Double?, predictedHighS: Double?, gaps: [String],
+                confidence: Double, assumption: String? = nil) {
+        self.format = format; self.verdict = verdict; self.predictedLowS = predictedLowS; self.predictedHighS = predictedHighS
+        self.gaps = gaps; self.confidence = confidence; self.assumption = assumption
+    }
 }
 
 public enum RaceReadiness {
@@ -211,6 +219,80 @@ public enum RaceReadiness {
     public static func assess(benchmarks b: Benchmarks, sessions: [HXSession], sex: Sex,
                               fresh1kS: Double?, formats: [RaceFormat] = RaceFormat.allCases) -> [FormatReadiness] {
         formats.map { assess(format: $0, benchmarks: b, sessions: sessions, sex: sex, fresh1kS: fresh1kS) }
+    }
+
+    /// The same read, taking the fresh 1 km time from the athlete's running bests. Screens and the
+    /// coach both come through here, so they cannot quote different predictions.
+    public static func assess(benchmarks b: Benchmarks, sessions: [HXSession], sex: Sex,
+                              personalBests: [PersonalBest]) -> [FormatReadiness] {
+        assess(benchmarks: b, sessions: sessions, sex: sex, fresh1kS: personalBests.first { $0.distanceM == 1000 }?.seconds)
+    }
+
+    /// How much slower this athlete's stations and runs are in a race than at their best. Measured from
+    /// their most recent full simulation; typical values until they have one.
+    public static func fatigue(benchmarks b: Benchmarks, sessions: [HXSession], run1k: Double?) -> (station: Double, run: Double) {
+        var stationFatigue = defaultStationFatigue
+        var runFatigue = defaultRunFatigue
+        let sims = sessions.filter { $0.kind == .fullSimulation && $0.isComplete && $0.stations.count == 8 }
+        if let sim = sims.sorted(by: { $0.startedAt > $1.startedAt }).first {
+            let simStations = sim.stations.compactMap(\.durationS).reduce(0, +)
+            let simBest = sim.stations.compactMap { seg -> Double? in
+                guard let st = seg.station else { return nil }
+                return b.bestStationS(st, loadKg: seg.loadKg)
+            }.reduce(0, +)
+            if simBest > 0 { stationFatigue = HXStats.clamp(simStations / simBest, 1.0, 1.5) }
+            if let r1 = run1k, r1 > 0 {
+                let runMean = HXStats.mean(sim.runs.compactMap(\.durationS)) ?? r1
+                runFatigue = HXStats.clamp(runMean / r1, 1.0, 1.6)
+            }
+        }
+        return (stationFatigue, runFatigue)
+    }
+
+    /// A target time for every segment of a session plan, from the same bests and the same measured
+    /// fatigue the finish prediction uses, so the live race screen and the prediction agree.
+    /// `raceEffort` is false for practice sets, where the target is simply the athlete's best.
+    public static func targets(for plan: [PlannedSegment], benchmarks b: Benchmarks, sessions: [HXSession], fresh1kS: Double?,
+                               fallbackRun1kS: Double = 330, raceEffort: Bool = true) -> [Int: Double] {
+        let run1k = b.bestRun1kS?.seconds ?? fresh1kS
+        let f = raceEffort ? fatigue(benchmarks: b, sessions: sessions, run1k: run1k) : (station: 1.0, run: 1.0)
+        let run = run1k.map { $0 * f.run } ?? fallbackRun1kS
+        let rox = b.typicalRoxzoneS ?? 30
+        var out: [Int: Double] = [:]
+        for p in plan {
+            switch p.kind {
+            case .run: out[p.id] = run * (p.distanceM ?? 1000) / 1000
+            case .roxzone: out[p.id] = rox
+            case .station:
+                guard let st = p.station else { continue }
+                out[p.id] = b.bestStationS(st, loadKg: p.loadKg).map { $0 * f.station } ?? st.typicalSeconds
+            case .rest: out[p.id] = 180
+            default: break
+            }
+        }
+        return out
+    }
+
+    /// How a format changes the work one athlete's times stand for.
+    ///
+    /// Singles: the athlete does everything, with the fatigue measured in their own simulations.
+    /// Doubles: both run every kilometre, and the station work is shared. Two athletes alternating
+    /// hold a higher work rate than one, taken here as stations done in 80% of the solo time, and
+    /// they arrive at each run fresher, so 60% of the solo fatigue is carried.
+    /// Relay: each of four athletes runs 2 km and works two stations with long rests between, so
+    /// stations are close to fresh bests (15% of the solo fatigue) and each kilometre is run near the
+    /// athlete's fresh 1 km time (3% slower, for running it twice).
+    /// The shares are estimates from typical results, not measurements of this athlete, which is
+    /// why the range is widened for both and the assumption is stated beside the prediction.
+    static func shape(_ format: RaceFormat) -> (stationWork: Double, fatigueCarried: Double, freshRuns: Bool, extraBand: Double, assumption: String?) {
+        switch format {
+        case .openSingles, .proSingles:
+            return (1, 1, false, 0, nil)
+        case .doubles:
+            return (0.80, 0.6, false, 0.03, "Assumes a partner at your level sharing every station evenly.")
+        case .relay:
+            return (1, 0.15, true, 0.04, "Assumes three teammates at your level. You would run 2 km and work two stations.")
+        }
     }
 
     public static func assess(format: RaceFormat, benchmarks b: Benchmarks, sessions: [HXSession], sex: Sex,
@@ -229,22 +311,8 @@ public enum RaceReadiness {
         let run1k = b.bestRun1kS?.seconds ?? fresh1kS
         if run1k == nil { gaps.append("No 1 km run time yet") }
 
-        // Calibrate fatigue from real simulations when available.
-        var stationFatigue = defaultStationFatigue
-        var runFatigue = defaultRunFatigue
         let sims = sessions.filter { $0.kind == .fullSimulation && $0.isComplete && $0.stations.count == 8 }
-        if let sim = sims.sorted(by: { $0.startedAt > $1.startedAt }).first {
-            let simStations = sim.stations.compactMap(\.durationS).reduce(0, +)
-            let simBest = sim.stations.compactMap { seg -> Double? in
-                guard let st = seg.station else { return nil }
-                return b.bestStationS(st, loadKg: seg.loadKg)
-            }.reduce(0, +)
-            if simBest > 0 { stationFatigue = HXStats.clamp(simStations / simBest, 1.0, 1.5) }
-            if let r1 = run1k, r1 > 0 {
-                let runMean = HXStats.mean(sim.runs.compactMap(\.durationS)) ?? r1
-                runFatigue = HXStats.clamp(runMean / r1, 1.0, 1.6)
-            }
-        }
+        let (stationFatigue, runFatigue) = fatigue(benchmarks: b, sessions: sessions, run1k: run1k)
 
         let coverage = Double(covered) / 8 * 0.7 + (run1k != nil ? 0.3 : 0)
         var low: Double? = nil, high: Double? = nil
@@ -252,10 +320,15 @@ public enum RaceReadiness {
             // Estimate missing stations at the median of covered ones so a range still forms.
             let perStation = stationSum / Double(covered)
             let fullStations = stationSum + perStation * Double(8 - covered)
-            let rox = (b.typicalRoxzoneS ?? 40) * 8
-            let runs = r1 * runFatigue * 8
-            let mid = fullStations * stationFatigue + runs + rox
-            let band = mid * (0.05 + 0.10 * (1 - coverage))
+            // A full race has a transition into and out of every station but the last: fifteen, not eight.
+            let transitions = Double(RacePlanBuilder.fullRace(format: format, sex: sex).filter { $0.kind == .roxzone }.count)
+            let rox = (b.typicalRoxzoneS ?? 30) * transitions
+            let s = shape(format)
+            let stationTime = fullStations * (1 + (stationFatigue - 1) * s.fatigueCarried) * s.stationWork
+            let freshest = [fresh1kS, b.bestRun1kS?.seconds].compactMap { $0 }.min() ?? r1
+            let runs = s.freshRuns ? freshest * 1.03 * 8 : r1 * (1 + (runFatigue - 1) * s.fatigueCarried) * 8
+            let mid = stationTime + runs + rox
+            let band = mid * (0.05 + 0.10 * (1 - coverage) + s.extraBand)
             low = mid - band; high = mid + band
         }
 
@@ -272,6 +345,6 @@ public enum RaceReadiness {
             gaps.append("Pro loads not yet proven at every station")
         }
         return FormatReadiness(format: format, verdict: verdict, predictedLowS: low, predictedHighS: high,
-                               gaps: Array(gaps.prefix(4)), confidence: coverage)
+                               gaps: Array(gaps.prefix(4)), confidence: coverage, assumption: low == nil ? nil : shape(format).assumption)
     }
 }

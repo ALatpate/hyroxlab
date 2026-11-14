@@ -329,6 +329,7 @@ struct RunSummaryView: View {
     let zones: HXZones
     let onDone: () -> Void
     @EnvironmentObject private var router: LumaRouter
+    @EnvironmentObject private var env: LumaEnv
 
     var body: some View {
         ScrollView {
@@ -354,7 +355,7 @@ struct RunSummaryView: View {
                     }
                     StatCell(label: "Average heart rate", value: result.avgHR.map { String(format: "%.0f", $0) } ?? "–", unit: "bpm")
                     StatCell(label: "Highest heart rate", value: result.maxHR.map { String(format: "%.0f", $0) } ?? "–", unit: "bpm")
-                    if let s = result.workout?.strain { StatCell(label: "Strain", value: String(format: "%.1f", LScale.strain21(s))) }
+                    if let s = result.workout?.strain { StatCell(label: "Strain", value: LScale.text(s, on21: env.profile.strainOn21)) }
                     if let k = result.workout?.kcal { StatCell(label: "Energy", value: LFormat.grouped(k), unit: "kcal") }
                 }
                 if !result.newBests.isEmpty {

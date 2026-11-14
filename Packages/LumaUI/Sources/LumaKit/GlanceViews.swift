@@ -193,12 +193,13 @@ public struct LumaTodayWidgetView: View {
     }
 
     private var rectangular: some View {
-        HStack(spacing: 9) {
-            circular.frame(width: 50, height: 50)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(callLine).font(.system(size: 14, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.7)
-                Text("Strain \(strain ?? "–") · Sleep \(sleep ?? "–")").font(.system(size: 12.5, weight: .medium)).opacity(0.85).lineLimit(1)
-                Text(rectangularThird).font(.system(size: 12.5)).opacity(0.65).lineLimit(1)
+        HStack(spacing: 8) {
+            circular.frame(width: 44, height: 44)
+            VStack(alignment: .leading, spacing: 1.5) {
+                Text("\(Image(systemName: "flame.fill")) \(strain ?? "–")  \(Image(systemName: "moon.fill")) \(sleep ?? "–")")
+                    .font(.system(size: 13, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8)
+                Text(callLine).font(.system(size: 12, weight: .medium)).opacity(0.85).lineLimit(1).minimumScaleFactor(0.75)
+                Text(rectangularThird).font(.system(size: 12)).opacity(0.65).lineLimit(1).minimumScaleFactor(0.8)
             }
             Spacer(minLength: 0)
         }
@@ -285,7 +286,7 @@ struct GlanceFuelRows: View {
                 Text(label).font(LumaFont.label(9)).foregroundStyle(Luma.mist)
                 Spacer(minLength: 2)
                 Text(value ?? "–").font(LumaFont.numeral(compact ? 15 : 16)).foregroundStyle(Luma.frost)
-                if let target { Text("/ \(target)").font(LumaFont.body(10)).foregroundStyle(Luma.smoke) }
+                if let target { Text("/ \(compact ? String(target.split(separator: " ").first ?? "") : target)").font(LumaFont.body(10)).foregroundStyle(Luma.smoke) }
             }
             .lineLimit(1)
             GlanceProgress(fraction: fraction, color: color)

@@ -81,6 +81,21 @@ public enum Station: Int, Codable, CaseIterable, Identifiable, Sendable {
 
     /// Official load preset (kg) for a format and sex. Sled loads include the sled. Zero means
     /// bodyweight. These are presets: the athlete can override them per session for gym kit.
+    /// A typical in-race time for a recreational open-division athlete, in seconds. A reference
+    /// point for charts and a starting target until the athlete has times of their own.
+    public var typicalSeconds: Double {
+        switch self {
+        case .skiErg: return 262
+        case .sledPush: return 198
+        case .sledPull: return 244
+        case .burpeeBroadJump: return 302
+        case .rowing: return 271
+        case .farmersCarry: return 122
+        case .sandbagLunges: return 296
+        case .wallBalls: return 418
+        }
+    }
+
     public func loadKg(format: RaceFormat, sex: Sex) -> Double {
         let pro = format.usesProLoads
         switch (self, sex, pro) {

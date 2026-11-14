@@ -1,10 +1,18 @@
 # name|screen|scrollY|data|waitSeconds
 01-today|today|0|demo|5
 02-today-b|today|620|demo|5
+30-train|train|0|demo|5
+34-readiness|train.readiness|0|demo|5
+35-readiness-b|train.readiness|560|demo|5
+36-session|train.session|0|demo|5
+38-strength|train.strength|0|demo|5
+40-history|train.history|0|demo|5
 50-coach|coach|0|demo|5
-51-coach-b|coach|500|demo|5
+67-routine|sheet.routine|0|demo|5
+71-run|cover.run|0|demo|9
+80-devices|you.devices|0|demo|5
+81-devices-b|you.devices|420|demo|5
 95-dev-lock|dev.lock|0|demo|5
 96-dev-lock-b|dev.lock|560|demo|5
 97-dev-home|dev.home|0|demo|5
 98-dev-home2|dev.home2|0|demo|5
-99-dev-home2-b|dev.home2|420|demo|5

@@ -94,7 +94,13 @@ public final class CoachEngine: ObservableObject {
         guard env.isDemo, hasKey, messages.isEmpty else { return }
         let today = LumaAnalysis.todayKey()
         briefDay = today
-        brief = "Recovery is 78%, helped by seven and a half hours and an HRV four points above your usual. Class this morning can be a proper effort; keep this evening's run genuinely easy so the week's load stays level. Aim for lights out by 22:30 to clear the last of the sleep debt."
+        // Written from the demo's own numbers, so the card never contradicts the screen it sits on.
+        let a = env.analysis
+        var opening = "Last night has not been scored yet."
+        if let night = a.lastNight, let r = night.recovery {
+            opening = "Recovery is \(Int(r.rounded()))%" + (night.sleepMin.map { " after \(LFormat.hm(minutes: $0)) of sleep." } ?? ".")
+        }
+        brief = opening + " " + a.call.body + " Eat to your carbohydrate target around training and aim for lights out by 22:30."
         let lunch = env.fuel.last { $0.kind == .meal && $0.source == .photo }
         let coachPlan = env.planned.filter { $0.origin == .coach && $0.day >= today }.prefix(2).map { $0.id }
         messages = [

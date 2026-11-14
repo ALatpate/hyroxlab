@@ -670,6 +670,11 @@ enum LumaText {
 
     static func km(_ metres: Double, decimals: Int = 2) -> String { String(format: "%.\(decimals)f", metres / 1000) }
 
+    /// Facts on one line, separated by dots. A value and its unit stay together when the line wraps.
+    static func line(_ parts: [String]) -> String {
+        parts.filter { !$0.isEmpty }.map { $0.replacingOccurrences(of: " ", with: "\u{00A0}") }.joined(separator: " · ")
+    }
+
     static func greeting(_ date: Date = Date()) -> String {
         let h = Calendar.current.component(.hour, from: date)
         return h < 5 ? "Late night" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening"

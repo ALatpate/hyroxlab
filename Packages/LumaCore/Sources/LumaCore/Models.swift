@@ -214,6 +214,15 @@ public enum LScale {
     /// The strap pipeline stores strain on 0–100; athletes know it on 0–21.
     public static func strain21(_ strain100: Double) -> Double { strain100 * 21 / 100 }
     public static func strain100(_ strain21: Double) -> Double { strain21 * 100 / 21 }
+
+    /// Stored strain (0–100) on the scale the athlete has chosen. Every screen shows strain through
+    /// this and `text`, so one session never reads as two different numbers.
+    public static func shown(_ strain100: Double, on21: Bool) -> Double { on21 ? strain21(strain100) : strain100 }
+    public static func text(_ strain100: Double, on21: Bool) -> String {
+        String(format: on21 ? "%.1f" : "%.0f", shown(strain100, on21: on21))
+    }
+    /// A value defined on the 0–21 scale (strain targets are), on the scale the athlete has chosen.
+    public static func shownFrom21(_ value21: Double, on21: Bool) -> Double { on21 ? value21 : strain100(value21) }
 }
 
 public enum LFormat {

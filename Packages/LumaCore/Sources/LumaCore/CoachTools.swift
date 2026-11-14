@@ -402,8 +402,7 @@ public enum CoachTools {
                     }),
                     "best_estimated_1rm_kg": .object(Dictionary(rec.map { ($0.key, JSONValue.rounded($0.value.e1RM)) }, uniquingKeysWith: { x, _ in x }))]
         case "get_hyrox":
-            let ready = RaceReadiness.assess(benchmarks: w.benchmarks, sessions: w.sessions, sex: w.profile.sex,
-                                             fresh1kS: w.personalBests.first { $0.distanceM == 1000 }?.seconds ?? w.benchmarks.bestRun1kS?.seconds)
+            let ready = RaceReadiness.assess(benchmarks: w.benchmarks, sessions: w.sessions, sex: w.profile.sex, personalBests: w.personalBests)
             return ["station_bests_s": .object(Dictionary(Station.allCases.compactMap { st -> (String, JSONValue)? in
                         let load = st.loadKg(format: w.profile.format, sex: w.profile.sex)
                         guard let best = w.benchmarks.bestStationS(st, loadKg: load) else { return nil }
@@ -420,7 +419,8 @@ public enum CoachTools {
                     }),
                     "readiness_by_format": .array(ready.map { r -> JSONValue in
                         ["format": .string(r.format.title), "verdict": .string("\(r.verdict)"), "predicted_low_s": .rounded(r.predictedLowS, 0),
-                         "predicted_high_s": .rounded(r.predictedHighS, 0), "confidence_0_1": .rounded(r.confidence, 2), "gaps": .array(r.gaps.map { .string($0) })]
+                         "predicted_high_s": .rounded(r.predictedHighS, 0), "confidence_0_1": .rounded(r.confidence, 2), "gaps": .array(r.gaps.map { .string($0) }),
+                         "assumption": .optional(r.assumption)]
                     }),
                     "note": "Readiness is indicative: it comes from the athlete's own benchmark and simulation times, not from a lab or race result."]
         case "get_checkins":

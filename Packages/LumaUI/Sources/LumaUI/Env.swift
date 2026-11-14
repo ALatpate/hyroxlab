@@ -78,14 +78,21 @@ public struct LumaPairedStrap: Identifiable, Equatable {
 
 public enum LumaHealthAccess: Equatable { case unavailable, off, on, denied }
 
+/// The two strap families, which pair differently and so are searched for separately.
+public enum LumaStrapGeneration: String, CaseIterable, Sendable {
+    case four, fiveOrMG
+
+    var title: String { self == .four ? "WHOOP 4.0" : "WHOOP 5.0 / MG" }
+}
+
 /// What Luma can ask the strap and the system to do. Implemented by the app over the strap layer.
 @MainActor
 public protocol LumaDeviceControl: AnyObject {
     func reconnect()
     func syncNow()
-    func startScan()
+    func startScan(_ generation: LumaStrapGeneration)
     func stopScan()
-    func pair(_ strap: LumaFoundStrap)
+    func pair(_ strap: LumaFoundStrap, generation: LumaStrapGeneration)
     func makeActive(_ id: String)
     func forget(_ id: String)
     func buzz()
@@ -405,7 +412,6 @@ public final class LumaEnv: ObservableObject {
                           PersonalBest(distanceM: 5000, seconds: 1480), PersonalBest(distanceM: 10000, seconds: 3105)]
             env.upsert(LumaDemoContent.simulation(daysAgo: 37, runPace: 334, stationFactor: 1.09))
             env.upsert(LumaDemoContent.simulation(daysAgo: 9, runPace: 319))
-            env.coach.seedDemo()
         }
         return env
     }
@@ -429,6 +435,7 @@ public final class LumaEnv: ObservableObject {
             self.loaded = true
             self.refreshPlan()
             self.refreshAnalysis()
+            if self.isDemo { self.coach.seedDemo() }
         }
     }
 
@@ -544,6 +551,7 @@ public final class LumaEnv: ObservableObject {
         disk.save(s, "session-\(s.id.uuidString).json")
         if s.isComplete {
             benchmarks.ingest(s)
+            benchmarks.updateRoxzone(from: sessions)
             disk.save(benchmarks, "benchmarks.json")
         }
     }

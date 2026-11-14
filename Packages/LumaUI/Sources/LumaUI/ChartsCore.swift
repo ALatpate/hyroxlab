@@ -180,16 +180,36 @@ struct ChartXLabels: View {
     /// Position of index i along the plot, 0…1.
     var position: (Int) -> CGFloat
 
-    var body: some View {
+    private func x(_ i: Int) -> CGFloat {
+        min(plot.maxX - 14, max(plot.minX + 14, plot.minX + position(i) * plot.width))
+    }
+
+    /// The labels to draw: evenly picked, then thinned so that none runs into the one before it.
+    private var visible: [Int] {
         let n = labels.count
-        let picks: [Int] = n <= count ? Array(0..<n) : (0..<count).map { Int((Double($0) / Double(count - 1) * Double(n - 1)).rounded()) }
+        guard n > 0 else { return [] }
+        let picks: [Int] = n <= count || count < 2 ? Array(0..<n) : (0..<count).map { Int((Double($0) / Double(count - 1) * Double(n - 1)).rounded()) }
+        var shown: [Int] = []
+        var edge: CGFloat = -.greatestFiniteMagnitude
+        for i in picks where !labels[i].isEmpty && !shown.contains(i) {
+            let width = CGFloat(labels[i].count) * 6.2 + 6
+            let centre = x(i)
+            if centre - width / 2 >= edge {
+                shown.append(i)
+                edge = centre + width / 2
+            }
+        }
+        return shown
+    }
+
+    var body: some View {
         ZStack(alignment: .topLeading) {
-            ForEach(picks, id: \.self) { i in
+            ForEach(visible, id: \.self) { i in
                 Text(labels[i])
                     .font(LumaFont.label(9.5))
                     .foregroundStyle(Luma.smoke)
                     .fixedSize()
-                    .position(x: min(plot.maxX - 14, max(plot.minX + 14, plot.minX + position(i) * plot.width)), y: plot.maxY + 12)
+                    .position(x: x(i), y: plot.maxY + 12)
             }
         }
     }

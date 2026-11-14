@@ -68,7 +68,7 @@ struct LiveStatusLine: View {
             if state.isLive {
                 Text(state.zone.map { "Zone \($0)" } ?? "Live").foregroundStyle(state.zone == nil ? Luma.mist : state.zoneColor)
             } else if let at = state.lastAt {
-                Text("Last reading \(Text(at, style: .relative)) ago").foregroundStyle(Luma.mist)
+                Text("Last reading \(Text(at, style: .timer)) ago").foregroundStyle(Luma.mist).monospacedDigit()
             } else {
                 Text(state.connected ? "Waiting for a reading" : "Strap not connected").foregroundStyle(Luma.mist)
             }
@@ -134,8 +134,9 @@ public struct LumaLiveCard: View {
                 Text(state.recovery.map { "\($0)" } ?? "–").font(LumaFont.numeral(16)).foregroundStyle(state.recovery == nil ? Luma.smoke : Luma.frost)
             }
             .frame(width: 42, height: 42)
-            Text("Recovery").font(LumaFont.label(8)).foregroundStyle(Luma.mist)
+            Text("Recovery").font(LumaFont.label(8)).foregroundStyle(Luma.mist).lineLimit(1).fixedSize()
         }
+        .frame(width: 50)
     }
 }
 

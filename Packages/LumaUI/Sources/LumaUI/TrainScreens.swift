@@ -210,22 +210,18 @@ struct PlannedCard: View {
     }
 
     private func recorded(_ w: LWorkout) -> String {
-        var text = w.sport + " · " + LumaText.duration(w.durationS)
-        if let s = w.strain { text += String(format: " · strain %.1f", LScale.strain21(s)) }
-        return text
+        var parts = [w.sport, LumaText.duration(w.durationS)]
+        if let s = w.strain { parts.append("strain " + LScale.text(s, on21: env.profile.strainOn21)) }
+        return LumaText.line(parts)
     }
 
     private var line: String {
         var parts: [String] = []
         if let m = session.startMinutes { parts.append(LFormat.timeOfDay(minutes: Double(m))) }
         if session.kind != .rest { parts.append("\(session.durationMin) min"); parts.append(session.intensity.title) }
-        switch session.origin {
-        case .routine: parts.append("Routine")
-        case .coach: parts.append("From the coach")
-        case .you: break
-        }
+        if session.origin == .coach { parts.append("From the coach") }
         if session.status == .skipped { parts.append("Skipped") }
-        return parts.joined(separator: " · ")
+        return LumaText.line(parts)
     }
 }
 
@@ -243,7 +239,7 @@ struct WeekSummary: View {
             StatCell(label: "Sessions", value: "\(workouts.count)", note: adherence.map { "\($0.done) of \($0.planned) planned done" })
             StatCell(label: "Training time", value: LFormat.clock(minutes: minutes), unit: "h")
             StatCell(label: "Running", value: String(format: "%.1f", km), unit: "km")
-            StatCell(label: "Hardest day", value: days.compactMap { env.day($0.day)?.strain }.max().map { String(format: "%.1f", LScale.strain21($0)) } ?? "–", note: "Peak day strain")
+            StatCell(label: "Hardest day", value: days.compactMap { env.day($0.day)?.strain }.max().map { LScale.text($0, on21: env.profile.strainOn21) } ?? "–", note: "Peak day strain")
         }
     }
 }
@@ -397,7 +393,11 @@ struct RoutineSheet: View {
             LumaField(title: "Name, e.g. Conditioning class", text: $title)
             HStack {
                 Toggle("Fixed time", isOn: $hasTime).font(LumaFont.body(14)).foregroundStyle(Luma.mist).tint(Luma.volt).fixedSize()
+                Spacer()
                 if hasTime { DatePicker("", selection: $time, displayedComponents: [.hourAndMinute]).labelsHidden().colorScheme(.dark) }
+            }
+            HStack {
+                Text("Duration").font(LumaFont.body(14)).foregroundStyle(Luma.mist)
                 Spacer()
                 Stepper(value: $duration, in: 15...240, step: 5) { Text("\(duration) min").font(LumaFont.numeral(20)).foregroundStyle(Luma.frost) }.fixedSize()
             }
@@ -502,9 +502,9 @@ struct HistoryRow: View {
     private var detail: String {
         var parts = [LumaText.duration(workout.durationS)]
         if let d = workout.distanceM, d > 200 { parts.append("\(LumaText.km(d)) km") }
-        if let p = workout.paceSPerKm, workout.kind == .run { parts.append("\(LumaText.pace(p)) /km") }
+        if let p = workout.paceSPerKm, workout.kind == .run { parts.append("\(LumaText.pace(p))/km") }
         if let hr = workout.avgHR { parts.append("\(Int(hr.rounded())) bpm") }
-        return parts.joined(separator: " · ")
+        return LumaText.line(parts)
     }
 }
 
