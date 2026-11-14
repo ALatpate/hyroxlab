@@ -40,7 +40,7 @@ xcrun simctl install "$UDID" "$APP"
 xcrun simctl privacy "$UDID" grant all "$BID" 2>/dev/null || true
 
 # Warm-up launch: first launch pays dyld + asset costs and (in the full app) seeds demo data.
-xcrun simctl launch "$UDID" "$BID" "${EXTRA[@]}" -lumaScreen today >/dev/null 2>&1 || true
+xcrun simctl launch "$UDID" "$BID" ${EXTRA[@]+"${EXTRA[@]}"} -lumaScreen today >/dev/null 2>&1 || true
 sleep 12
 xcrun simctl terminate "$UDID" "$BID" 2>/dev/null || true
 
@@ -48,7 +48,7 @@ n=0
 while IFS='|' read -r name screen scroll data wait || [ -n "${name:-}" ]; do
   case "${name:-}" in ''|\#*) continue;; esac
   xcrun simctl terminate "$UDID" "$BID" 2>/dev/null || true
-  xcrun simctl launch "$UDID" "$BID" "${EXTRA[@]}" -lumaScreen "$screen" -lumaScroll "${scroll:-0}" -lumaData "${data:-demo}" >/dev/null 2>&1 \
+  xcrun simctl launch "$UDID" "$BID" ${EXTRA[@]+"${EXTRA[@]}"} -lumaScreen "$screen" -lumaScroll "${scroll:-0}" -lumaData "${data:-demo}" >/dev/null 2>&1 \
     || { echo "launch failed: $name"; continue; }
   sleep "${wait:-4}"
   if xcrun simctl io "$UDID" screenshot --type=png "$OUT/$name.png" >/dev/null 2>&1; then

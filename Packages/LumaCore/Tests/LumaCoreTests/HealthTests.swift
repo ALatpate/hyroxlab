@@ -25,7 +25,10 @@ final class StatTests: XCTestCase {
     }
 
     func testTrendTests() {
-        let rising = (0..<20).map { Double($0) * 0.5 + (Double($0 % 3) - 1) * 0.2 }
+        let rising: [Double] = (0..<20).map { (i: Int) -> Double in
+            let wobble: Double = Double(i % 3) - 1
+            return Double(i) * 0.5 + wobble * 0.2
+        }
         let ts = LStat.theilSen(rising)!
         XCTAssertEqual(ts.slope, 0.5, accuracy: 0.05)
         let mk = LStat.mannKendall(rising)!
@@ -57,7 +60,8 @@ final class StatTests: XCTestCase {
 
     func testBaselineNeedsEnoughNights() {
         XCTAssertNil(LBaseline([60, 61, 62]))
-        let b = LBaseline((0..<20).map { 60 + Double($0 % 5) })!
+        let history: [Double] = (0..<20).map { (i: Int) -> Double in 60 + Double(i % 5) }
+        let b = LBaseline(history)!
         XCTAssertEqual(b.center, 62)
         XCTAssertTrue(b.isEstablished)
         XCTAssertEqual(b.z(62 + b.spread), 1, accuracy: 1e-9)

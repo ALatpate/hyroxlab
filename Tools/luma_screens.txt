@@ -1,2 +1,5 @@
 # name|screen|scrollY|data|waitSeconds
 01-today|today|0|demo|5
+02-today-b|today|560|demo|5
+03-today-c|today|1180|demo|5
+04-today-sparse|today|0|sparse|5

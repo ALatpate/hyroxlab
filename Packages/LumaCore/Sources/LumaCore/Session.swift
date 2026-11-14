@@ -24,7 +24,7 @@ public enum HXSessionKind: Codable, Equatable, Sendable, Hashable {
         case .runTreadmill: return "Treadmill run"
         case .runIntervals: return "Run intervals"
         case .strength: return "Strength"
-        case .other: return "HXSession"
+        case .other: return "Session"
         }
     }
 
