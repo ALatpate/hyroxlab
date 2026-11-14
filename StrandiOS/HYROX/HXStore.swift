@@ -151,7 +151,7 @@ final class HXStore: ObservableObject {
         let row = WorkoutRow(startTs: Int(s.startedAt.timeIntervalSince1970), endTs: Int(end.timeIntervalSince1970),
                              sport: sport, source: "manual", durationS: s.totalS, energyKcal: kcal,
                              avgHr: avgHr, maxHr: maxHr, strain: nil, distanceM: distanceM, zonesJSON: nil,
-                             notes: "HYROX Lab · \(s.kind.title)", steps: nil)
+                             notes: "Luma · \(s.kind.title)", steps: nil)
         await repo.saveManualWorkout(row)
     }
 

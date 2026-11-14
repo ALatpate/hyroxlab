@@ -74,7 +74,7 @@ struct HXReadinessWidget: Widget {
         StaticConfiguration(kind: HXWidgetState.kind, provider: HXReadinessProvider()) { entry in
             HXReadinessWidgetView(entry: entry)
         }
-        .configurationDisplayName("HYROX Lab readiness")
+        .configurationDisplayName("Luma readiness")
         .description("Today's readiness and session.")
         .supportedFamilies([.systemSmall, .systemMedium])
     }

@@ -241,8 +241,8 @@ targets:
     info:
       path: StrandiOS/Resources/Info.plist
       properties:
-        CFBundleName: HYROX Lab
-        CFBundleDisplayName: HYROX Lab
+        CFBundleName: Luma
+        CFBundleDisplayName: Luma
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         # Surfaces APP_GROUP_ID to runtime (WidgetSnapshot.suiteName) so the App Group id isn't

@@ -77,7 +77,7 @@ enum HXCoachContext {
         }
         let recent = s.sessions.filter(\.isComplete).prefix(5)
         if !recent.isEmpty {
-            out.append("Recent HYROX Lab sessions:")
+            out.append("Recent Luma sessions:")
             for x in recent {
                 var line = "- \(x.startedAt.formatted(date: .abbreviated, time: .omitted)) \(x.kind.title): \(HXFormat.duration(x.totalS ?? 0))"
                 let dist = x.runs.compactMap(\.distanceM).reduce(0, +)

@@ -19,31 +19,31 @@ def build(repo: str, version: str, build_no: str, bundle_id: str, size: int, sha
     owner, name = repo.split("/", 1)
     raw = f"https://raw.githubusercontent.com/{owner}/{name}/main"
     return {
-        "name": "HYROX Lab",
+        "name": "Luma",
         "identifier": f"{bundle_id}.altstore",
         "sourceURL": f"{raw}/hyroxlab-source.json",
-        "subtitle": "WHOOP-powered HYROX, running and readiness — on your own phone.",
+        "subtitle": "Luma — WHOOP-powered HYROX, running and readiness, on your own phone.",
         "description": (
-            "Personal AltStore / SideStore source for HYROX Lab, a fork of NOOP that adds a HYROX "
+            "Personal AltStore / SideStore source for Luma (HYROX Lab), a fork of NOOP that adds a HYROX "
             "training system, a full running module and readiness coaching on top of NOOP's direct "
             "WHOOP connection. Add this source once; every new build appears as an update."
         ),
-        "iconURL": f"https://github.com/{owner}/{name}/raw/main/Strand/Resources/Assets.xcassets/AppIcon.appiconset/icon_512x512.png",
+        "iconURL": f"https://github.com/{owner}/{name}/raw/main/Design/luma-icon-1024.png",
         "website": f"https://github.com/{owner}/{name}",
         "tintColor": TINT,
         "apps": [
             {
-                "name": "HYROX Lab",
+                "name": "Luma",
                 "bundleIdentifier": bundle_id,
                 "developerName": owner,
                 "subtitle": "HYROX, running and readiness from your WHOOP.",
                 "localizedDescription": (
-                    "HYROX Lab reads a WHOOP strap you own directly over Bluetooth (via NOOP) and adds "
+                    "Luma reads a WHOOP strap you own directly over Bluetooth (via NOOP) and adds "
                     "HYROX simulations and race mode, GPS running with splits and audio cues, readiness, "
                     "training plans and a coach. Everything stays on the phone. Personal, non-commercial "
                     "build; not affiliated with WHOOP or HYROX."
                 ),
-                "iconURL": f"https://github.com/{owner}/{name}/raw/main/Strand/Resources/Assets.xcassets/AppIcon.appiconset/icon_512x512.png",
+                "iconURL": f"https://github.com/{owner}/{name}/raw/main/Design/luma-icon-1024.png",
                 "tintColor": TINT,
                 "category": "healthcare-fitness",
                 "screenshotURLs": [],
