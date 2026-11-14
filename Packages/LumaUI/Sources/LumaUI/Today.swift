@@ -23,6 +23,7 @@ struct TodayScreen: View {
             if a.watch.level >= .watch, a.lastNight?.day == a.today { WatchBanner(watch: a.watch) }
             TodayHero(analysis: a, strainOn21: env.profile.strainOn21)
             CallCard(call: a.call, strain21: a.day?.strain.map(LScale.strain21))
+            CoachBriefCard()
             PlanCard()
             HeartStrip(points: hr)
             TodayVitals(analysis: a, stress: stress)
@@ -491,5 +492,58 @@ struct CheckInPrompt: View {
             .background(LumaPanel(radius: 22))
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Coach brief
+
+/// The coach's morning read of the day. Written once a day, and only when the coach is connected
+/// and allowed to see health data.
+struct CoachBriefCard: View {
+    @EnvironmentObject private var env: LumaEnv
+
+    var body: some View { CoachBriefBody(coach: env.coach) }
+}
+
+private struct CoachBriefBody: View {
+    @ObservedObject var coach: CoachEngine
+    @EnvironmentObject private var env: LumaEnv
+    @EnvironmentObject private var router: LumaRouter
+
+    private var enabled: Bool { env.profile.morningBrief && coach.hasKey && env.profile.shareHealthWithCoach }
+
+    var body: some View {
+        Group {
+            if enabled, let brief = coach.brief, coach.briefDay == env.today {
+                LumaCard(tint: Luma.aqua.opacity(0.5)) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "sparkles").font(.system(size: 12, weight: .bold)).foregroundStyle(Luma.aqua)
+                            LumaLabel("Coach's read of today")
+                            Spacer()
+                            Button {
+                                Task { await coach.loadBrief(force: true) }
+                            } label: {
+                                Image(systemName: "arrow.clockwise").font(.system(size: 12, weight: .semibold)).foregroundStyle(Luma.smoke).frame(width: 28, height: 28)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Write the read again")
+                        }
+                        Text(brief).font(LumaFont.body(15)).foregroundStyle(Luma.frost).lineSpacing(3).fixedSize(horizontal: false, vertical: true)
+                        Button("Talk it through") { router.tab = .coach }
+                            .font(LumaFont.body(14, .semibold)).foregroundStyle(Luma.aqua).buttonStyle(.plain)
+                    }
+                }
+            } else if enabled, coach.briefLoading {
+                LumaCard {
+                    HStack(spacing: 10) {
+                        ProgressView().controlSize(.small).tint(Luma.aqua)
+                        Text("Writing this morning's read").font(LumaFont.body(14)).foregroundStyle(Luma.mist)
+                    }
+                }
+            }
+        }
+        .task(id: env.analysis.lastNight?.day) { if enabled { await coach.loadBrief() } }
+        .onChange(of: coach.brief) { _, _ in env.onGlanceChange?() }
     }
 }

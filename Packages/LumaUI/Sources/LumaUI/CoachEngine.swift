@@ -89,6 +89,24 @@ public final class CoachEngine: ObservableObject {
         if let saved = env.disk.load([String].self, "coach-brief.json"), saved.count == 2 { briefDay = saved[0]; brief = saved[1] }
     }
 
+    /// The gallery's stand-in conversation, so the design can be judged without a key or a network.
+    func seedDemo() {
+        guard env.isDemo, hasKey, messages.isEmpty else { return }
+        let today = LumaAnalysis.todayKey()
+        briefDay = today
+        brief = "Recovery is 78%, helped by seven and a half hours and an HRV four points above your usual. Class this morning can be a proper effort; keep this evening's run genuinely easy so the week's load stays level. Aim for lights out by 22:30 to clear the last of the sleep debt."
+        let lunch = env.fuel.last { $0.kind == .meal && $0.source == .photo }
+        let coachPlan = env.planned.filter { $0.origin == .coach && $0.day >= today }.prefix(2).map { $0.id }
+        messages = [
+            CoachMessage(role: .user, text: "What is moving my recovery up or down?"),
+            CoachMessage(role: .assistant, text: "Three things stand out in your last 60 days:\n\n- **Alcohol** is the clearest drag: nights after a drink score about 11 points lower, mostly through a higher resting heart rate.\n- **Late sessions** cost you around 25 minutes of sleep; your 06:30 classes do not.\n- **HRV** is trending up, about 4 ms over six weeks, which fits the steadier training load.\n\nHere is the HRV trend against your normal range.",
+                         cards: [.chart(metric: LMetric.hrv.rawValue, days: 30)]),
+            CoachMessage(role: .user, text: "Log my lunch from the photo and plan the rest of the week around my classes."),
+            CoachMessage(role: .assistant, text: "Lunch is logged; you are at 96 g of protein, so a 40 g serving this evening gets you to target.\n\nFor the week I kept your classes as they are and added two sessions that fit around them.",
+                         cards: [.logged(entryIDs: lunch.map { [$0.id] } ?? []), .planned(sessionIDs: Array(coachPlan)), .note("Prefers morning sessions on weekdays")]),
+        ]
+    }
+
     var hasKey: Bool { !(env.secrets.coachKey() ?? "").isEmpty }
 
     // MARK: World
@@ -455,6 +473,7 @@ public final class CoachEngine: ObservableObject {
 
     /// A short morning read of the day. Written once per day and kept.
     func loadBrief(force: Bool = false) async {
+        guard !env.isDemo, env.profile.morningBrief else { return }
         let day = env.today
         guard hasKey, env.profile.shareHealthWithCoach, !briefLoading, env.analysis.lastNight?.day == day else { return }
         if briefDay == day, brief != nil, !force { return }

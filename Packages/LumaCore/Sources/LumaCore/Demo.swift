@@ -284,7 +284,7 @@ public enum LumaDemoContent {
     public static func profile() -> LProfile {
         var p = LProfile()
         p.name = "Alex"; p.birthYear = 1992; p.heightCm = 180; p.weightKg = 78; p.maxHR = 187
-        p.fiveKSeconds = 24 * 60 + 40; p.gym = "UN1T Hatch Street"; p.shareHealthWithCoach = true
+        p.fiveKSeconds = 24 * 60 + 40; p.gym = "Forge Fitness"; p.shareHealthWithCoach = true
         p.setupVersion = LProfile.currentSetupVersion
         return p
     }

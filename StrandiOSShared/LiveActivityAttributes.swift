@@ -2,17 +2,33 @@
 import Foundation
 import ActivityKit
 
-/// Live Activity attributes for an active live-HR / workout session. Shared between the app (which
-/// starts/updates the activity) and the widget extension (which renders it on the Lock Screen and in
-/// the Dynamic Island).
+/// Live Activity attributes for the heart-rate card on the Lock Screen and in the Dynamic Island.
+/// Shared between the app (which starts and updates the activity) and the widget extension (which
+/// draws it). The type name is persisted by iOS for running activities, so it stays as it is.
 public struct NOOPActivityAttributes: ActivityAttributes {
     public struct ContentState: Codable, Hashable {
         public var bpm: Int?
         public var recovery: Int?
         public var bonded: Bool
-        // Effort / strain on NOOP's 0–100 axis (#446) — one more stat in the Dynamic Island expanded
-        // region. OPTIONAL with a nil default so an activity started by an older build still decodes.
+        // Strain on the stored 0–100 axis. OPTIONAL with a nil default so an activity started by an
+        // older build still decodes; the same holds for every field below.
         public var effort: Int?
+
+        /// The most recent reading the strap delivered and when it arrived. Kept when `bpm` goes nil,
+        /// so the card can show "last reading, 2 min ago" instead of going blank.
+        public var lastBpm: Int?
+        public var lastAt: Date?
+        /// Heart-rate zone 1…5 of the reading, from the athlete's own zones.
+        public var zone: Int?
+        /// Strain as the athlete has chosen to see it ("9.4" on the 0–21 scale).
+        public var strainText: String?
+        public var sleep: Int?
+        /// A session being recorded: its name, a start date such that now − start is the moving time,
+        /// the moving time while paused, and the distance so far.
+        public var session: String?
+        public var sessionStart: Date?
+        public var pausedElapsed: Double?
+        public var distanceM: Double?
 
         public init(bpm: Int?, recovery: Int?, bonded: Bool, effort: Int? = nil) {
             self.bpm = bpm
@@ -22,10 +38,10 @@ public struct NOOPActivityAttributes: ActivityAttributes {
         }
     }
 
-    /// Static title shown for the session.
+    /// Static title for the session.
     public var title: String
 
-    public init(title: String = "Live HR") {
+    public init(title: String = "Heart rate") {
         self.title = title
     }
 }

@@ -195,7 +195,7 @@ final class CoachToolTests: XCTestCase {
         let s = CoachPrompt.system(world: world(), calendar: cal)
         XCTAssertTrue(s.contains("Alex"))
         XCTAssertTrue(s.contains("Left knee"))
-        XCTAssertTrue(s.contains("UN1T Hatch Street"))
+        XCTAssertTrue(s.contains("Forge Fitness"))
         XCTAssertTrue(s.contains("recovery "))
         XCTAssertFalse(s.contains("\t"))
     }

@@ -174,6 +174,8 @@ public enum LumaDest: Hashable {
     case lift(UUID)
     case supplements, fuelHistory
     case devices, settings, profile, about
+    /// Development only: the widget design sheets.
+    case dev(Int)
 }
 
 enum LumaSheetDest: Identifiable {
@@ -403,6 +405,7 @@ public final class LumaEnv: ObservableObject {
                           PersonalBest(distanceM: 5000, seconds: 1480), PersonalBest(distanceM: 10000, seconds: 3105)]
             env.upsert(LumaDemoContent.simulation(daysAgo: 37, runPace: 334, stationFactor: 1.09))
             env.upsert(LumaDemoContent.simulation(daysAgo: 9, runPace: 319))
+            env.coach.seedDemo()
         }
         return env
     }
@@ -572,6 +575,42 @@ public final class LumaEnv: ObservableObject {
         }
         if !improved.isEmpty { runPBs = all.sorted { $0.distanceM < $1.distanceM } }
         return improved
+    }
+
+    // MARK: Glance
+
+    /// What the widgets and the Lock Screen should show right now.
+    public func glance(now: Date = Date()) -> LumaGlance {
+        let a = analysis
+        let today = a.today
+        let scored: LDay? = a.lastNight?.day == today ? a.lastNight : nil
+        let schedule = scheduleDays([today, LDate.adding(1, to: today)])
+        var sessions: [LumaGlance.Session] = []
+        if let day = schedule.first {
+            for p in day.planned where p.kind != .rest && p.status != .skipped {
+                sessions.append(LumaGlance.Session(id: p.id.uuidString, title: p.title,
+                                                   time: p.startMinutes.map { LFormat.timeOfDay(minutes: Double($0)) },
+                                                   symbol: p.kind.sport.symbol, done: day.isDone(p)))
+            }
+            for w in day.unplannedWorkouts {
+                sessions.append(LumaGlance.Session(id: w.id, title: w.kind == .other ? w.sport : w.kind.title, time: nil, symbol: w.kind.symbol, done: true))
+            }
+        }
+        var tomorrow: String?
+        if schedule.count > 1, let first = schedule[1].planned.first(where: { $0.kind != .rest }) {
+            tomorrow = first.startMinutes.map { first.title + " · " + LFormat.timeOfDay(minutes: Double($0)) } ?? first.title
+        }
+        let strain = a.day?.strain.map { profile.strainOn21 ? LScale.strain21($0) : $0 }
+        let totals = fuelTotals(on: today), targets = fuelTargets(on: today)
+        let week = LumaAnalysis.series(.recovery, days: days, ending: today, count: 7).values.map { $0.map { Int($0.rounded()) } }
+        let brief: String? = coach.briefDay == today ? coach.brief : nil
+        return LumaGlance(day: today, recovery: scored?.recovery.map { Int($0.rounded()) }, strain: strain, strainMax: profile.strainOn21 ? 21 : 100,
+                          sleepScore: scored?.sleepScore.map { Int($0.rounded()) }, sleepMinutes: scored?.sleepMin.map { Int($0.rounded()) },
+                          hrv: scored?.hrv.map { Int($0.rounded()) }, restingHR: scored?.restingHR.map { Int($0.rounded()) },
+                          call: a.call.title, callDetail: a.call.body, sessions: Array(sessions.prefix(4)), tomorrow: tomorrow,
+                          kcal: Int(totals.kcal.rounded()), kcalTarget: Int(targets.kcal.rounded()), protein: Int(totals.proteinG.rounded()),
+                          proteinTarget: Int(targets.proteinG.rounded()), waterMl: Int(totals.waterMl.rounded()),
+                          waterTargetMl: Int(targets.waterMl.rounded()), brief: brief, week: week, updated: now)
     }
 
     // MARK: Export and about

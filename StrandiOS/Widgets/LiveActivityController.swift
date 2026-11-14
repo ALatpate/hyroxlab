@@ -38,12 +38,22 @@ final class LiveActivityController {
     /// Banners NOOP has asked iOS to remove (`removeLeftovers`), so a tick that arrives before iOS has dropped one from
     /// its list neither asks again nor logs it twice.
     private var removing: Set<String> = []
-    /// How long after the last push iOS treats the banner as fresh; after that the banner draws the dash
-    /// (`NOOPLiveActivity.shownBpm`). A WHOOP 5.0 taken off the wrist goes quiet, and with nothing arriving iOS
-    /// suspends NOOP, so no timer of NOOP's can clear the number: iOS's own stale date is what does it, in at most
-    /// this long (a tester's log, 23 Sep 2026). A steady number is re-pushed once half of this has passed
-    /// (`LiveHRBannerPushPolicy`), so a banner fed by a worn strap never goes stale.
-    static let staleAfter: TimeInterval = 30
+    /// When the strap last delivered a heart rate, and what it was. The banner carries both, so that once readings
+    /// stop it shows the last one with its age rather than nothing.
+    private var lastArrival: Date?
+    private var lastReading: (bpm: Int, at: Date)?
+    /// Fills in what the heart-rate layer does not know: the athlete's zone for the reading, the day's scores as
+    /// the rest of the app shows them, and a session being recorded. Set once at launch.
+    var decorate: ((inout NOOPActivityAttributes.ContentState) -> Void)?
+    /// How long after the last push iOS treats the banner as fresh; after that the banner shows the number as the
+    /// last reading, with its age. A strap taken off the wrist goes quiet, and with nothing arriving iOS suspends
+    /// the app, so no timer of the app's can relabel the number: iOS's own stale date is what does it, in at most
+    /// this long. A steady number is re-pushed once half of this has passed (`LiveHRBannerPushPolicy`).
+    ///
+    /// 75 s, not 30: outside a recorded session a WHOOP 5.0 / MG delivers a heart rate about every 30 s, so a
+    /// 30 s window expired between two ordinary readings and the banner blanked while the strap was worn and
+    /// connected. The window has to span at least two of those readings.
+    static let staleAfter: TimeInterval = 75
 
     /// Follow the strap from process start, not from a screen. iOS starts NOOP in the background — the strap
     /// reconnecting, a sync, the Sync Strap shortcut — and a process started that way need not build any screen (the
@@ -55,6 +65,10 @@ final class LiveActivityController {
         // Refreshed once a change has landed, never from inside it (`LiveHRBannerInputs`). AppModel's median (`bpm`)
         // is an input in its own right: it moves on the R-R alone, and a clear that reached it that way refreshed
         // nothing, so the banner kept the last number until iOS's stale date drew the dash.
+        // Stamped as each reading arrives, so the banner can say how old the number it shows is.
+        model.live.$heartRate
+            .sink { [weak self] hr in if hr != nil { self?.lastArrival = Date() } }
+            .store(in: &cancellables)
         LiveHRBannerInputs.settled([model.live.$heartRate.map { _ in () }.eraseToAnyPublisher(),
                                     model.live.$connected.map { _ in () }.eraseToAnyPublisher(),
                                     model.$bpm.map { _ in () }.eraseToAnyPublisher()])
@@ -109,7 +123,7 @@ final class LiveActivityController {
             shownState = nil
             startedAt = nil
             log((Self.listed(activity) == .ended ? "ended by iOS" : "gone from the Lock Screen (dismissed)")
-                + "; started again when NOOP is next on screen")
+                + "; started again when the app is next on screen")
         }
         // Re-adopt an activity that outlived a previous app session. ActivityKit keeps Live Activities
         // alive across launches/relaunches, but a fresh controller starts with `activity == nil`, so
@@ -125,6 +139,10 @@ final class LiveActivityController {
                 activity = adopted
                 startedAt = (UserDefaults.standard.dictionary(forKey: Self.startedKey)?[adopted.id] as? Double)
                     .map(Date.init(timeIntervalSince1970:))
+                // The last reading the previous run showed, so a banner picked up before the next reading
+                // arrives keeps its number.
+                let shown = adopted.content.state
+                if lastReading == nil, let bpm = shown.lastBpm, let at = shown.lastAt { lastReading = (bpm, at) }
                 log("picked up the one already on the Lock Screen")
             }
         }
@@ -150,8 +168,13 @@ final class LiveActivityController {
         // Link down: the dash, never the last number (`bonded` stays true across a disconnect, and keying off it once
         // left a fabricated "live" HR standing). No timed end: a timer in a suspended app fires at its next wake,
         // which is typically the strap coming back — exactly when the banner should stay.
-        let state = NOOPActivityAttributes.ContentState(bpm: connected ? bpm : nil, recovery: recovery,
+        var state = NOOPActivityAttributes.ContentState(bpm: connected ? bpm : nil, recovery: recovery,
                                                         bonded: connected, effort: effort)
+        if let live = state.bpm { lastReading = (live, lastArrival ?? now) }
+        decorate?(&state)
+        // The reading's own time is left out of `state`: it moves with every reading, and comparing it would turn
+        // each one into a push. It is stamped on as a push goes out (`stamped`).
+        state.lastBpm = lastReading?.bpm
 
         if step == .renew, activity != nil {
             // The fresh banner first, then the old one goes, so the Lock Screen is never without one; if iOS refuses
@@ -171,7 +194,8 @@ final class LiveActivityController {
             lastPush = now
             shownState = state
             let staleDate = now.addingTimeInterval(Self.staleAfter)
-            Task { await activity.update(ActivityContent(state: state, staleDate: staleDate)) }
+            let content = ActivityContent(state: stamped(state), staleDate: staleDate)
+            Task { await activity.update(content) }
         } else if start(state, at: now) {
             log(state.bpm == nil ? "started, showing – until a heart rate arrives" : "started")
             removeLeftovers(Activity<NOOPActivityAttributes>.activities, beside: activity)
@@ -204,8 +228,8 @@ final class LiveActivityController {
         defer { isStarting = false }
         do {
             let started = try Activity.request(
-                attributes: NOOPActivityAttributes(title: String(localized: "Live HR")),
-                content: ActivityContent(state: state, staleDate: now.addingTimeInterval(Self.staleAfter)),
+                attributes: NOOPActivityAttributes(title: "Heart rate"),
+                content: ActivityContent(state: stamped(state), staleDate: now.addingTimeInterval(Self.staleAfter)),
                 pushType: nil
             )
             activity = started
@@ -223,6 +247,17 @@ final class LiveActivityController {
             return false
         }
     }
+
+    /// `state` with the time of the reading it carries, as it goes out to iOS.
+    private func stamped(_ state: NOOPActivityAttributes.ContentState) -> NOOPActivityAttributes.ContentState {
+        var out = state
+        out.lastAt = lastReading?.at
+        return out
+    }
+
+    /// Asks for the banner to be brought up to date now: something outside the heart rate changed (a session
+    /// started, paused or ended).
+    func refresh() { refreshBanner() }
 
     /// The banner turning to the dash, or back to a number: pushed at once (`LiveHRBannerPushPolicy`), and logged.
     private func logReading(_ state: NOOPActivityAttributes.ContentState) {

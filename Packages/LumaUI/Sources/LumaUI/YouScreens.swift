@@ -91,7 +91,7 @@ struct ProfileScreen: View {
                 }
             }
             LumaSection(title: "For the coach")
-            LumaField(title: "Where you train, e.g. UN1T Hatch Street", text: $env.profile.gym)
+            LumaField(title: "Where you train", text: $env.profile.gym)
             LumaField(title: "Your goals, in your own words", text: $env.profile.goals, axis: .vertical)
             LumaSection(title: "Sleep")
             optionalNumber("Fixed sleep need (hours)", "Leave off and Luma estimates your need each night from strain and sleep debt.",

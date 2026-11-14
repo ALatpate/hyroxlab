@@ -167,6 +167,7 @@ struct LumaDestinationView: View {
         case .settings: SettingsScreen()
         case .profile: ProfileScreen()
         case .about: AboutScreen()
+        case .dev(let page): DevWidgetsScreen(page: page)
         }
     }
 }
@@ -259,6 +260,9 @@ enum LumaRoute {
             LumaLaunch.page = Int(String(name.last ?? "0")) ?? 0
             r.cover = .onboarding
         case "sheet.manual": r.tab = .train; r.sheet = .manualWorkout
+        case "dev.lock": r.open(.today, .dev(0))
+        case "dev.home": r.open(.today, .dev(1))
+        case "dev.home2": r.open(.today, .dev(2))
         case "sheet.water": r.sheet = .fuelAdd(.water)
         default: break
         }
