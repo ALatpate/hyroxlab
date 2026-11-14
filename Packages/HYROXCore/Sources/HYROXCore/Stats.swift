@@ -1,7 +1,7 @@
 import Foundation
 
 /// Small, dependency-free statistics used across the package.
-public enum Stats {
+public enum HXStats {
     public static func mean(_ xs: [Double]) -> Double? {
         guard !xs.isEmpty else { return nil }
         return xs.reduce(0, +) / Double(xs.count)
@@ -71,7 +71,7 @@ public struct RobustBaseline: Equatable, Sendable {
     /// `history` is oldest → newest and must NOT contain the value being judged.
     public init?(history: [Double]) {
         let tail = Array(history.suffix(Self.window))
-        guard tail.count >= Self.minimumSamples, let m = Stats.median(tail), let d = Stats.mad(tail) else { return nil }
+        guard tail.count >= Self.minimumSamples, let m = HXStats.median(tail), let d = HXStats.mad(tail) else { return nil }
         median = m; mad = max(d, 1e-9); count = tail.count
     }
 
@@ -84,7 +84,7 @@ public struct RobustBaseline: Equatable, Sendable {
 
 // MARK: - Formatting helpers (pure, UI-independent)
 
-public enum Format {
+public enum HXFormat {
     /// 5:07 for 307 s; 1:02:03 above an hour.
     public static func duration(_ seconds: Double, showHours: Bool? = nil) -> String {
         let s = Int(seconds.rounded())

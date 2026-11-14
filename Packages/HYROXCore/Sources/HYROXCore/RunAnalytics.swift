@@ -77,22 +77,22 @@ public struct PaceSmoother: Sendable {
 
 // MARK: - Zones
 
-public struct HRZones: Codable, Equatable, Sendable {
+public struct HXZones: Codable, Equatable, Sendable {
     /// Lower bounds of zones 1…5 in bpm (zone 1 starts at `bounds[0]`).
     public let bounds: [Double]
 
     public init(bounds: [Double]) { self.bounds = bounds }
 
     /// Five zones from max HR: 50/60/70/80/90 %.
-    public static func fromMaxHR(_ max: Double) -> HRZones {
-        HRZones(bounds: [0.5, 0.6, 0.7, 0.8, 0.9].map { $0 * max })
+    public static func fromMaxHR(_ max: Double) -> HXZones {
+        HXZones(bounds: [0.5, 0.6, 0.7, 0.8, 0.9].map { $0 * max })
     }
     /// Five zones from lactate-threshold HR (Friel-style): <85 / 85–89 / 90–94 / 95–99 / ≥100 % of LTHR.
-    public static func fromLTHR(_ lthr: Double) -> HRZones {
-        HRZones(bounds: [0.0, 0.85, 0.90, 0.95, 1.0].map { $0 * lthr })
+    public static func fromLTHR(_ lthr: Double) -> HXZones {
+        HXZones(bounds: [0.0, 0.85, 0.90, 0.95, 1.0].map { $0 * lthr })
     }
     /// Age estimate when nothing better exists.
-    public static func fromAge(_ age: Int) -> HRZones { fromMaxHR(Double(208 - Int(Double(age) * 0.7))) }
+    public static func fromAge(_ age: Int) -> HXZones { fromMaxHR(Double(208 - Int(Double(age) * 0.7))) }
 
     public func zone(for hr: Double) -> Int {
         var z = 1
@@ -120,7 +120,7 @@ public enum RunAnalytics {
                 let tCross = prev.tS + frac * (s.tS - prev.tS)
                 let secs = tCross - lapStartT
                 laps.append(Lap(index: laps.count + 1, distanceM: lapM, seconds: secs,
-                                paceSPerKm: secs / (lapM / 1000), avgHR: Stats.mean(hrAcc), isPartial: false))
+                                paceSPerKm: secs / (lapM / 1000), avgHR: HXStats.mean(hrAcc), isPartial: false))
                 lapStartT = tCross; lapStartD = nextMark; nextMark += lapM
                 hrAcc.removeAll()
             }
@@ -130,7 +130,7 @@ public enum RunAnalytics {
         if remD > 50 {
             let secs = prev.tS - lapStartT
             laps.append(Lap(index: laps.count + 1, distanceM: remD, seconds: secs,
-                            paceSPerKm: secs / (remD / 1000), avgHR: Stats.mean(hrAcc), isPartial: true))
+                            paceSPerKm: secs / (remD / 1000), avgHR: HXStats.mean(hrAcc), isPartial: true))
         }
         return laps
     }
@@ -160,7 +160,7 @@ public enum RunAnalytics {
     }
 
     /// Time in each HR zone from 1 Hz-ish samples.
-    public static func zoneShares(_ samples: [RunSample], zones: HRZones) -> [HRZoneShare] {
+    public static func zoneShares(_ samples: [RunSample], zones: HXZones) -> [HRZoneShare] {
         var secs = [Double](repeating: 0, count: 5)
         var prev: RunSample? = nil
         for s in samples {
@@ -185,7 +185,7 @@ public enum RunAnalytics {
     private static func efficiency(_ s: [RunSample]) -> Double? {
         guard let f = s.first, let l = s.last, l.tS > f.tS + 60 else { return nil }
         let hrs = s.compactMap(\.hr)
-        guard let hr = Stats.mean(hrs), hr > 60 else { return nil }
+        guard let hr = HXStats.mean(hrs), hr > 60 else { return nil }
         let speed = (l.distanceM - f.distanceM) / (l.tS - f.tS)
         return speed / hr
     }
@@ -215,8 +215,8 @@ public enum RunPredictor {
     public static func fitExponent(_ pbs: [PersonalBest]) -> Double? {
         guard pbs.count >= 2 else { return nil }
         let xs = pbs.map { log($0.distanceM) }, ys = pbs.map { log($0.seconds) }
-        guard let fit = Stats.linearFit(xs, ys) else { return nil }
-        return Stats.clamp(fit.slope, 1.02, 1.15)
+        guard let fit = HXStats.linearFit(xs, ys) else { return nil }
+        return HXStats.clamp(fit.slope, 1.02, 1.15)
     }
 
     /// Predicted time range for `targetM` from the best available PB; ±3 % band.

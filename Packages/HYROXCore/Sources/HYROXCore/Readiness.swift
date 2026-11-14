@@ -29,7 +29,7 @@ public enum TrainingLoad {
     }
 }
 
-// MARK: - Readiness
+// MARK: - HXReadiness
 
 public struct ReadinessInputs: Equatable, Sendable {
     /// NOOP Charge 0–100 for today, if available.
@@ -72,7 +72,7 @@ public struct ReadinessDriver: Equatable, Sendable, Identifiable {
     public let points: Double
 }
 
-public struct Readiness: Equatable, Sendable {
+public struct HXReadiness: Equatable, Sendable {
     public let score: Int               // 0–100
     public let advice: SessionAdvice
     public let drivers: [ReadinessDriver]
@@ -80,9 +80,9 @@ public struct Readiness: Equatable, Sendable {
     public let confidence: Double
 }
 
-public enum ReadinessEngine {
+public enum HXReadinessEngine {
     /// Weights sum to 100 when all inputs exist; missing inputs redistribute to the rest.
-    public static func compute(_ i: ReadinessInputs) -> Readiness {
+    public static func compute(_ i: ReadinessInputs) -> HXReadiness {
         var parts: [(label: String, score01: Double, weight: Double)] = []
 
         if let c = i.charge { parts.append(("Charge \(Int(c))", c / 100, 35)) }
@@ -90,7 +90,7 @@ public enum ReadinessEngine {
         if let h = i.hrvToday, let base = RobustBaseline(history: i.hrvHistory) {
             let z = base.z(h)
             // Above baseline is fine (cap), below costs; −2 MAD ≈ 0.
-            let s = Stats.clamp(0.75 + z * 0.125, 0, 1)
+            let s = HXStats.clamp(0.75 + z * 0.125, 0, 1)
             let pct = base.percentDelta(h)
             parts.append((String(format: "HRV %+.0f%% vs baseline", pct), s, 25))
         } else if let h = i.hrvToday {
@@ -99,13 +99,13 @@ public enum ReadinessEngine {
 
         if let r = i.rhrToday, let base = RobustBaseline(history: i.rhrHistory) {
             let z = base.z(r)
-            let s = Stats.clamp(0.75 - z * 0.125, 0, 1)
+            let s = HXStats.clamp(0.75 - z * 0.125, 0, 1)
             parts.append((String(format: "Resting HR %+.0f bpm vs baseline", r - base.median), s, 10))
         }
 
         if let sl = i.sleepHoursLastNight {
-            let ratio = Stats.clamp(sl / max(5, i.sleepNeedHours), 0, 1.1)
-            let s = Stats.clamp((ratio - 0.6) / 0.4, 0, 1)
+            let ratio = HXStats.clamp(sl / max(5, i.sleepNeedHours), 0, 1.1)
+            let s = HXStats.clamp((ratio - 0.6) / 0.4, 0, 1)
             parts.append((String(format: "Slept %.1f h", sl), s, 20))
         }
 
@@ -117,14 +117,14 @@ public enum ReadinessEngine {
                 if ratio <= 1.3 { s = 1 } else if ratio >= 1.8 { s = 0 } else { s = 1 - (ratio - 1.3) / 0.5 }
                 parts.append((String(format: "Load ratio %.2f", ratio), s, 10))
             }
-            if let y = i.dailyLoads.last, let mean = Stats.mean(i.dailyLoads), mean > 0, y > 2 * mean {
+            if let y = i.dailyLoads.last, let mean = HXStats.mean(i.dailyLoads), mean > 0, y > 2 * mean {
                 parts.append(("Hard session yesterday", 0.4, 10))
             }
         }
 
         let totalW = parts.reduce(0) { $0 + $1.weight }
         guard totalW > 0 else {
-            return Readiness(score: 0, advice: .goAsPlanned, drivers: [], confidence: 0)
+            return HXReadiness(score: 0, advice: .goAsPlanned, drivers: [], confidence: 0)
         }
         let score01 = parts.reduce(0) { $0 + $1.score01 * $1.weight } / totalW
         let score = Int((score01 * 100).rounded())
@@ -139,8 +139,8 @@ public enum ReadinessEngine {
         case 40..<62: advice = i.hasHardSessionPlannedToday ? .easeOff : .goAsPlanned
         default: advice = .goAsPlanned
         }
-        let confidence = Stats.clamp(totalW / 100, 0, 1)
-        return Readiness(score: score, advice: advice, drivers: Array(drivers.prefix(3)), confidence: confidence)
+        let confidence = HXStats.clamp(totalW / 100, 0, 1)
+        return HXReadiness(score: score, advice: advice, drivers: Array(drivers.prefix(3)), confidence: confidence)
     }
 }
 

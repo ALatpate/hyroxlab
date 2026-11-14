@@ -54,7 +54,7 @@ public struct BridgeStep: Equatable, Sendable, Identifiable {
 public enum RaceAnalytics {
     /// Builds the full report for a HYROX-shaped session. `benchmarks` supplies per-station bests.
     /// `freshPaceSPerKm` is the athlete's unfatigued 1 km race pace; defaults to run 1.
-    public static func report(_ s: Session, benchmarks: Benchmarks? = nil, freshPaceSPerKm: Double? = nil,
+    public static func report(_ s: HXSession, benchmarks: Benchmarks? = nil, freshPaceSPerKm: Double? = nil,
                               targetSplits: [String: Double]? = nil) -> RaceReport {
         let runs = s.runs.filter { $0.endMs != nil }
         let stations = s.stations.filter { $0.endMs != nil }
@@ -92,12 +92,12 @@ public enum RaceAnalytics {
         }
 
         let paces = runRows.compactMap { $0.paceSPerKm }
-        let cv = Stats.cv(paces)
+        let cv = HXStats.cv(paces)
         let hrDrift: Double? = {
             guard let a = runRows.first?.avgHR, let b = runRows.last?.avgHR, runRows.count >= 2 else { return nil }
             return b - a
         }()
-        let ciMean = Stats.mean(runRows.dropFirst().compactMap { $0.compromisedIndex })
+        let ciMean = HXStats.mean(runRows.dropFirst().compactMap { $0.compromisedIndex })
 
         var bridge: [BridgeStep] = []
         if let targets = targetSplits {
@@ -147,7 +147,7 @@ public struct Benchmarks: Codable, Equatable, Sendable {
     }
 
     /// Folds a completed session into the bests. Idempotent per session.
-    public mutating func ingest(_ s: Session) {
+    public mutating func ingest(_ s: HXSession) {
         for seg in s.stations where seg.endMs != nil {
             guard let st = seg.station, let sec = seg.durationS, sec > 5 else { continue }
             let k = Self.loadKey(st, loadKg: seg.loadKg)
@@ -168,11 +168,11 @@ public struct Benchmarks: Codable, Equatable, Sendable {
     }
 
     /// Recomputes typical roxzone from the most recent simulations.
-    public mutating func updateRoxzone(from sessions: [Session]) {
+    public mutating func updateRoxzone(from sessions: [HXSession]) {
         let sims = sessions.filter { $0.kind == .fullSimulation && $0.isComplete }
             .sorted { $0.startedAt > $1.startedAt }.prefix(3)
         let per = sims.flatMap { $0.roxzones.compactMap(\.durationS) }
-        typicalRoxzoneS = Stats.mean(per)
+        typicalRoxzoneS = HXStats.mean(per)
     }
 }
 
@@ -208,12 +208,12 @@ public enum RaceReadiness {
     static let defaultStationFatigue = 1.12
     static let defaultRunFatigue = 1.08
 
-    public static func assess(benchmarks b: Benchmarks, sessions: [Session], sex: Sex,
+    public static func assess(benchmarks b: Benchmarks, sessions: [HXSession], sex: Sex,
                               fresh1kS: Double?, formats: [RaceFormat] = RaceFormat.allCases) -> [FormatReadiness] {
         formats.map { assess(format: $0, benchmarks: b, sessions: sessions, sex: sex, fresh1kS: fresh1kS) }
     }
 
-    public static func assess(format: RaceFormat, benchmarks b: Benchmarks, sessions: [Session], sex: Sex,
+    public static func assess(format: RaceFormat, benchmarks b: Benchmarks, sessions: [HXSession], sex: Sex,
                               fresh1kS: Double?) -> FormatReadiness {
         var gaps: [String] = []
         var covered = 0
@@ -239,10 +239,10 @@ public enum RaceReadiness {
                 guard let st = seg.station else { return nil }
                 return b.bestStationS(st, loadKg: seg.loadKg)
             }.reduce(0, +)
-            if simBest > 0 { stationFatigue = Stats.clamp(simStations / simBest, 1.0, 1.5) }
+            if simBest > 0 { stationFatigue = HXStats.clamp(simStations / simBest, 1.0, 1.5) }
             if let r1 = run1k, r1 > 0 {
-                let runMean = Stats.mean(sim.runs.compactMap(\.durationS)) ?? r1
-                runFatigue = Stats.clamp(runMean / r1, 1.0, 1.6)
+                let runMean = HXStats.mean(sim.runs.compactMap(\.durationS)) ?? r1
+                runFatigue = HXStats.clamp(runMean / r1, 1.0, 1.6)
             }
         }
 

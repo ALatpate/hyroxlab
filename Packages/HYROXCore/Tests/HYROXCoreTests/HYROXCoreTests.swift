@@ -31,7 +31,7 @@ final class SplitRecorderTests: XCTestCase {
     func testAdvanceStampsMillisecondsAndAutosaveShape() {
         let clock = FakeClock()
         let plan = RacePlanBuilder.compromised(station: .wallBalls, rounds: 2, format: .openSingles, sex: .male)
-        var rec = SplitRecorder(session: Session(kind: .compromisedRunning(.wallBalls), format: .openSingles, sex: .male, startedAt: Date()),
+        var rec = SplitRecorder(session: HXSession(kind: .compromisedRunning(.wallBalls), format: .openSingles, sex: .male, startedAt: Date()),
                                 plan: plan, clock: clock)
         rec.start()
         XCTAssertEqual(rec.session.segments.count, 1)
@@ -53,7 +53,7 @@ final class SplitRecorderTests: XCTestCase {
     func testUndoMergesBack() {
         let clock = FakeClock()
         let plan = RacePlanBuilder.halfRace(secondHalf: false, format: .openSingles, sex: .male)
-        var rec = SplitRecorder(session: Session(kind: .halfSimulation(secondHalf: false), format: .openSingles, sex: .male, startedAt: Date()), plan: plan, clock: clock)
+        var rec = SplitRecorder(session: HXSession(kind: .halfSimulation(secondHalf: false), format: .openSingles, sex: .male, startedAt: Date()), plan: plan, clock: clock)
         rec.start(); clock.tick(10); rec.advance()
         XCTAssertEqual(rec.currentIndex, 1)
         rec.undoLastAdvance()
@@ -64,20 +64,20 @@ final class SplitRecorderTests: XCTestCase {
 
     func testSessionRoundTripsThroughJSON() throws {
         let plan = RacePlanBuilder.fullRace(format: .proSingles, sex: .female)
-        var rec = SplitRecorder(session: Session(kind: .fullSimulation, format: .proSingles, sex: .female, startedAt: Date()), plan: plan, clock: FakeClock())
+        var rec = SplitRecorder(session: HXSession(kind: .fullSimulation, format: .proSingles, sex: .female, startedAt: Date()), plan: plan, clock: FakeClock())
         rec.start(); rec.advance()
         let data = try JSONEncoder().encode(rec.session)
-        let back = try JSONDecoder().decode(Session.self, from: data)
+        let back = try JSONDecoder().decode(HXSession.self, from: data)
         XCTAssertEqual(back, rec.session)
     }
 }
 
 final class RaceAnalyticsTests: XCTestCase {
     /// Builds a complete simulation with given run seconds and station seconds.
-    func makeSim(runs: [Double], stations: [Double], rox: Double = 30, id: UUID = UUID()) -> Session {
+    func makeSim(runs: [Double], stations: [Double], rox: Double = 30, id: UUID = UUID()) -> HXSession {
         let clock = FakeClock()
         let plan = RacePlanBuilder.fullRace(format: .openSingles, sex: .male)
-        var rec = SplitRecorder(session: Session(id: id, kind: .fullSimulation, format: .openSingles, sex: .male, startedAt: Date()), plan: plan, clock: clock)
+        var rec = SplitRecorder(session: HXSession(id: id, kind: .fullSimulation, format: .openSingles, sex: .male, startedAt: Date()), plan: plan, clock: clock)
         rec.start()
         var ri = 0, si = 0
         for p in plan {
@@ -176,7 +176,7 @@ final class RunAnalyticsTests: XCTestCase {
     }
 
     func testZonesAndDecoupling() {
-        let z = HRZones.fromMaxHR(190)
+        let z = HXZones.fromMaxHR(190)
         XCTAssertEqual(z.zone(for: 100), 1)
         XCTAssertEqual(z.zone(for: 150), 3)
         XCTAssertEqual(z.zone(for: 185), 5)
@@ -210,7 +210,7 @@ final class ReadinessTests: XCTestCase {
         let good = ReadinessInputs(charge: 85, hrvToday: 70, hrvHistory: Array(repeating: 65, count: 30) + [60, 70],
                                    rhrToday: 50, rhrHistory: Array(repeating: 51, count: 30), sleepHoursLastNight: 8,
                                    dailyLoads: Array(repeating: 200, count: 28), hasHardSessionPlannedToday: true)
-        let g = ReadinessEngine.compute(good)
+        let g = HXReadinessEngine.compute(good)
         XCTAssertGreaterThan(g.score, 75)
         XCTAssertEqual(g.advice, .goAsPlanned)
         XCTAssertEqual(g.drivers.count, 3)
@@ -219,7 +219,7 @@ final class ReadinessTests: XCTestCase {
         var bad = good
         bad.charge = 20; bad.hrvToday = 40; bad.sleepHoursLastNight = 4.5
         bad.dailyLoads = Array(repeating: 100, count: 27) + [900]
-        let b = ReadinessEngine.compute(bad)
+        let b = HXReadinessEngine.compute(bad)
         XCTAssertLessThan(b.score, 40)
         XCTAssertEqual(b.advice, .rest)
         XCTAssertTrue(b.drivers.contains { $0.label.hasPrefix("Charge") })
@@ -273,8 +273,8 @@ final class PlanTests: XCTestCase {
         let p = TrainingPaces(fiveKSeconds: 1500)
         XCTAssertEqual(p.easy, 390, accuracy: 0.01)
         XCTAssertEqual(p.hyroxRace, 330, accuracy: 0.01)
-        XCTAssertEqual(Format.pace(p.threshold), "5:24")
-        XCTAssertEqual(Format.duration(3725), "1:02:05")
-        XCTAssertEqual(Format.durationTenths(64.26), "1:04.3")
+        XCTAssertEqual(HXFormat.pace(p.threshold), "5:24")
+        XCTAssertEqual(HXFormat.duration(3725), "1:02:05")
+        XCTAssertEqual(HXFormat.durationTenths(64.26), "1:04.3")
     }
 }

@@ -1,9 +1,9 @@
 import Foundation
 
-// MARK: - Session model
+// MARK: - HXSession model
 
 /// What kind of session was recorded. Stored as a string so new kinds never break old rows.
-public enum SessionKind: Codable, Equatable, Sendable, Hashable {
+public enum HXSessionKind: Codable, Equatable, Sendable, Hashable {
     case fullSimulation
     case halfSimulation(secondHalf: Bool)
     case stationPractice(Station)
@@ -24,7 +24,7 @@ public enum SessionKind: Codable, Equatable, Sendable, Hashable {
         case .runTreadmill: return "Treadmill run"
         case .runIntervals: return "Run intervals"
         case .strength: return "Strength"
-        case .other: return "Session"
+        case .other: return "HXSession"
         }
     }
 
@@ -64,7 +64,7 @@ public struct HRSummary: Codable, Equatable, Sendable {
         guard !samples.isEmpty else { return nil }
         return HRSummary(avg: samples.reduce(0, +) / Double(samples.count), max: samples.max() ?? 0,
                          min: samples.min() ?? 0, sampleCount: samples.count,
-                         expectedCount: max(1, Int(durationS.rounded())), source: source)
+                         expectedCount: Swift.max(1, Int(durationS.rounded())), source: source)
     }
 }
 
@@ -74,7 +74,7 @@ public enum HRSource: String, Codable, Sendable {
 
 /// A timed segment of a completed (or in-progress) session. Times are milliseconds on a monotonic
 /// clock relative to session start, plus the wall-clock start for display.
-public struct Segment: Codable, Equatable, Sendable, Identifiable {
+public struct HXSegment: Codable, Equatable, Sendable, Identifiable {
     public var id: Int
     public var kind: SegmentKind
     public var station: Station?
@@ -108,20 +108,20 @@ public struct Segment: Codable, Equatable, Sendable, Identifiable {
 
 /// A recorded session. `segments` is appended as the session runs so a crash loses at most the
 /// segment in flight.
-public struct Session: Codable, Equatable, Sendable, Identifiable {
+public struct HXSession: Codable, Equatable, Sendable, Identifiable {
     public var id: UUID
-    public var kind: SessionKind
+    public var kind: HXSessionKind
     public var format: RaceFormat
     public var sex: Sex
     public var startedAt: Date
     public var endedAt: Date?
-    public var segments: [Segment]
+    public var segments: [HXSegment]
     public var targetFinishS: Double?
     public var rpe: Int?
     public var note: String?
 
-    public init(id: UUID = UUID(), kind: SessionKind, format: RaceFormat, sex: Sex, startedAt: Date,
-                endedAt: Date? = nil, segments: [Segment] = [], targetFinishS: Double? = nil,
+    public init(id: UUID = UUID(), kind: HXSessionKind, format: RaceFormat, sex: Sex, startedAt: Date,
+                endedAt: Date? = nil, segments: [HXSegment] = [], targetFinishS: Double? = nil,
                 rpe: Int? = nil, note: String? = nil) {
         self.id = id; self.kind = kind; self.format = format; self.sex = sex; self.startedAt = startedAt
         self.endedAt = endedAt; self.segments = segments; self.targetFinishS = targetFinishS
@@ -133,9 +133,9 @@ public struct Session: Codable, Equatable, Sendable, Identifiable {
         return last - (segments.first?.startMs ?? 0)
     }
     public var totalS: Double? { totalMs.map { Double($0) / 1000 } }
-    public var runs: [Segment] { segments.filter { $0.kind == .run } }
-    public var stations: [Segment] { segments.filter { $0.kind == .station } }
-    public var roxzones: [Segment] { segments.filter { $0.kind == .roxzone } }
+    public var runs: [HXSegment] { segments.filter { $0.kind == .run } }
+    public var stations: [HXSegment] { segments.filter { $0.kind == .station } }
+    public var roxzones: [HXSegment] { segments.filter { $0.kind == .roxzone } }
     public var isComplete: Bool { endedAt != nil }
 }
 
@@ -157,15 +157,15 @@ public struct SystemMonotonicClock: MonotonicClock {
 
 /// Drives a session through its planned segments. Every transition is stamped in milliseconds
 /// from the monotonic clock. The recorder never writes anywhere itself: it hands back the updated
-/// `Session` after each call so the caller can persist it immediately.
+/// `HXSession` after each call so the caller can persist it immediately.
 public struct SplitRecorder: Sendable {
-    public private(set) var session: Session
+    public private(set) var session: HXSession
     public private(set) var plan: [PlannedSegment]
     public private(set) var currentIndex: Int
     private let clock: MonotonicClock
     private let t0: Int64
 
-    public init(session: Session, plan: [PlannedSegment], clock: MonotonicClock = SystemMonotonicClock()) {
+    public init(session: HXSession, plan: [PlannedSegment], clock: MonotonicClock = SystemMonotonicClock()) {
         self.session = session
         self.plan = plan
         self.currentIndex = -1
@@ -194,7 +194,7 @@ public struct SplitRecorder: Sendable {
     /// `hr` is the HR summary the caller computed for the closed segment; `distanceM`/`reps` override
     /// the plan when the athlete did something different.
     @discardableResult
-    public mutating func advance(hr: HRSummary? = nil, distanceM: Double? = nil, reps: Int? = nil) -> Segment? {
+    public mutating func advance(hr: HRSummary? = nil, distanceM: Double? = nil, reps: Int? = nil) -> HXSegment? {
         guard isStarted, !isFinished else { return nil }
         let now = elapsedMs
         let closed = close(at: now, hr: hr, distanceM: distanceM, reps: reps)
@@ -222,11 +222,11 @@ public struct SplitRecorder: Sendable {
     }
 
     private mutating func open(_ p: PlannedSegment, at ms: Int64) {
-        session.segments.append(Segment(id: p.id, kind: p.kind, station: p.station, label: p.label,
+        session.segments.append(HXSegment(id: p.id, kind: p.kind, station: p.station, label: p.label,
                                         startMs: ms, distanceM: p.distanceM, reps: p.reps, loadKg: p.loadKg))
     }
 
-    private mutating func close(at ms: Int64, hr: HRSummary?, distanceM: Double?, reps: Int?) -> Segment? {
+    private mutating func close(at ms: Int64, hr: HRSummary?, distanceM: Double?, reps: Int?) -> HXSegment? {
         guard var seg = session.segments.last, seg.endMs == nil else { return nil }
         seg.endMs = max(ms, seg.startMs)
         if let hr { seg.hr = hr }
