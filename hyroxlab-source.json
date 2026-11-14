@@ -2,8 +2,8 @@
   "name": "Luma",
   "identifier": "ie.hyroxlab.noop.altstore",
   "sourceURL": "https://raw.githubusercontent.com/ALatpate/hyroxlab/main/hyroxlab-source.json",
-  "subtitle": "Luma \u2014 WHOOP-powered HYROX, running and readiness, on your own phone.",
-  "description": "Personal AltStore / SideStore source for Luma (HYROX Lab), a fork of NOOP that adds a HYROX training system, a full running module and readiness coaching on top of NOOP's direct WHOOP connection. Add this source once; every new build appears as an update.",
+  "subtitle": "Luma \u2014 recovery, running, HYROX and fuelling from your strap, on your own phone.",
+  "description": "Personal AltStore / SideStore source for Luma: recovery, sleep, strain, running, HYROX and fuelling from a WHOOP strap you own, computed on your phone. Add this source once; every new build appears as an update.",
   "iconURL": "https://github.com/ALatpate/hyroxlab/raw/main/Design/luma-icon-1024.png",
   "website": "https://github.com/ALatpate/hyroxlab",
   "tintColor": "C8FF2E",
@@ -12,8 +12,8 @@
       "name": "Luma",
       "bundleIdentifier": "ie.hyroxlab.noop",
       "developerName": "ALatpate",
-      "subtitle": "HYROX, running and readiness from your WHOOP.",
-      "localizedDescription": "Luma reads a WHOOP strap you own directly over Bluetooth (via NOOP) and adds HYROX simulations and race mode, GPS running with splits and audio cues, readiness, training plans and a coach. Everything stays on the phone. Personal, non-commercial build; not affiliated with WHOOP or HYROX.",
+      "subtitle": "Recovery, running, HYROX and fuelling from your WHOOP.",
+      "localizedDescription": "Luma reads a WHOOP strap you own directly over Bluetooth and turns it into recovery, sleep and strain each morning, GPS running with splits and spoken cues, HYROX race mode and readiness, a food and supplement log, and a coach. Your data stays on the phone; the coach runs on your own Anthropic key and reads only what you let it. A personal, non-commercial build on open-source foundations, credited in the app's About screen; not affiliated with WHOOP or HYROX.",
       "iconURL": "https://github.com/ALatpate/hyroxlab/raw/main/Design/luma-icon-1024.png",
       "tintColor": "C8FF2E",
       "category": "healthcare-fitness",
@@ -21,11 +21,11 @@
       "versions": [
         {
           "version": "12.1.0",
-          "buildVersion": "9",
+          "buildVersion": "10",
           "date": "2026-11-14",
-          "localizedDescription": "Build 9 from commit 4f939d9.",
+          "localizedDescription": "Build 10 from commit a8e423f.",
           "downloadURL": "https://github.com/ALatpate/hyroxlab/releases/download/latest/HYROXLab-ios.ipa",
-          "size": 23266918,
+          "size": 24452836,
           "minOSVersion": "17.0"
         }
       ],
@@ -38,7 +38,11 @@
           "NSBluetoothAlwaysUsageDescription": "Talks to your WHOOP strap.",
           "NSLocationWhenInUseUsageDescription": "Records your route during outdoor runs.",
           "NSHealthShareUsageDescription": "Reads Apple Health data you authorise.",
-          "NSHealthUpdateUsageDescription": "Writes workouts you authorise to Apple Health."
+          "NSHealthUpdateUsageDescription": "Writes workouts you authorise to Apple Health.",
+          "NSMotionUsageDescription": "Counts steps during a walk or run.",
+          "NSCameraUsageDescription": "Photographs a meal, label or supplement to log it.",
+          "NSMicrophoneUsageDescription": "Lets you ask the coach a question by voice.",
+          "NSSpeechRecognitionUsageDescription": "Transcribes a spoken question on the phone."
         }
       }
     }
