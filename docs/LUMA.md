@@ -31,6 +31,12 @@ bridge implements them:
   `LScale`, so the 0–21 and 0–100 settings cannot disagree between screens. Widgets and the Lock
   Screen card take their numbers from the glance snapshot (`LumaGlance`), and withhold them once the
   snapshot is no longer for the current training day (the day turns over at 04:00).
+- **Sessions are never invented.** A stretch of raised heart rate that no session covers is a
+  suggestion: `LumaRepoSource.suggestedSessions` runs the strap layer's own detector over the raw
+  record, `SessionSuggestions` (LumaCore) decides which stretches reach training intensity, and nothing
+  is stored until the athlete keeps one. A kept or hand-logged session is stored as a manual row, and
+  the strap layer then fills its heart rate and strain from its own record at read time. The search
+  reads days of raw heart rate, so it runs only while the app is on screen.
 - **Race predictions come from one resolver** (`RaceReadiness.assess`), and the live race screen takes
   its targets from the same model (`RaceReadiness.targets`).
 - **Stored identifiers are never renamed.** Bundle ids, the App Group, `noop.*` defaults keys, the
