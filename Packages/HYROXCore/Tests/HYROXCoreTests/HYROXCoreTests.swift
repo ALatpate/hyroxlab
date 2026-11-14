@@ -101,7 +101,8 @@ final class RaceAnalyticsTests: XCTestCase {
         XCTAssertEqual(r.runs[1].afterStation, .skiErg)
         XCTAssertEqual(r.hrDriftBpm ?? 0, 14, accuracy: 0.01)
         XCTAssertNotNil(r.pacingCV)
-        XCTAssertEqual(r.stations[7].hrrAfterS ?? 0, 25, accuracy: 0.01)
+        XCTAssertEqual(r.stations[0].hrrAfterS ?? 0, 25, accuracy: 0.01)
+        XCTAssertNil(r.stations[7].hrrAfterS)   // no roxzone after the last station
         XCTAssertEqual(r.totalS ?? 0, 2335 + 1900 + 450, accuracy: 0.01)
     }
 
