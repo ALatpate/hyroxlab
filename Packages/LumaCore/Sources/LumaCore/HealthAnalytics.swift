@@ -78,7 +78,9 @@ public struct RecoveryRead: Equatable, Sendable {
 public enum RecoveryModel {
     /// Explains the day's recovery score from its inputs. The score itself comes from the strap
     /// pipeline; this never produces a second, competing number.
-    public static func read(day d: LDay, baselines b: LBaselines, gap: RecoveryGap? = nil) -> RecoveryRead {
+    /// `partial`: only part of the night behind the day was recorded. Its figures are then listed as
+    /// they were measured and set against nothing: a part of a night is not comparable with whole ones.
+    public static func read(day d: LDay, baselines b: LBaselines, gap: RecoveryGap? = nil, partial: Bool = false) -> RecoveryRead {
         var factors: [RecoveryFactor] = []
 
         if let v = d.hrv {
@@ -118,6 +120,10 @@ public enum RecoveryModel {
             let effect = abs(v) < 0.5 ? 0 : -abs(v) / 0.4
             let note = abs(v) < 0.5 ? "In your normal range" : "\(LFormat.signed(v, decimals: 1))°C from baseline"
             factors.append(RecoveryFactor(metric: .skinTempDev, value: v, baseline: 0, effect: effect, note: note))
+        }
+
+        if partial {
+            factors = factors.map { RecoveryFactor(metric: $0.metric, value: $0.value, baseline: nil, effect: 0, note: "From the recorded part") }
         }
 
         let band = d.recovery.map(RecoveryBand.of)

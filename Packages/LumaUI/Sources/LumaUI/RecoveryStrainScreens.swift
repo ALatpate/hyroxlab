@@ -254,6 +254,7 @@ struct StrainScreen: View {
                             }
                         }
                         LumaLineChart(values: grid.values, labels: grid.labels, color: Luma.ember, height: 160, gaps: true)
+                        if let note = unrecordedNote { LumaNote(note) }
                     }
                 }
             }
@@ -280,6 +281,16 @@ struct StrainScreen: View {
             guard let start = LDate.startOfDay(a.today)?.timeIntervalSince1970 else { return }
             hr = await env.source.heartRate(from: start, to: start + 86_400, bucketSeconds: 300)
         }
+    }
+
+    /// How much of today the heart-rate record does not cover, when that is twenty minutes or more.
+    /// Strain is worked out from recorded heart rate, so it is said next to the line it is read from.
+    private var unrecordedNote: String? {
+        guard let start = LDate.startOfDay(env.analysis.today)?.timeIntervalSince1970, let asOf = env.recordReadAt, asOf > start else { return nil }
+        let holes = RecordCheck.gaps(env.record, from: start, to: asOf, minimum: RecordCheck.listedHoleSeconds)
+        let missing: Double = holes.reduce(0.0) { $0 + $1.seconds }
+        guard missing > 0 else { return nil }
+        return "Nothing was recorded for \(LFormat.hm(minutes: missing / 60)) of today so far. Strain is worked out from recorded heart rate, so that time adds nothing to it."
     }
 }
 

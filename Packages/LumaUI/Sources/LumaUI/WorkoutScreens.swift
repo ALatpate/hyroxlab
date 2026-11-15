@@ -23,12 +23,7 @@ struct WorkoutScreen: View {
                 if route.count >= 2 { LumaRouteTrace(coords: route).frame(height: 240).background(LumaPanel()) }
                 stats(w)
                 if hr.count > 4 {
-                    LumaCard {
-                        VStack(alignment: .leading, spacing: 10) {
-                            LumaLabel("Heart rate")
-                            LumaLineChart(values: hr.map { $0.bpm }, labels: hr.map { LumaText.duration($0.t - w.start) }, color: Luma.coral, height: 170)
-                        }
-                    }
+                    SessionHeartCard(points: hr, start: w.start, end: w.end, step: Double(Self.bucketSeconds(w)))
                 }
                 zonesCard(w)
                 if let samples = env.runSamples(for: w.id), samples.count > 10 {
@@ -386,6 +381,35 @@ struct StationRadarCard: View {
                     LumaLabel("Strengths and gaps")
                     LumaRadar(spokes: spokes, color: Luma.volt).frame(height: 250)
                     LumaNote("Further from the centre is faster, measured against a typical open-division time. Dips are where the cheapest minutes are.")
+                }
+            }
+        }
+    }
+}
+
+
+/// A session's heart rate on the session's own clock. The line breaks where nothing was recorded, and
+/// when the record does not cover the whole session a sentence says how much of it there is: a strap
+/// out of the phone's reach leaves a hole, and what is shown for the session describes the rest.
+struct SessionHeartCard: View {
+    let points: [LHRPoint]
+    let start: Double
+    let end: Double
+    let step: Double
+
+    var body: some View {
+        let slots: [Double?] = RecordCheck.slots(points, from: start, to: end, step: step)
+        let origin: Double = RecordCheck.slotStart(start, step: step)
+        let length: Double = max(0, end - start)
+        let missing: Double = min(length, Double(slots.filter { $0 == nil }.count) * step)
+        LumaCard {
+            VStack(alignment: .leading, spacing: 10) {
+                LumaLabel("Heart rate")
+                LumaLineChart(values: slots, labels: slots.indices.map { LumaText.duration(max(0, origin + Double($0) * step - start)) },
+                              color: Luma.coral, height: 170, gaps: true)
+                // Small dropouts are not worth a sentence; a real part of the session is.
+                if missing >= 120, missing >= length * 0.05 {
+                    LumaNote("Heart rate reached the phone for \(LFormat.hm(minutes: (length - missing) / 60)) of this session's \(LFormat.hm(minutes: length / 60)). Its heart-rate figures cover that part.")
                 }
             }
         }

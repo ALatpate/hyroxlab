@@ -37,6 +37,10 @@ final class RecordTests: XCTestCase {
         let slots = RecordCheck.slots(points, from: at(0, 0), to: at(1, 10), step: 600)
         XCTAssertEqual(slots, [nil, 60, 61, nil, nil, nil, 70])
         XCTAssertEqual(RecordCheck.slots(points, from: at(0, 0), to: at(0, 0), step: 600), [])
+        // Readings come in buckets that start on whole multiples of the step. A window that starts
+        // between two of them begins its grid at the bucket that holds its start.
+        XCTAssertEqual(RecordCheck.slotStart(at(0, 13), step: 600), at(0, 10))
+        XCTAssertEqual(RecordCheck.slots(points, from: at(0, 13), to: at(0, 33), step: 600), [60, 61, nil])
     }
 
     /// The morning this was written for: asleep at 01:00, up at 09:30, and at 10:01 the phone held the
@@ -157,6 +161,22 @@ final class RecordTests: XCTestCase {
         // A night with part of its record missing is not compared with the athlete's normal.
         XCTAssertEqual(a.watch.title, "Not assessed")
         XCTAssertNil(a.lastScored)
+        XCTAssertEqual(a.recovery?.factors.count, 4)
+        XCTAssertTrue(a.recovery?.factors.allSatisfy { $0.baseline == nil && $0.effect == 0 && $0.note == "From the recorded part" } ?? false)
+
+        // The coach is given the same reason and told how to read the night, so it does not advise as
+        // if the athlete had slept one hour.
+        let world = CoachWorld(today: today, now: now, profile: LProfile(), days: days, workouts: [], analysis: a, planned: [], routine: [],
+                               fuel: [], supplements: [], checkIns: [], lifts: [], sessions: [], benchmarks: Benchmarks(),
+                               personalBests: [], notes: [], shareHealth: true)
+        let overview = CoachTools.overview(world, calendar: cal)
+        XCTAssertEqual(overview["sleep_last_night"]?["partly_recorded"]?.bool, true)
+        XCTAssertEqual(overview["sleep_last_night"]?["its_record"]?.string, "the record stops at 02:00, readings start again at 09:50")
+        XCTAssertTrue(overview["recovery"]?["why_today_has_no_score"]?.string?.hasPrefix("Learning your normal. ") ?? false)
+        let nights = CoachTools.read("get_sleep", input: .object(["start_date": .string("2026-11-14"), "end_date": .string(today)]), world: world, calendar: cal)
+        XCTAssertEqual(nights?["nights"]?.array?.map { $0["partly_recorded"]?.bool }, [false, true])
+        let rows = CoachTools.read("get_daily_metrics", input: .object(["start_date": .string("2026-11-14"), "end_date": .string(today)]), world: world, calendar: cal)
+        XCTAssertEqual(rows?["partly_recorded_nights"]?.array?.compactMap { $0.string }, [today])
         // It is listed with what was recorded, has no score, and is not a short night: the one hour that
         // reached the phone adds nothing to the sleep debt. Only the night before does (35 min short, a day old).
         XCTAssertEqual(a.sleep.last?.partial, true)

@@ -275,7 +275,7 @@ public enum CoachTools {
         let byDay = Dictionary(w.days.map { ($0.day, $0) }, uniquingKeysWith: { x, _ in x })
         switch name {
         case "get_overview":
-            return overview(w)
+            return overview(w, calendar: calendar)
         case "get_daily_metrics":
             let keys = range(input, world: w, maxDays: 180, calendar: calendar)
             let metrics: [LMetric] = [.recovery, .strain, .sleepHours, .hrv, .restingHR, .respRate, .skinTempDev, .deepMin, .remMin, .sleepEfficiency, .steps, .activeKcal]
@@ -283,9 +283,18 @@ public enum CoachTools {
                 guard let d = byDay[k] else { return nil }
                 return .array([.string(k)] + metrics.map { m in JSONValue.rounded(m.value(d), m.decimals) })
             }
-            return ["columns": .array([.string("date")] + metrics.map { .string($0.rawValue) }),
-                    "units": "recovery %, strain 0-21, sleepHours h, hrv ms (RMSSD), restingHR bpm, respRate breaths/min, skinTempDev °C from baseline, deepMin/remMin min, sleepEfficiency %, activeKcal kcal",
-                    "rows": .array(rows), "days_without_data": .number(Double(keys.count - rows.count))]
+            // Nights only partly recorded are named, so their rows are not read as short or poor nights.
+            let partNights: [JSONValue] = a.sleep.nights.filter { $0.partial && keys.contains($0.day) }.map { .string($0.day) }
+            var out: [String: JSONValue] = [
+                "columns": .array([.string("date")] + metrics.map { .string($0.rawValue) }),
+                "units": "recovery %, strain 0-21, sleepHours h, hrv ms (RMSSD), restingHR bpm, respRate breaths/min, skinTempDev °C from baseline, deepMin/remMin min, sleepEfficiency %, activeKcal kcal",
+                "rows": .array(rows), "days_without_data": .number(Double(keys.count - rows.count)),
+            ]
+            if !partNights.isEmpty {
+                out["partly_recorded_nights"] = .array(partNights)
+                out["how_to_read_them"] = .string(Self.partNightNote)
+            }
+            return .object(out)
         case "get_sleep":
             let keys = Set(range(input, world: w, maxDays: 60, calendar: calendar))
             let nights: [JSONValue] = a.sleep.nights.filter { keys.contains($0.day) }.map { n -> JSONValue in
@@ -293,7 +302,7 @@ public enum CoachTools {
                  "score": .rounded(n.score, 0), "efficiency_pct": .rounded(n.efficiency, 0), "deep_min": .rounded(n.deepMin, 0), "rem_min": .rounded(n.remMin, 0),
                  "light_min": .rounded(n.lightMin, 0), "awake_min": .rounded(n.awakeMin, 0), "wake_ups": .whole(n.awakenings),
                  "bedtime": .optional(n.bedtime.map { LFormat.timeOfDay(minutes: $0) }), "wake_time": .optional(n.wake.map { LFormat.timeOfDay(minutes: $0) }),
-                 "nap_min": .rounded(n.napMin, 0)]
+                 "nap_min": .rounded(n.napMin, 0), "partly_recorded": .bool(n.partial)]
             }
             return ["nights": .array(nights), "summary": [
                 "avg_7_nights_min": .rounded(a.sleep.avg7Min, 0), "avg_30_nights_min": .rounded(a.sleep.avg30Min, 0),
@@ -457,8 +466,11 @@ public enum CoachTools {
         return .object(o)
     }
 
+    /// What the coach is told about a night only part of which reached the phone, wherever one appears.
+    static let partNightNote = "Only part of such a night reached the phone. Its sleep, HRV, resting heart rate and breathing figures describe the recorded part and are not the night's. It is not a short or poor night: do not advise as if the athlete slept that little, do not compare its figures with other nights, and say plainly that the night was only partly recorded. It is left out of sleep debt, averages and baselines."
+
     /// The snapshot used both by `get_overview` and, in brief, by the system prompt.
-    public static func overview(_ w: CoachWorld) -> JSONValue {
+    public static func overview(_ w: CoachWorld, calendar: Calendar = LDate.calendar) -> JSONValue {
         let a = w.analysis
         let night = a.lastNight
         let fresh = night?.day == w.today
@@ -471,10 +483,16 @@ public enum CoachTools {
             return ["metric": .string(f.metric.rawValue), "value": .rounded(f.value), "your_usual": .rounded(f.baseline),
                     "note": .string(f.note), "pull": .string(pull)]
         }
-        let recovery: JSONValue = [
+        var recoveryFields: [String: JSONValue] = [
             "score_pct": .rounded(night?.recovery, 0), "from_night_ending": .optional(night?.day), "is_todays": .bool(fresh),
             "band": .optional(a.recovery?.band?.title), "headline": .optional(a.recovery?.headline), "factors": .array(factors),
         ]
+        // The reason today has no score, as the app states it, so the coach gives the same one.
+        if let gap = a.gap {
+            let words = DayCall.waiting(gap)
+            recoveryFields["why_today_has_no_score"] = .string(words.title + ". " + words.body)
+        }
+        let recovery: JSONValue = .object(recoveryFields)
         let baselines: JSONValue = [
             "nights_recorded": .number(Double(a.baselines.nights)), "hrv_ms": .rounded(a.baselines.hrv?.center),
             "resting_hr": .rounded(a.baselines.restingHR?.center), "resp_rate": .rounded(a.baselines.respRate?.center),
@@ -485,11 +503,17 @@ public enum CoachTools {
             "strain_target": .optional(a.call.strainTarget.map { "\(Int($0.lowerBound))–\(Int($0.upperBound))" }),
         ]
         let last = fresh ? a.sleep.last : nil
-        let sleep: JSONValue = [
+        var sleepFields: [String: JSONValue] = [
             "asleep_min": .rounded(last?.asleepMin, 0), "need_min": .rounded(last?.needMin, 0), "score": .rounded(last?.score, 0),
             "debt_now_min": .rounded(a.sleep.debtMin, 0), "need_tonight_min": .rounded(a.sleep.tonightNeedMin, 0),
             "recommended_bedtime": .optional(a.sleep.recommendedBedtime.map { LFormat.timeOfDay(minutes: $0) }),
         ]
+        if a.night.isPartial {
+            sleepFields["partly_recorded"] = .bool(true)
+            sleepFields["its_record"] = .string(RecordReport.nightLine(a.night, calendar: calendar))
+            sleepFields["how_to_read_it"] = .string(partNightNote)
+        }
+        let sleep: JSONValue = .object(sleepFields)
         let plan: [JSONValue] = (todaysPlan?.planned ?? []).map { p -> JSONValue in
             let status = todaysPlan?.isDone(p) == true ? "done" : p.status.rawValue
             return ["id": .string(p.id.uuidString), "title": .string(p.title), "kind": .string(p.kind.rawValue),

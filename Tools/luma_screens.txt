@@ -7,6 +7,9 @@
 11-sleep-partial|today.sleep|0|partial|5
 12-recovery|today.recovery|0|demo|5
 13-recovery-partial|today.recovery|0|partial|5
+14-strain-partial|today.strain|0|partial|5
+15-heart-partial|today.heart|0|partial|5
+31-workout|train.workout|0|demo|5
 80-devices|you.devices|0|partial|5
 82-settings|you.settings|0|demo|5
 84-datacheck|you.datacheck|0|partial|5

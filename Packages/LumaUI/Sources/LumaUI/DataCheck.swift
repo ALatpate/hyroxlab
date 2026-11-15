@@ -116,7 +116,7 @@ struct DataNoticeCard: View {
             guard closedHole != from else { return nil }
             var title = "Nothing recorded since \(LumaText.time(from))"
             if let to { title = "Nothing recorded from \(LumaText.time(from)) to \(LumaText.time(to))" }
-            var text = "No heart rate reached the phone in that time, so last night is only part of a night. It is marked wherever it shows, and left out of your sleep debt and averages."
+            var text = "No heart rate reached the phone in that time, so last night is only part of a night. Its figures are marked, and it is left out of sleep debt and averages."
             if lost {
                 text += " This strap hands over nothing it stored, so that part can't be brought back."
             } else {
@@ -257,7 +257,7 @@ struct DataCheckScreen: View {
                             LumaLabel("Nothing recorded")
                             ForEach(Array(holes.enumerated()), id: \.offset) { _, hole in
                                 HStack {
-                                    Text("\(LumaText.time(hole.start)) – \(LumaText.time(hole.end))")
+                                    Text(LumaText.span(hole.start, hole.end))
                                         .font(LumaFont.body(15, .medium)).foregroundStyle(Luma.frost)
                                     Spacer()
                                     Text(LFormat.hm(minutes: hole.seconds / 60)).font(LumaFont.numeral(17, .semibold)).foregroundStyle(Luma.amber)

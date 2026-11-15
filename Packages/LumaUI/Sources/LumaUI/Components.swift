@@ -656,6 +656,15 @@ enum LumaText {
         Date(timeIntervalSince1970: ts).formatted(date: .omitted, time: .shortened)
     }
 
+    /// "2:00 AM – 11:04 AM", with the weekday on each side when the two times fall on different days.
+    static func span(_ from: Double, _ to: Double) -> String {
+        let a = Date(timeIntervalSince1970: from), b = Date(timeIntervalSince1970: to)
+        if Calendar.current.isDate(a, inSameDayAs: b) { return "\(time(from)) – \(time(to))" }
+        let dayA: String = a.formatted(.dateTime.weekday(.abbreviated))
+        let dayB: String = b.formatted(.dateTime.weekday(.abbreviated))
+        return "\(dayA) \(time(from)) – \(dayB) \(time(to))"
+    }
+
     static func duration(_ seconds: Double) -> String {
         let s = Int(seconds.rounded())
         if s >= 3600 { return String(format: "%d:%02d:%02d", s / 3600, (s % 3600) / 60, s % 60) }

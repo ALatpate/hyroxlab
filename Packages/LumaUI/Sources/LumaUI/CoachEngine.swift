@@ -96,7 +96,7 @@ public final class CoachEngine: ObservableObject {
         briefDay = today
         // Written from the demo's own numbers, so the card never contradicts the screen it sits on.
         let a = env.analysis
-        var opening = "Last night has not been scored yet."
+        var opening = a.call.title + "."
         if let night = a.lastNight, let r = night.recovery {
             opening = "Recovery is \(Int(r.rounded()))%" + (night.sleepMin.map { " after \(LFormat.hm(minutes: $0)) of sleep." } ?? ".")
         }

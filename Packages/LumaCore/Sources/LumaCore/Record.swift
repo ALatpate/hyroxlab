@@ -119,14 +119,23 @@ public enum RecordCheck {
         return out
     }
 
+    /// Where the slot grid for readings from `from` begins. Readings arrive in buckets that start on
+    /// whole multiples of the step, so the grid does too: the bucket that holds `from` starts a little
+    /// before it and is the first slot.
+    public static func slotStart(_ from: Double, step: Double) -> Double {
+        step > 0 ? (from / step).rounded(.down) * step : from
+    }
+
     /// Readings laid out on evenly spaced slots from `from` up to `to`, nil where nothing was recorded,
-    /// so a chart leaves missing time empty instead of joining the line across it.
+    /// so a chart leaves missing time empty instead of joining the line across it. Slot `i` begins at
+    /// `slotStart(from, step:) + i * step`.
     public static func slots(_ points: [LHRPoint], from: Double, to: Double, step: Double) -> [Double?] {
         guard step > 0, to > from else { return [] }
-        let count: Int = Int(((to - from) / step).rounded(.up))
+        let origin: Double = slotStart(from, step: step)
+        let count: Int = Int(((to - origin) / step).rounded(.up))
         var out = [Double?](repeating: nil, count: count)
         for p in points {
-            let i: Int = Int(((p.t - from) / step).rounded(.down))
+            let i: Int = Int(((p.t - origin) / step).rounded(.down))
             if i >= 0 && i < count { out[i] = p.bpm }
         }
         return out

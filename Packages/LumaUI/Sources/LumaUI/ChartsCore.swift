@@ -441,7 +441,8 @@ struct TimeGrid {
         let newest: Double = points.map { $0.t }.max() ?? from
         let end: Double = to ?? (newest + step)
         let slots: [Double?] = RecordCheck.slots(points, from: from, to: end, step: step)
+        let origin: Double = RecordCheck.slotStart(from, step: step)
         values = slots
-        labels = slots.indices.map { LumaText.time(from + Double($0) * step) }
+        labels = slots.indices.map { LumaText.time(origin + Double($0) * step) }
     }
 }

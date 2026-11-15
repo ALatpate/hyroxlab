@@ -69,7 +69,7 @@ public struct LumaAnalysis: Sendable {
         let baselines = LBaselines.compute(days: whole, before: reference)
         let todaysRecovery = lastNight?.day == today ? lastNight?.recovery : nil
         let gap = RecordCheck.gap(recovery: todaysRecovery, night: night, reading: reading, calibration: calibration)
-        let recovery = lastNight.map { RecoveryModel.read(day: $0, baselines: baselines, gap: gap) }
+        let recovery = lastNight.map { RecoveryModel.read(day: $0, baselines: baselines, gap: gap, partial: $0.day == today && night.isPartial) }
         let sleep = SleepModel.summarize(days: days, sleeps: sleeps, baseNeedMin: profile.sleepNeedHours.map { $0 * 60 },
                                          partial: partial, today: today, calendar: calendar)
         let rest = baselines.restingHR?.center ?? lastNight?.restingHR ?? 55
