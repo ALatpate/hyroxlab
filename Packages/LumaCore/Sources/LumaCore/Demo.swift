@@ -34,6 +34,9 @@ public final class LumaDemoSource: LumaDataSource {
     public let checkIns: [CheckIn]
     public let today: String
     private let calendar: Calendar
+    /// When set, heart rate exists only inside these stretches: a staged situation in which part of the
+    /// record never reached the phone.
+    public var recorded: [RecordStretch]?
 
     public init(dayCount: Int = 120, today: Date = Date(), calendar: Calendar = LDate.calendar) {
         self.calendar = calendar
@@ -217,8 +220,12 @@ public final class LumaDemoSource: LumaDataSource {
         var out: [LHRPoint] = []
         var t = from
         while t < min(to, now) {
-            let a = bpm(at: t), b = bpm(at: t + step / 2), c = bpm(at: t + step * 0.9)
-            out.append(LHRPoint(t: t, bpm: (a + b + c) / 3, lo: min(a, b, c) - 2, hi: max(a, b, c) + 3))
+            let at: Double = t
+            let held: Bool = recorded.map { stretches in stretches.contains { at >= $0.start && at < $0.end } } ?? true
+            if held {
+                let a = bpm(at: t), b = bpm(at: t + step / 2), c = bpm(at: t + step * 0.9)
+                out.append(LHRPoint(t: t, bpm: (a + b + c) / 3, lo: min(a, b, c) - 2, hi: max(a, b, c) + 3))
+            }
             t += step
         }
         return out
@@ -278,6 +285,16 @@ public final class LumaDemoSource: LumaDataSource {
 
     public func saveWorkout(_ workout: LWorkout, replacing old: LWorkout?) async {}
     public func deleteWorkout(_ workout: LWorkout) async {}
+
+    /// A few lines of the kind the strap layer reports, so the data check has something to lay out.
+    public func facts() async -> [LFact] {
+        let link = "Strap link", stored = "Stored on this phone, last 24 hours"
+        return [LFact(link, "Connected", "yes"), LFact(link, "Paired securely", "yes"),
+                LFact(link, "Handed over nothing in repeated reads", "yes"), LFact(link, "Last completed read", "never"),
+                LFact(link, "Firmware", "50.40.1.0"),
+                LFact(stored, "Heart-rate readings", "7,140"), LFact(stored, "Beat-to-beat intervals", "6,902"),
+                LFact(stored, "Movement readings", "0")]
+    }
 
     /// One evening stretch the demo athlete never recorded, so the prompt has something to show.
     public func suggestedSessions(days: Int) async -> [LSuggestedSession] {

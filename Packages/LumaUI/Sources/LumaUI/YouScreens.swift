@@ -212,12 +212,6 @@ struct DevicesScreen: View {
                         info("On wrist", s.connected ? (s.worn ? "Yes" : "No") : "–")
                         info("Last sync", s.lastSync.map { $0.formatted(.relative(presentation: .named)) } ?? "Never")
                     }
-                    if s.syncing {
-                        HStack(spacing: 8) {
-                            ProgressView().controlSize(.small).tint(Luma.volt)
-                            Text("Bringing in history from the strap (\(s.syncedChunks) blocks so far)").font(LumaFont.body(13)).foregroundStyle(Luma.mist)
-                        }
-                    }
                     if let hint = s.hint { Text(hint).font(LumaFont.body(13.5)).foregroundStyle(Luma.amber).fixedSize(horizontal: false, vertical: true) }
                     HStack(spacing: 8) {
                         LumaQuickAction(symbol: "arrow.triangle.2.circlepath", title: "Sync", tint: Luma.volt) { env.device?.syncNow() }
@@ -233,6 +227,9 @@ struct DevicesScreen: View {
                         LumaNote("Live heart rate works, but history sync, strap buzzes and double-tap need a secure pairing. Put the strap in pairing mode (on a WHOOP 5.0 or MG: take it off the charger, then tap the band firmly several times until the light blinks blue), then press Reconnect and accept the pairing request.")
                     }
                 }
+            } else {
+                // The same notice Today carries, so the two screens cannot describe the data differently.
+                DataNoticeCard()
             }
             LumaSection(title: "Your straps")
             if live.paired.isEmpty {
@@ -354,6 +351,15 @@ struct SettingsScreen: View {
                 toggle("Heart rate on the Lock Screen", "A card with your heart rate and today's numbers. iOS starts it when you open Luma and keeps it for up to eight hours.", $env.profile.lockScreenHeartRate)
                 toggle("Strap battery alerts", "A notification when the strap needs charging.",
                        Binding(get: { live.batteryAlerts }, set: { env.device?.setBatteryAlerts($0) }))
+            }
+            LumaSection(title: "Recording")
+            LumaGroup {
+                toggle("Record all the time", "The strap sends heart rate to the phone day and night, so whole nights are recorded and the Lock Screen card stays live. It uses more strap battery, and Luma has to stay open in the background: swiping it away stops the recording. Off: the strap streams only while Luma is on screen or a session is running.", $env.profile.continuousRecording)
+                Button { router.push(.dataCheck) } label: {
+                    LumaRow(symbol: "waveform.path.ecg.rectangle.fill", symbolColor: Luma.sky, title: "Data check",
+                            subtitle: "Where heart rate reached the phone, hour by hour", chevron: true)
+                }
+                .buttonStyle(.plain)
             }
             LumaSection(title: "Coach")
             LumaGroup {

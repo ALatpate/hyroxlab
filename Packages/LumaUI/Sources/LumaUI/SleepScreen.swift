@@ -10,6 +10,11 @@ struct SleepScreen: View {
 
     private var summary: SleepSummary { env.analysis.sleep }
     private var night: SleepNight? { summary.nights.last { $0.day == day } }
+    /// The night's heart rate laid on the clock from lights-out to waking, so a stretch with no
+    /// readings shows as a break in the line.
+    private var nightGrid: TimeGrid {
+        TimeGrid(nightHR, from: night?.main?.start ?? (nightHR.first?.t ?? 0), to: night?.main?.end, step: 300)
+    }
 
     var body: some View {
         LumaDetailScreen(title: "Sleep", tone: .sleep) {
@@ -21,6 +26,7 @@ struct SleepScreen: View {
             } else {
                 DayStepper(day: $day, earliest: summary.nights.first?.day, today: env.today)
                 if let n = night {
+                    if n.partial { NightRecordNote(night: env.nightRecord(on: n.day)) }
                     SleepHero(night: n)
                     if let main = n.main, !main.stages.isEmpty {
                         LumaCard {
@@ -56,8 +62,8 @@ struct SleepScreen: View {
                                         Text("Lowest \(Int(low.rounded())) bpm").font(LumaFont.body(13, .medium)).foregroundStyle(Luma.mist)
                                     }
                                 }
-                                LumaLineChart(values: nightHR.map { $0.bpm }, labels: nightHR.map { LumaText.time($0.t) }, color: Luma.coral,
-                                              height: 150, replay: n.day)
+                                LumaLineChart(values: nightGrid.values, labels: nightGrid.labels, color: Luma.coral,
+                                              height: 150, replay: n.day, gaps: true)
                             }
                         }
                     }
@@ -116,9 +122,15 @@ struct SleepHero: View {
             VStack(alignment: .leading, spacing: 6) {
                 LumaLabel("Time asleep")
                 Text(LFormat.hm(minutes: night.asleepMin)).font(LumaFont.numeral(46)).foregroundStyle(Luma.frost)
-                Text("\(Int(night.needMetPct.rounded()))% of the \(LFormat.hm(minutes: night.needMin)) you needed")
-                    .font(LumaFont.body(13.5)).foregroundStyle(Luma.mist).fixedSize(horizontal: false, vertical: true)
-                LumaBar(value: total, total: night.needMin, color: Luma.dusk, height: 6)
+                if night.partial {
+                    // A night cut short by missing data is not a short night: it is not set against the need.
+                    Text("In the part that was recorded").font(LumaFont.body(13.5)).foregroundStyle(Luma.amber)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Text("\(Int(night.needMetPct.rounded()))% of the \(LFormat.hm(minutes: night.needMin)) you needed")
+                        .font(LumaFont.body(13.5)).foregroundStyle(Luma.mist).fixedSize(horizontal: false, vertical: true)
+                    LumaBar(value: total, total: night.needMin, color: Luma.dusk, height: 6)
+                }
                 if night.napMin > 0 {
                     Text("Includes \(LFormat.hm(minutes: night.napMin)) of naps").font(LumaFont.body(12)).foregroundStyle(Luma.smoke)
                 }

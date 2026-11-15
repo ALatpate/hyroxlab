@@ -177,6 +177,7 @@ struct LumaDestinationView: View {
         case .settings: SettingsScreen()
         case .profile: ProfileScreen()
         case .about: AboutScreen()
+        case .dataCheck: DataCheckScreen()
         case .dev(let page): DevWidgetsScreen(page: page)
         }
     }
@@ -254,6 +255,7 @@ enum LumaRoute {
         case "you.settings": r.open(.today, .settings)
         case "you.profile": r.open(.today, .profile)
         case "you.about": r.open(.today, .about)
+        case "you.datacheck": r.open(.today, .dataCheck)
         case "sheet.go": r.sheet = .go
         case "sheet.you": r.sheet = .you
         case "sheet.checkin": r.sheet = .checkIn(today)

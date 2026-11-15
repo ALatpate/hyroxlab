@@ -38,6 +38,17 @@ public struct LumaStrap: Equatable {
     public var syncing = false
     public var syncedChunks = 0
     public var lastSync: Date?
+    /// The strap holds records newer than anything the phone has read from it.
+    public var historyPending = false
+    /// The strap has handed over none of its stored history in several attempts. What it streams live is
+    /// then the only record there is.
+    public var historyEmpty = false
+    /// The strap has to be restarted before it will hand over more of its history.
+    public var needsRestart = false
+    /// Why the last sync ended early, when it did.
+    public var syncError: String?
+    /// The strap is being asked to stream heart rate at all times, not only while a screen wants it.
+    public var continuous = false
     public var name: String?
     public var model: String?
     public var firmware: String?
@@ -59,6 +70,9 @@ public struct LumaStrap: Equatable {
         if syncing { return "Syncing history" }
         return secure ? "Connected" : "Connected, not paired"
     }
+
+    /// The strap's stored record is still arriving: being read now, or known to hold more than the phone has.
+    public var reading: Bool { connected && (syncing || historyPending) }
 }
 
 public struct LumaFoundStrap: Identifiable, Equatable {
@@ -101,6 +115,9 @@ public protocol LumaDeviceControl: AnyObject {
     func cue()
     /// Ask the strap for its fast heart-rate stream while a live screen is open.
     func setLiveHeartRate(_ on: Bool)
+    /// Luma came on screen or left it. While it is on screen the strap is asked to stream heart rate,
+    /// whatever the recording setting, so every screen shows a live figure.
+    func setOnScreen(_ on: Bool)
     func connectHealth() async
     /// Notifications when the strap's battery runs low.
     func setBatteryAlerts(_ on: Bool)
@@ -190,6 +207,8 @@ public enum LumaDest: Hashable {
     case lift(UUID)
     case supplements, fuelHistory
     case devices, settings, profile, about
+    /// Where heart rate reached the phone and what is stored, hour by hour.
+    case dataCheck
     /// Development only: the widget design sheets.
     case dev(Int)
 }
@@ -388,9 +407,25 @@ public final class LumaEnv: ObservableObject {
     private var detectedStretches: [LSuggestedSession] = []
     private var stretchesSearchedAt: Date?
     private var dismissedStretches: Set<String>
+    /// Where the heart-rate record of the last day and a half has readings. A night is only as complete
+    /// as this record behind it (`RecordCheck`).
+    @Published public private(set) var record: [RecordStretch] = []
+    /// When `record` was read. A night is judged as of this moment, not the wall clock: a record read a
+    /// while ago says nothing about the time since.
+    private var recordAsOf: Double?
+    /// How far the recovery baseline has got; nil once it is learned.
+    public private(set) var calibration: LCalibration?
+    /// Nights found only partly recorded, kept so they go on being left out of debt, averages and
+    /// baselines after the record that showed it is no longer looked at.
+    public private(set) var nightMarks: [NightMark]
+    private var bag: Set<AnyCancellable> = []
+    /// A made-up situation for the gallery ("partial": a night whose record stops early).
+    var demoScenario: String?
     /// Whether the app is on screen. The root view keeps this current; it is false until a scene
     /// appears, so nothing that is only worth doing for someone looking runs during a background wake.
-    var isInFront = false
+    var isInFront = false {
+        didSet { if isInFront != oldValue { device?.setOnScreen(isInFront) } }
+    }
 
     // Athlete's own records
     @Published public var profile: LProfile { didSet { if profile != oldValue { disk.save(profile, "profile.json"); onProfileChange?(profile); refreshAnalysis() } } }
@@ -430,21 +465,28 @@ public final class LumaEnv: ObservableObject {
         benchmarks = disk.load(Benchmarks.self, "benchmarks.json") ?? Benchmarks()
         dismissedStretches = SessionSuggestions.prune(Set(disk.load([String].self, "stretches-dismissed.json") ?? []),
                                                       now: Date().timeIntervalSince1970)
+        nightMarks = disk.load([NightMark].self, "night-marks.json") ?? []
         sessions = disk.list(prefix: "session-").compactMap { disk.load(HXSession.self, $0) }.sorted { $0.startedAt > $1.startedAt }
+        // Whether the strap's record is still arriving decides what Luma says about the night, so the
+        // analysis is rebuilt the moment that changes, not at the next reload.
+        live.$strap.map { $0.reading }.removeDuplicates().dropFirst()
+            .sink { [weak self] _ in Task { @MainActor [weak self] in self?.refreshAnalysis() } }
+            .store(in: &bag)
     }
 
     /// The gallery and previews: synthetic strap data and filled-in records, nothing persisted.
-    public static func demo(sparse: Bool = false) -> LumaEnv {
+    public static func demo(sparse: Bool = false, scenario: String? = nil) -> LumaEnv {
         let source = LumaDemoSource(dayCount: sparse ? 6 : 120)
         let live = LumaLive()
         var strap = LumaStrap()
         strap.connected = true; strap.secure = true; strap.heartRate = 58; strap.heartRateAt = Date()
         strap.battery = 64; strap.lastSync = Date().addingTimeInterval(-540); strap.name = "WHOOP MG"; strap.model = "MG"
-        strap.firmware = "50.40.1.0"
+        strap.firmware = "50.40.1.0"; strap.continuous = true
         live.strap = strap
         live.paired = [LumaPairedStrap(id: "demo", name: "WHOOP MG", detail: "Active", isActive: true)]
         live.health = .on
         let env = LumaEnv(source: source, live: live, secrets: MemorySecrets(key: sparse ? nil : "demo"), persistent: false)
+        env.demoScenario = scenario
         env.profile = LumaDemoContent.profile()
         if !sparse {
             env.routine = LumaDemoContent.routine()
@@ -473,10 +515,20 @@ public final class LumaEnv: ObservableObject {
             let days = await self.source.loadDays()
             let sleeps = await self.source.loadSleeps(days: 400)
             let workouts = await self.source.loadWorkouts(days: 400)
+            let now = Date().timeIntervalSince1970
+            // One reading a minute is enough to see where the record has holes.
+            let minutes = await self.source.heartRate(from: now - 36 * 3600, to: now, bucketSeconds: 60)
+            let calibration = await self.source.calibration()
+            let marks = await self.checkedMarks(now: now)
             guard !Task.isCancelled else { return }
             self.days = days
             self.sleeps = sleeps
             self.workouts = workouts
+            self.record = RecordCheck.stretches(readingsAt: minutes.map { $0.t }, spacing: 60)
+            self.recordAsOf = now
+            self.calibration = calibration
+            self.keep(marks)
+            if self.demoScenario == "partial" { self.stagePartialNight(now: now) }
             self.loaded = true
             self.refreshPlan()
             self.refreshAnalysis()
@@ -501,9 +553,104 @@ public final class LumaEnv: ObservableObject {
 
     func refreshAnalysis() {
         let today = LumaAnalysis.todayKey()
-        analysis = LumaAnalysis.build(days: days, sleeps: sleeps, workouts: workouts, profile: profile, planned: planned,
-                                       checkIns: checkIns, personalBests: runPBs, today: today)
+        // The gallery's ordinary data is taken as it stands, so its pictures do not depend on the hour
+        // they are taken at; only a staged situation is judged against a record.
+        let judged: [RecordStretch] = (isDemo && demoScenario == nil) ? [] : record
+        let built = LumaAnalysis.build(days: days, sleeps: sleeps, workouts: workouts, profile: profile, planned: planned,
+                                       checkIns: checkIns, personalBests: runPBs, record: judged, recordAsOf: recordAsOf,
+                                       reading: live.strap.reading, calibration: calibration,
+                                       partialNights: Set(nightMarks.map { $0.day }), today: today)
+        analysis = built
+        // Nothing is concluded about tonight's mark before the strap data has been read once.
+        if loaded { mark(built.night, on: today) }
         onGlanceChange?()
+    }
+
+    /// Records today's verdict: a night found cut off is marked, one found whole is unmarked.
+    private func mark(_ night: NightRecord, on day: String) {
+        var marks = nightMarks
+        switch night {
+        case .cutOff(let at, let resumes):
+            marks.removeAll { $0.day == day }
+            marks.append(NightMark(day: day, at: at, resumes: resumes))
+        case .complete, .none:
+            marks.removeAll { $0.day == day }
+        case .stillGoing:
+            break
+        }
+        keep(marks)
+    }
+
+    private func keep(_ marks: [NightMark]) {
+        let sorted = marks.sorted { $0.day < $1.day }
+        guard sorted != nightMarks else { return }
+        nightMarks = sorted
+        disk.save(sorted, "night-marks.json")
+    }
+
+    /// The marks, with last week's checked again against the record: a hole fills when the strap hands
+    /// over its stored record later, and that night is then whole. Today's is settled by the analysis.
+    private func checkedMarks(now: Double) async -> [NightMark] {
+        let today = LumaAnalysis.todayKey()
+        var kept: [NightMark] = []
+        for mark in nightMarks {
+            // Older than a year: no longer feeds anything.
+            if now - mark.at > 400 * 86_400 { continue }
+            if mark.day == today || now - mark.at > 7 * 86_400 { kept.append(mark); continue }
+            let until: Double = mark.resumes ?? (mark.at + RecordCheck.holeSeconds)
+            let points = await source.heartRate(from: mark.at - 600, to: until + 600, bucketSeconds: 60)
+            let found = RecordCheck.stretches(readingsAt: points.map { $0.t }, spacing: 60)
+            if RecordCheck.stillMissing(mark, stretches: found) { kept.append(mark) }
+        }
+        return kept
+    }
+
+    /// The one thing about the state of the data worth saying now. Resolved here, once, for every screen.
+    var dataNotice: DataNotice? {
+        let s = live.strap
+        return DataNotice.resolve(connected: s.connected, secure: s.secure, syncing: s.syncing, parts: s.syncedChunks,
+                                  pending: s.historyPending, historyEmpty: s.historyEmpty, continuous: s.continuous,
+                                  needsRestart: s.needsRestart, syncError: s.syncError,
+                                  lastSync: s.lastSync?.timeIntervalSince1970, night: analysis.night)
+    }
+
+    /// The gallery's "partial" situation, the morning it was built from: asleep at 01:00, and the phone
+    /// holds the strap's readings only up to 02:00 and for the last ten minutes, on the second night of
+    /// four the recovery baseline needs.
+    private func stagePartialNight(now: Double) {
+        let today = LumaAnalysis.todayKey()
+        guard let midnight = LDate.startOfDay(today)?.timeIntervalSince1970 else { return }
+        let bed = midnight + 3600, stop = midnight + 7200
+        if let i = days.lastIndex(where: { $0.day == today }) {
+            days[i].recovery = nil; days[i].strain = nil; days[i].sleepMin = 60; days[i].steps = nil; days[i].activeKcal = nil
+            days[i].deepMin = 12; days[i].remMin = 6; days[i].lightMin = 42; days[i].restingHR = 70; days[i].hrv = 45
+            days[i].sleepScore = nil; days[i].skinTempDev = nil
+        }
+        sleeps.removeAll { $0.day == today }
+        sleeps.append(LSleep(start: bed, end: stop, day: today, restingHR: 70, hrv: 45,
+                             stages: [LStage(start: bed, end: bed + 2520, kind: .light), LStage(start: bed + 2520, end: bed + 3240, kind: .deep),
+                                      LStage(start: bed + 3240, end: stop, kind: .rem)]))
+        sleeps.sort { $0.start < $1.start }
+        record = [RecordStretch(start: midnight + 600, end: stop), RecordStretch(start: now - 600, end: now)]
+        // The charts read the same record, so they show the same hole.
+        (source as? LumaDemoSource)?.recorded = record
+        calibration = LCalibration(have: 2, need: 4)
+        // This strap hands over nothing stored, so the hole is there to stay.
+        live.strap.historyEmpty = true
+    }
+
+    // MARK: Record
+
+    /// Where the record on hand ends; nil when there is none.
+    var recordEnd: Double? { record.last?.end }
+    /// When the record on hand was read.
+    var recordReadAt: Double? { recordAsOf }
+
+    /// How much of a night is in the record: today's from the analysis, an earlier one from its mark.
+    func nightRecord(on day: String) -> NightRecord {
+        if day == analysis.today { return analysis.night }
+        if let mark = nightMarks.first(where: { $0.day == day }) { return .cutOff(at: mark.at, resumes: mark.resumes) }
+        return .complete
     }
 
     /// Keeps four weeks of routine sessions on the calendar.
@@ -652,6 +799,10 @@ public final class LumaEnv: ObservableObject {
         let a = analysis
         let today = a.today
         let scored: LDay? = a.lastNight?.day == today ? a.lastNight : nil
+        // The night's figures come from the same summary the Sleep screen shows, so the two cannot differ.
+        // A widget has no room to qualify a figure, so a part-recorded night's are withheld there.
+        let night: SleepNight? = a.sleep.last.flatMap { $0.day == today && !$0.partial ? $0 : nil }
+        let wholeNight: Bool = !a.night.isPartial
         let schedule = scheduleDays([today, LDate.adding(1, to: today)])
         var sessions: [LumaGlance.Session] = []
         if let day = schedule.first {
@@ -673,8 +824,9 @@ public final class LumaEnv: ObservableObject {
         let week = LumaAnalysis.series(.recovery, days: days, ending: today, count: 7).values.map { $0.map { Int($0.rounded()) } }
         let brief: String? = coach.briefDay == today ? coach.brief : nil
         return LumaGlance(day: today, recovery: scored?.recovery.map { Int($0.rounded()) }, strain: strain, strainMax: profile.strainOn21 ? 21 : 100,
-                          sleepScore: scored?.sleepScore.map { Int($0.rounded()) }, sleepMinutes: scored?.sleepMin.map { Int($0.rounded()) },
-                          hrv: scored?.hrv.map { Int($0.rounded()) }, restingHR: scored?.restingHR.map { Int($0.rounded()) },
+                          sleepScore: night?.score.map { Int($0.rounded()) }, sleepMinutes: night.map { Int($0.asleepMin.rounded()) },
+                          hrv: wholeNight ? scored?.hrv.map { Int($0.rounded()) } : nil,
+                          restingHR: wholeNight ? scored?.restingHR.map { Int($0.rounded()) } : nil,
                           call: a.call.title, callDetail: a.call.body, sessions: Array(sessions.prefix(4)), tomorrow: tomorrow,
                           kcal: Int(totals.kcal.rounded()), kcalTarget: Int(targets.kcal.rounded()), protein: Int(totals.proteinG.rounded()),
                           proteinTarget: Int(targets.proteinG.rounded()), waterMl: Int(totals.waterMl.rounded()),

@@ -78,7 +78,7 @@ public struct RecoveryRead: Equatable, Sendable {
 public enum RecoveryModel {
     /// Explains the day's recovery score from its inputs. The score itself comes from the strap
     /// pipeline; this never produces a second, competing number.
-    public static func read(day d: LDay, baselines b: LBaselines) -> RecoveryRead {
+    public static func read(day d: LDay, baselines b: LBaselines, gap: RecoveryGap? = nil) -> RecoveryRead {
         var factors: [RecoveryFactor] = []
 
         if let v = d.hrv {
@@ -139,9 +139,10 @@ public enum RecoveryModel {
             headline = "Running low"
             detail = worst.map { "\($0.metric.title) is the main drag: \($0.note.prefix(1).lowercased() + $0.note.dropFirst())." } ?? "Several overnight signals are below baseline."
         case nil:
-            headline = d.hasNight ? "Recovery is calibrating" : "No night recorded yet"
-            detail = d.hasNight ? "Luma needs a few nights of data to score recovery against your own baseline."
-                                : "Wear the strap overnight and sync in the morning to score recovery."
+            // The reason is resolved once (`RecordCheck.gap`) and worded once (`DayCall.waiting`).
+            let words = DayCall.waiting(gap)
+            headline = words.title
+            detail = words.body
         }
         return RecoveryRead(day: d.day, score: d.recovery, band: band, factors: factors, headline: headline, detail: detail,
                             nightsToBaseline: toBaseline)
@@ -172,6 +173,9 @@ public struct SleepNight: Equatable, Sendable, Identifiable {
     public let bedtime: Double?
     public let wake: Double?
     public let napMin: Double
+    /// Only part of this night is in the record (`NightRecord`): its figures cover the recorded part, it
+    /// has no score, and it is left out of sleep debt, averages and the usual bed and wake times.
+    public var partial: Bool = false
 
     public var restorativePct: Double? {
         guard let deepMin, let remMin, asleepMin > 0 else { return nil }
@@ -215,8 +219,16 @@ public enum SleepModel {
         return (ts - midnight.timeIntervalSince1970) / 60
     }
 
-    public static func summarize(days: [LDay], sleeps: [LSleep], baseNeedMin: Double? = nil, today: String,
-                                 calendar: Calendar = LDate.calendar) -> SleepSummary {
+    /// The block that is the night on a wake day: the longest one that is not a nap.
+    public static func mainBlock(on day: String, sleeps: [LSleep]) -> LSleep? {
+        sleeps.filter { $0.day == day && !$0.isNap }.max { $0.inBedMin < $1.inBedMin }
+    }
+
+    /// `partial` names the wake days whose night is only partly in the record. Such a night is listed
+    /// with what was recorded, and nothing is concluded from it: a night cut short by missing data is
+    /// not a short night.
+    public static func summarize(days: [LDay], sleeps: [LSleep], baseNeedMin: Double? = nil, partial: Set<String> = [],
+                                 today: String, calendar: Calendar = LDate.calendar) -> SleepSummary {
         let base = baseNeedMin ?? defaultNeedMin
         let byDay = Dictionary(grouping: sleeps, by: { $0.day })
         let dayByKey = Dictionary(days.map { ($0.day, $0) }, uniquingKeysWith: { a, _ in a })
@@ -246,31 +258,37 @@ public enum SleepModel {
             }
             let priorStrain = dayByKey[LDate.adding(-1, to: key, calendar: calendar)]?.strain
             let needed = d?.sleepNeedMin ?? need(baseMin: base, priorStrain: priorStrain, debtMin: debt)
-            shortfalls.append((key, max(0, need(baseMin: base, priorStrain: priorStrain, debtMin: 0) - asleep - napMin)))
+            let isPartial = partial.contains(key)
+            if !isPartial {
+                shortfalls.append((key, max(0, need(baseMin: base, priorStrain: priorStrain, debtMin: 0) - asleep - napMin)))
+            }
 
             let eff = d?.sleepEfficiency ?? mainBlock?.efficiency
             let bed = mainBlock.flatMap { relativeMinutes($0.start, wakeDay: key, calendar: calendar) }
             let wake = mainBlock.flatMap { relativeMinutes($0.end, wakeDay: key, calendar: calendar) }
-            let score = d?.sleepScore ?? composite(asleep: asleep + napMin, need: needed, efficiency: eff,
-                                                   restorativePct: (deep != nil && rem != nil) ? ((deep ?? 0) + (rem ?? 0)) / asleep * 100 : nil)
+            let whole: Double? = d?.sleepScore ?? composite(asleep: asleep + napMin, need: needed, efficiency: eff,
+                                                            restorativePct: (deep != nil && rem != nil) ? ((deep ?? 0) + (rem ?? 0)) / asleep * 100 : nil)
+            let score: Double? = isPartial ? nil : whole
             nights.append(SleepNight(day: key, main: mainBlock, naps: naps, asleepMin: asleep,
                                      inBedMin: mainBlock?.inBedMin ?? asleep / max(0.5, (eff ?? 90) / 100),
                                      efficiency: eff, deepMin: deep, remMin: rem, lightMin: light, awakeMin: awake,
                                      awakenings: awakenings, needMin: needed, debtMin: debt, score: score,
-                                     bedtime: bed, wake: wake, napMin: napMin))
+                                     bedtime: bed, wake: wake, napMin: napMin, partial: isPartial))
         }
 
-        let recent7 = nights.suffix(7), recent30 = nights.suffix(30)
+        // Averages and the usual schedule come from whole nights only.
+        let wholeNights = nights.filter { !$0.partial }
+        let recent7 = wholeNights.suffix(7), recent30 = wholeNights.suffix(30)
         let beds = recent7.compactMap { $0.bedtime }, wakes = recent7.compactMap { $0.wake }
         var consistency: Double?
         if beds.count >= 4, let sb = LStat.sd(beds), let sw = LStat.sd(wakes) {
             consistency = LStat.clamp(100 * (1 - ((sb + sw) / 2) / 120), 0, 100)
         }
-        let typicalBed = LStat.median(nights.suffix(14).compactMap { $0.bedtime })
-        let typicalWake = LStat.median(nights.suffix(14).compactMap { $0.wake })
+        let typicalBed = LStat.median(wholeNights.suffix(14).compactMap { $0.bedtime })
+        let typicalWake = LStat.median(wholeNights.suffix(14).compactMap { $0.wake })
 
         var jetlag: Double?
-        let mids = nights.suffix(28).compactMap { n -> (weekend: Bool, mid: Double)? in
+        let mids = wholeNights.suffix(28).compactMap { n -> (weekend: Bool, mid: Double)? in
             guard let b = n.bedtime, let w = n.wake else { return nil }
             let wd = LDate.weekday(n.day, calendar: calendar)
             return (wd >= 6, (b + w) / 2)
@@ -408,7 +426,32 @@ public struct DayCall: Equatable, Sendable {
     /// Suggested day strain on the 0–21 scale.
     public let strainTarget: ClosedRange<Double>?
 
-    public static func make(recovery: Double?, load: LoadState?, sleepDebtMin: Double, watch: BodyWatch,
+    /// The same call with a sentence added to what it says.
+    func qualified(_ sentence: String) -> DayCall {
+        DayCall(level: level, title: title, body: body + " " + sentence, reasons: reasons, strainTarget: strainTarget)
+    }
+
+    /// What to say when there is no score to go on, for each reason there might be none. The reason is
+    /// resolved once (`RecordCheck.gap`); this only words it.
+    static func waiting(_ gap: RecoveryGap?) -> (title: String, body: String) {
+        switch gap {
+        case .reading:
+            return ("Reading last night", "Luma is still reading your strap's record of the night. Go by feel until the score lands.")
+        case .calibrating(let c):
+            return ("Learning your normal",
+                    "Recovery is scored against your own normal, which takes \(c.need) recorded nights to learn. You have \(c.have). Until then, train as planned and go by feel.")
+        case .noNight:
+            return ("No night recorded", "There is no record of last night. Wear the strap to bed with Luma running in the background. Go by feel today.")
+        case .stillGoing:
+            return ("Night still being recorded", "Your strap's record of the night ends only minutes ago. Look again shortly.")
+        case .cutOff:
+            return ("Last night's record is incomplete", "Part of the night never reached the phone, so it can't be scored. Go by feel today and keep the plan flexible.")
+        case .unscored, .none:
+            return ("No recovery score", "Last night was recorded but has no score. Go by feel and keep the plan flexible.")
+        }
+    }
+
+    public static func make(recovery: Double?, gap: RecoveryGap? = nil, load: LoadState?, sleepDebtMin: Double, watch: BodyWatch,
                             plannedHard: Bool = false) -> DayCall {
         var reasons: [String] = []
         if watch.level == .alert {
@@ -418,9 +461,8 @@ public struct DayCall: Equatable, Sendable {
                            reasons: reasons, strainTarget: 0...8)
         }
         guard let r = recovery else {
-            return DayCall(level: .unknown, title: "Waiting for last night",
-                           body: "Sync the strap to score recovery. Until then, go by feel and keep the plan flexible.",
-                           reasons: [], strainTarget: nil)
+            let words = waiting(gap)
+            return DayCall(level: .unknown, title: words.title, body: words.body, reasons: [], strainTarget: nil)
         }
         reasons.append("Recovery \(Int(r.rounded()))%")
         let acwr = load?.ready == true ? load?.acwr : nil

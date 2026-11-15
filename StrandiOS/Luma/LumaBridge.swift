@@ -2,6 +2,7 @@
 import SwiftUI
 import Combine
 import WidgetKit
+import ActivityKit
 import UIKit
 import WhoopStore
 import LumaCore
@@ -28,6 +29,8 @@ final class LumaBridge: ObservableObject, LumaDeviceControl {
     private var arrival: Date?
     private var scanning = false
     private var liveWanters = 0
+    /// Luma is on screen. While it is, the strap is asked to stream whatever the recording setting.
+    private var onScreen = false
     private var ticker: Timer?
     private var lastGlance: LumaGlance?
 
@@ -45,6 +48,7 @@ final class LumaBridge: ObservableObject, LumaDeviceControl {
         env = LumaEnv(source: source, live: live, secrets: LumaKeychain())
         env.device = self
         env.recorder = recorder
+        source.linkFacts = { [weak self] in self?.linkFacts() ?? [] }
         Self.settleEarlierShell()
         retireEarlierAutomations()
         adoptStrapProfileIfNew()
@@ -164,6 +168,15 @@ final class LumaBridge: ObservableObject, LumaDeviceControl {
         env.onProfileChange = { [weak self] profile in self?.mirror(profile) }
         if env.profile.isSetUp { mirror(env.profile) }
 
+        // The strap layer puts its own stored stream preference back on every pairing. Luma's want can be
+        // wider than that preference (on screen with "Record all the time" off), so it is applied again
+        // after each one. Delivered on the next turn of the run loop, which is after the strap layer's own.
+        model.live.$bonded.removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.applyCapture() }
+            .store(in: &bag)
+        applyCapture()
+
         // Widgets and the Lock Screen card.
         env.onGlanceChange = { [weak self] in self?.publishGlance() }
         recorder.onChange = { [weak self] in self?.liveActivity?.refresh() }
@@ -233,6 +246,13 @@ final class LumaBridge: ObservableObject, LumaDeviceControl {
         strap.syncing = state.backfilling
         strap.syncedChunks = state.syncChunksThisSession
         strap.lastSync = state.lastSyncedAt.map { Date(timeIntervalSince1970: $0) }
+        // What the strap layer knows about how complete its own read is. Luma states these; it does not
+        // re-derive them.
+        strap.historyPending = state.historyPendingSync
+        strap.historyEmpty = state.historySyncExperimental || state.sustainedEmptyOffload
+        strap.needsRestart = state.strapNeedsReboot
+        strap.syncError = Self.plain(state.lastSyncError)
+        strap.continuous = PuffinExperiment.keepRealtimeForDataEnabled && !PuffinExperiment.continuousHrvOvernightOnlyEnabled
         let device = activeDevice
         strap.name = device?.displayName
         strap.model = device?.model
@@ -319,6 +339,35 @@ final class LumaBridge: ObservableObject, LumaDeviceControl {
         }
     }
 
+    func setOnScreen(_ on: Bool) {
+        guard on != onScreen else { return }
+        onScreen = on
+        applyCapture()
+    }
+
+    /// Asks the strap to keep sending heart rate: at all times when the athlete records all the time,
+    /// otherwise while Luma is on screen. This is the strap layer's own continuous capture, switched
+    /// through its own preference and call: one existing, reversible command (the realtime heart-rate
+    /// toggle), no new one. A WHOOP 5.0 or MG that hands over nothing it stored can only be recorded this
+    /// way, which is why Luma's setting defaults to on. It costs strap battery, and it has not been
+    /// measured on hardware from here.
+    ///
+    /// The preference is kept where the strap layer reads it, because that layer re-applies it at launch
+    /// and on every pairing. Its "night hours only" refinement is the default for a fresh preference and
+    /// Luma has no switch for it, so it is set off: Luma's one setting means day and night.
+    private func applyCapture() {
+        let always = env.profile.continuousRecording
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: PuffinExperiment.keepRealtimeForDataKey) as? Bool != always {
+            defaults.set(always, forKey: PuffinExperiment.keepRealtimeForDataKey)
+        }
+        if defaults.object(forKey: PuffinExperiment.continuousHrvOvernightOnlyKey) as? Bool != false {
+            defaults.set(false, forKey: PuffinExperiment.continuousHrvOvernightOnlyKey)
+        }
+        model.ble.setKeepRealtimeForData(always || onScreen)
+        refreshStrap()
+    }
+
     func connectHealth() async {
         if health.auth == .denied, let url = URL(string: UIApplication.openSettingsURLString) {
             _ = await UIApplication.shared.open(url)
@@ -359,6 +408,57 @@ final class LumaBridge: ObservableObject, LumaDeviceControl {
             defaults.set(profile.lockScreenHeartRate, forKey: UnitPrefs.liveActivityKey)
         }
         liveActivity?.refresh()
+        applyCapture()
+    }
+
+    // MARK: Data check
+
+    /// The state of the strap link and of what feeds the Lock Screen, read at the moment it is asked
+    /// for. Readings only: each line is a value the strap layer or iOS holds, with nothing concluded.
+    private func linkFacts() -> [LFact] {
+        let state = model.live
+        let calendar = Calendar.current
+        func yes(_ value: Bool) -> String { value ? "yes" : "no" }
+        func stamp(_ ts: Double) -> String { RecordReport.stamp(ts, calendar: calendar) }
+        var out: [LFact] = []
+
+        let link = "Strap link"
+        out.append(LFact(link, "Connected", yes(state.connected)))
+        out.append(LFact(link, "Paired securely", yes(state.encryptedBond)))
+        out.append(LFact(link, "Ready to hand over what it stored", yes(state.historyReady)))
+        out.append(LFact(link, "Being read now", state.backfilling ? "yes, \(state.syncChunksThisSession) parts so far" : "no"))
+        out.append(LFact(link, "Holds data not yet read", yes(state.historyPendingSync)))
+        out.append(LFact(link, "Handed over nothing in repeated reads", yes(state.historySyncExperimental || state.sustainedEmptyOffload)))
+        out.append(LFact(link, "Reads not moving forward", yes(state.strapNeedsReboot)))
+        out.append(LFact(link, "Last completed read", state.lastSyncedAt.map { stamp($0) } ?? "never"))
+        out.append(LFact(link, "Note from the last read", Self.plain(state.lastSyncError) ?? "none"))
+        var range = "not reported"
+        if let r = state.strapRange, r.newestUnix > 0 {
+            let oldest: String = r.oldestUnix.map { stamp(Double($0)) } ?? "not reported"
+            range = oldest + " to " + stamp(Double(r.newestUnix))
+        }
+        out.append(LFact(link, "The strap's own record runs", range))
+        out.append(LFact(link, "Pages waiting at connection", state.pagesBehindAtConnect.map { String($0) } ?? "not reported"))
+        let bpm: Int? = model.bpm ?? state.heartRate
+        out.append(LFact(link, "Heart rate now", bpm.map { "\($0) bpm" } ?? "none arriving"))
+        out.append(LFact(link, "On wrist", yes(state.worn)))
+        out.append(LFact(link, "Battery", state.batteryPct.map { "\(Int($0.rounded()))%" } ?? "not reported"))
+        out.append(LFact(link, "Firmware", state.strapFirmware ?? "not reported"))
+        out.append(LFact(link, "Model", activeDevice?.model ?? "none"))
+
+        let recording = "Recording"
+        out.append(LFact(recording, "Stream held open by the setting", yes(PuffinExperiment.keepRealtimeForDataEnabled)))
+        out.append(LFact(recording, "Limited to night hours", yes(PuffinExperiment.continuousHrvOvernightOnlyEnabled)))
+        out.append(LFact(recording, "Power saving", yes(PuffinExperiment.powerSavingEnabled)))
+        out.append(LFact(recording, "Luma on screen", yes(onScreen)))
+        out.append(LFact(recording, "A screen or session asking for live heart rate", yes(liveWanters > 0)))
+
+        let lock = "Lock Screen and widgets"
+        out.append(LFact(lock, "Lock Screen card setting", yes(UnitPrefs.liveActivityEnabled())))
+        out.append(LFact(lock, "Live Activities allowed in iOS", yes(ActivityAuthorizationInfo().areActivitiesEnabled)))
+        out.append(LFact(lock, "Cards on the Lock Screen now", String(Activity<NOOPActivityAttributes>.activities.count)))
+        out.append(LFact(lock, "Widget figures last written", lastGlance.map { stamp($0.updated.timeIntervalSince1970) } ?? "not in this run"))
+        return out
     }
 
     // MARK: Widgets and the Lock Screen

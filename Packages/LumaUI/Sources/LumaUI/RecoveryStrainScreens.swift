@@ -11,11 +11,14 @@ struct RecoveryScreen: View {
         let a = env.analysis
         LumaDetailScreen(title: "Recovery", tone: .recovery) {
             if let read = a.recovery {
-                RecoveryHero(read: read, today: a.today)
+                RecoveryHero(read: read, today: a.today, gap: a.gap)
                 if !read.factors.isEmpty {
-                    LumaSection(title: "What is behind it")
+                    LumaSection(title: read.score == nil ? "What was measured" : "What is behind it")
                     LumaGroup {
                         ForEach(read.factors) { FactorRow(factor: $0) }
+                    }
+                    if read.day == a.today, let sentence = LumaWords.nightSentence(a.night) {
+                        LumaNote("\(sentence) These figures cover the recorded part only.")
                     }
                     if read.nightsToBaseline > 0 {
                         LumaNote("\(read.nightsToBaseline) more nights until your baselines are established. Until then comparisons are provisional.")
@@ -28,7 +31,7 @@ struct RecoveryScreen: View {
             } else {
                 LumaCard {
                     LumaEmpty(symbol: "bolt.heart", title: "No recovery score yet",
-                              message: "Recovery is scored each morning from your night's HRV, resting heart rate and sleep. Wear the strap overnight and sync.")
+                              message: "Recovery is scored each morning from the night's HRV, resting heart rate and sleep. Wear the strap to bed with Luma running in the background.")
                 }
             }
             LumaSection(title: "History")
@@ -46,6 +49,8 @@ struct RecoveryScreen: View {
 struct RecoveryHero: View {
     let read: RecoveryRead
     let today: String
+    /// Why there is no score, when there is none: the same resolved reason Today gives.
+    var gap: RecoveryGap? = nil
     @State private var shown: Double = 0
 
     var body: some View {
@@ -59,7 +64,7 @@ struct RecoveryHero: View {
                         if read.score != nil { Text("%").font(LumaFont.numeral(26)).foregroundStyle(Luma.mist) }
                     }
                     .foregroundStyle(Luma.frost)
-                    Text(read.band?.title ?? "Calibrating").font(LumaFont.label(12)).foregroundStyle(color)
+                    Text(read.band?.title ?? LumaWords.gapLabel(gap)).font(LumaFont.label(12)).foregroundStyle(color)
                 }
             }
             .frame(height: 220)
@@ -234,6 +239,8 @@ struct StrainScreen: View {
         let on21 = env.profile.strainOn21
         let strain = a.day?.strain.map { LScale.shown($0, on21: on21) }
         let todays = env.workouts.filter { $0.day == a.today }.sorted { $0.start < $1.start }
+        // Laid on the clock from the start of the day, so time with no readings shows as a break.
+        let grid = TimeGrid(hr, from: LDate.startOfDay(a.today)?.timeIntervalSince1970 ?? (hr.first?.t ?? 0), step: 300)
         LumaDetailScreen(title: "Strain", tone: .strain) {
             StrainHero(strain: strain, top: on21 ? 21 : 100, target: on21 ? a.call.strainTarget : nil)
             if hr.count > 6 {
@@ -246,7 +253,7 @@ struct StrainScreen: View {
                                 Text("Peak \(Int(peak.rounded())) bpm").font(LumaFont.body(13, .medium)).foregroundStyle(Luma.mist)
                             }
                         }
-                        LumaLineChart(values: hr.map { $0.bpm }, labels: hr.map { LumaText.time($0.t) }, color: Luma.ember, height: 160)
+                        LumaLineChart(values: grid.values, labels: grid.labels, color: Luma.ember, height: 160, gaps: true)
                     }
                 }
             }

@@ -19,8 +19,9 @@ everything described here sits beside it. [`AGENTS.md`](../AGENTS.md) still gove
 `LumaUI` knows nothing about Bluetooth, the database or HealthKit. It sees four protocols and the
 bridge implements them:
 
-- `LumaDataSource`: days, nights, sessions, heart-rate and HRV series, routes, stress.
-- `LumaDeviceControl`: pair, sync, buzz, live heart rate, Health access, battery alerts.
+- `LumaDataSource`: days, nights, sessions, heart-rate and HRV series, routes, stress, how far the
+  recovery baseline has got, and the plain facts behind the data check.
+- `LumaDeviceControl`: pair, sync, buzz, live heart rate, being on screen, Health access, battery alerts.
 - `LumaRecorder`: start, pause and finish a recorded session.
 - `LumaSecrets`: the coach's API key, held in the keychain.
 
@@ -31,6 +32,31 @@ bridge implements them:
   `LScale`, so the 0–21 and 0–100 settings cannot disagree between screens. Widgets and the Lock
   Screen card take their numbers from the glance snapshot (`LumaGlance`), and withhold them once the
   snapshot is no longer for the current training day (the day turns over at 04:00).
+- **A night is only as complete as the record behind it.** A WHOOP 5.0 or MG may hand over nothing it
+  stored, and then the phone holds only what the strap streamed while the app was running. A night that
+  ends where the heart-rate record ends was not seen to end. `RecordCheck` (LumaCore) reads where the
+  record has readings and classes the night: whole, still going, or cut off (an hour or more missing in
+  it or right after it). A cut-off night keeps the figures that were measured, each marked, and feeds
+  nothing else: no score of Luma's, no sleep debt, no average, no baseline, no trend (`NightMark`,
+  kept on the phone, because the record is only looked at for a day and a half). Luma never fills the
+  missing part in.
+- **One reason, one notice.** Why there is no recovery score is resolved once (`RecordCheck.gap`), in
+  a fixed order, and worded from that: the ring's caption, the day's call and the Recovery screen cannot
+  give different reasons, and none names a cause that was not established. The same holds for the state
+  of the data (`DataNotice.resolve`): Today and the strap screen carry the one card. Both state what
+  the strap layer reports (`LiveState`), such as "holds data not yet read"; they do not re-derive it.
+- **A missing figure is a dash.** No reading becomes a zero, and a figure from an earlier night says
+  which night it is from. A heart-rate line is laid on the clock (`TimeGrid`, `RecordCheck.slots`), so
+  time with no readings is a break in the line, not a stroke joining the two sides of it.
+- **Recording all the time is the strap layer's continuous capture**, switched through its own
+  preference and call (`LumaBridge.applyCapture`): one existing, reversible command, the realtime
+  heart-rate toggle. It is on by default in Luma, because it is the only way such a strap's night is
+  recorded, and it costs strap battery. With it off, the strap streams while Luma is on screen or a
+  session is running. The app has to stay running in the background for either to record anything.
+- **Sleep times are not edited by hand.** The strap layer can re-stage a hand-set night only where it
+  has movement data; elsewhere added time is stored as awake and the night is then frozen against
+  re-detection. On a strap with no movement record that would make a corrected night worse and keep
+  it so, so Luma has no such control until that is settled on hardware.
 - **Sessions are never invented.** A stretch of raised heart rate that no session covers is a
   suggestion: `LumaRepoSource.suggestedSessions` runs the strap layer's own detector over the raw
   record, `SessionSuggestions` (LumaCore) decides which stretches reach training intensity, and nothing
@@ -83,3 +109,11 @@ None of this exercises a strap. Pairing, sync, buzzes, the double tap, live reco
 Screen card's real cadence have to be checked on a phone with a strap, as do Health access under a
 sideload signature and a real coach request. A change is not verified on hardware until someone says
 what they tried.
+
+Still to be confirmed on a strap: that recording all the time keeps the app receiving heart rate through
+a whole night in the background, what it costs the strap's battery, and whether a given WHOOP 5.0 or MG
+hands over any stored record or movement data. **Settings, Data check** is the instrument for this: it
+shows the minutes of heart rate that reached the phone in each of the last 24 hours, the holes, the
+nights and days as stored, and the strap layer's own sync state, and sends all of it as plain text.
+The gallery's `partial` data (`-lumaData partial`) stages the case this was built from: asleep at 01:00,
+the record stopping at 02:00.

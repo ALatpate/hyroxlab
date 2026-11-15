@@ -111,8 +111,10 @@ public struct LumaTodayWidgetView: View {
 
     private var callLine: String {
         guard let glance else { return "Open Luma to get started" }
-        if !current { return "Waiting for last night" }
-        return glance.call ?? "Waiting for last night"
+        // Figures from an earlier day are withheld. All that is known is that Luma has not written
+        // today's yet, so that is all that is said.
+        if !current { return "Open Luma to update" }
+        return glance.call ?? "Open Luma to update"
     }
 
     public var body: some View {
@@ -463,12 +465,12 @@ public struct LumaBriefWidgetView: View {
     }
 
     private var headline: String {
-        guard let glance, current else { return "Waiting for last night" }
-        return glance.call ?? "Waiting for last night"
+        guard let glance, current else { return "Open Luma to update" }
+        return glance.call ?? "Open Luma to update"
     }
 
     private var text: String {
-        guard let glance, current else { return "Open Luma after you wake to score the night." }
+        guard let glance, current else { return "This widget last heard from Luma on an earlier day." }
         return glance.brief ?? glance.callDetail ?? "Open Luma for today's read."
     }
 

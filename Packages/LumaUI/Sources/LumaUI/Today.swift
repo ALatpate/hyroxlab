@@ -23,18 +23,22 @@ struct TodayScreen: View {
             SwitchedOffNote()
             if a.watch.level >= .watch, a.lastNight?.day == a.today { WatchBanner(watch: a.watch) }
             TodayHero(analysis: a, strainOn21: env.profile.strainOn21)
-            CallCard(call: a.call, strain21: a.day?.strain.map(LScale.strain21), on21: env.profile.strainOn21)
+            Group {
+                DataNoticeCard()
+                CallCard(call: a.call, strain21: a.day?.strain.map(LScale.strain21), on21: env.profile.strainOn21)
+            }
             CoachBriefCard()
             Group {
                 SuggestedSessionPrompt()
                 PlanCard()
             }
-            HeartStrip(points: hr)
+            HeartStrip(points: hr, dayStart: LDate.startOfDay(a.today)?.timeIntervalSince1970)
             TodayVitals(analysis: a, stress: stress)
             FuelGlance()
             CheckInPrompt()
         }
-        .task(id: env.days.count) {
+        // Redrawn when a day is added and as the record grows, so the line keeps up with the strap.
+        .task(id: "\(env.days.count)|\(Int((env.recordEnd ?? 0) / 300))") {
             guard let start = LDate.startOfDay(a.today)?.timeIntervalSince1970 else { return }
             hr = await env.source.heartRate(from: start, to: start + 86_400, bucketSeconds: 600)
             stress = await env.source.stress(day: a.today)
@@ -85,10 +89,14 @@ struct TodayHero: View {
     @EnvironmentObject private var router: LumaRouter
     @State private var shown: Double = 0
 
-    private var scored: LDay? { analysis.lastNight?.day == analysis.today ? analysis.lastNight : nil }
+    /// Today's row, when last night left one. It may have no score.
+    private var tonight: LDay? { analysis.lastNight?.day == analysis.today ? analysis.lastNight : nil }
+
+    /// What to put under a night figure when the record behind it is not whole.
+    private var nightNote: String? { LumaWords.nightNote(analysis.night) }
 
     var body: some View {
-        let score = scored?.recovery
+        let score = tonight?.recovery
         let color = Luma.recovery(score)
         VStack(spacing: 6) {
             Button { router.push(.recovery) } label: {
@@ -113,15 +121,28 @@ struct TodayHero: View {
             .buttonStyle(.plain)
 
             if score == nil {
-                Text(analysis.lastNight.map { "Last scored night: \(LumaText.dayTitle($0.day, today: analysis.today).lowercased()), \(Int(($0.recovery ?? 0).rounded()))%" }
-                     ?? "No night scored yet. Wear the strap overnight, then sync.")
-                    .font(LumaFont.body(13)).foregroundStyle(Luma.mist).multilineTextAlignment(.center)
+                VStack(spacing: 2) {
+                    Text(LumaWords.gapLine(analysis.gap))
+                    // An earlier score is named only when there is one, with the figure it had.
+                    if let last = analysis.lastScored, let earlier = last.recovery {
+                        Text("Last score: \(LumaText.dayTitle(last.day, today: analysis.today).lowercased()), \(Int(earlier.rounded()))%")
+                            .foregroundStyle(Luma.smoke)
+                    }
+                }
+                .font(LumaFont.body(13)).foregroundStyle(Luma.mist).multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            } else if case .cutOff(let at, _) = analysis.night {
+                Text("Scored from a night whose record stops at \(LumaText.time(at)).")
+                    .font(LumaFont.body(13)).foregroundStyle(Luma.amber).multilineTextAlignment(.center)
             }
 
-            HStack(spacing: 10) {
-                heroStat("Strain", value: analysis.day?.strain.map { LScale.shown($0, on21: strainOn21) }, decimals: strainOn21 ? 1 : 0, unit: "", tone: .strain, dest: .strain)
-                heroStat("Sleep", value: analysis.sleep.last.flatMap { $0.day == analysis.today ? $0.asleepMin / 60 : nil }, decimals: 1, unit: "h", tone: .sleep, dest: .sleep)
-                heroStat("HRV", value: scored?.hrv, decimals: 0, unit: "ms", tone: .hrv, dest: .heart)
+            HStack(alignment: .top, spacing: 10) {
+                heroStat("Strain", value: analysis.day?.strain.map { LScale.shown($0, on21: strainOn21) }, decimals: strainOn21 ? 1 : 0, unit: "", tone: .strain, dest: .strain,
+                         note: nil, reserve: nightNote != nil)
+                heroStat("Sleep", value: analysis.sleep.last.flatMap { $0.day == analysis.today ? $0.asleepMin / 60 : nil }, decimals: 1, unit: "h", tone: .sleep, dest: .sleep,
+                         note: nightNote, reserve: nightNote != nil)
+                heroStat("HRV", value: tonight?.hrv, decimals: 0, unit: "ms", tone: .hrv, dest: .heart,
+                         note: nightNote == nil || tonight?.hrv == nil ? nil : "part night", reserve: nightNote != nil)
             }
             .padding(.top, 4)
         }
@@ -129,7 +150,10 @@ struct TodayHero: View {
         .onChange(of: score) { _, new in withAnimation(.easeOut(duration: 0.8)) { shown = new ?? 0 } }
     }
 
-    private func heroStat(_ label: String, value: Double?, decimals: Int, unit: String, tone: LumaTone, dest: LumaDest) -> some View {
+    /// `note` qualifies a figure the record does not fully back ("to 02:00"). `reserve` keeps the three
+    /// tiles the same height when only some of them carry one.
+    private func heroStat(_ label: String, value: Double?, decimals: Int, unit: String, tone: LumaTone, dest: LumaDest,
+                          note: String?, reserve: Bool) -> some View {
         Button { router.push(dest) } label: {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 5) {
@@ -137,6 +161,9 @@ struct TodayHero: View {
                     LumaLabel(label)
                 }
                 LumaFigure(value: value, decimals: decimals, unit: unit, size: 34)
+                if reserve {
+                    Text(note ?? " ").font(LumaFont.body(11, .semibold)).foregroundStyle(Luma.amber).lineLimit(1).minimumScaleFactor(0.8)
+                }
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
@@ -381,12 +408,21 @@ struct PlanCard: View {
 /// Live heart rate beside the day's trace.
 struct HeartStrip: View {
     let points: [LHRPoint]
+    /// When the day began. With it the line is laid on the clock and breaks where nothing was recorded.
+    var dayStart: Double? = nil
     @EnvironmentObject private var live: LumaLive
     @EnvironmentObject private var router: LumaRouter
     @State private var beat = false
 
+    /// Ten-minute slots from the start of the day to the newest reading, nil where there is none.
+    private var slots: [Double?] {
+        guard let dayStart, let newest = points.map({ $0.t }).max() else { return points.map { Optional($0.bpm) } }
+        return RecordCheck.slots(points, from: dayStart, to: newest + 600, step: 600)
+    }
+
     var body: some View {
         let liveHR = live.strap.liveHeartRate()
+        let trace = slots
         Button { router.push(.heart) } label: {
             HStack(spacing: 14) {
                 VStack(alignment: .leading, spacing: 4) {
@@ -402,7 +438,7 @@ struct HeartStrip: View {
                 }
                 Spacer(minLength: 8)
                 if points.count > 3 {
-                    LumaSparkline(values: points.map { $0.bpm }, color: Luma.coral)
+                    GappedSparkline(values: trace, color: Luma.coral)
                         .frame(width: 150, height: 52)
                 }
             }
@@ -416,6 +452,47 @@ struct HeartStrip: View {
     }
 }
 
+/// A small line over evenly spaced slots that breaks where a slot has no reading, so missing time
+/// looks missing instead of being bridged.
+struct GappedSparkline: View {
+    var values: [Double?]
+    var color: Color
+
+    var body: some View {
+        GappedLine(values: values)
+            .stroke(color, style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
+            .accessibilityHidden(true)
+    }
+}
+
+struct GappedLine: Shape {
+    var values: [Double?]
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let present: [Double] = values.compactMap { $0 }
+        guard values.count > 1, let lo = present.min(), let hi = present.max() else { return path }
+        let span: Double = max(1, hi - lo)
+        let stepX: CGFloat = rect.width / CGFloat(values.count - 1)
+        var drawing = false
+        for (i, value) in values.enumerated() {
+            guard let value else { drawing = false; continue }
+            let x: CGFloat = rect.minX + CGFloat(i) * stepX
+            let y: CGFloat = rect.maxY - CGFloat((value - lo) / span) * rect.height
+            let point = CGPoint(x: x, y: y)
+            if drawing {
+                path.addLine(to: point)
+            } else {
+                // A reading on its own still shows: a line of no length with a round cap is a dot.
+                path.move(to: point)
+                path.addLine(to: point)
+                drawing = true
+            }
+        }
+        return path
+    }
+}
+
 // MARK: - Vitals grid
 
 struct TodayVitals: View {
@@ -425,13 +502,24 @@ struct TodayVitals: View {
 
     private var night: LDay? { analysis.lastNight }
 
+    /// Which night a night-derived figure is from, said under it: never "today" for an older night, and
+    /// never unqualified for a night the record only partly holds.
+    private var nightLabel: String {
+        guard let night else { return "today" }
+        guard night.day == analysis.today else { return LumaText.dayTitle(night.day, today: analysis.today).lowercased() + "'s night" }
+        switch analysis.night {
+        case .cutOff, .stillGoing: return "part of last night"
+        case .none, .complete: return "last night"
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             LumaSection(title: "Body", action: "Trends") { router.push(.trends) }
             let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
             LazyVGrid(columns: columns, spacing: 12) {
-                tile("Resting heart rate", night?.restingHR, 0, "bpm", .heart, "heart.fill", baseline: analysis.baselines.restingHR, better: false, dest: .heart)
-                tile("Respiratory rate", night?.respRate, 1, "rpm", .stress, "lungs.fill", baseline: analysis.baselines.respRate, better: nil, dest: .vitals)
+                tile("Resting heart rate", night?.restingHR, 0, "bpm", .heart, "heart.fill", baseline: analysis.baselines.restingHR, better: false, dest: .heart, from: nightLabel)
+                tile("Respiratory rate", night?.respRate, 1, "rpm", .stress, "lungs.fill", baseline: analysis.baselines.respRate, better: nil, dest: .vitals, from: nightLabel)
                 tile("Skin temperature", night?.skinTempDev, 1, "°C", .stress, "thermometer.medium", baseline: nil, better: nil, dest: .vitals, signed: true)
                 stressTile
                 tile("Steps", analysis.day?.steps.map(Double.init), 0, "", .strain, "figure.walk", baseline: nil, better: nil, dest: .strain, grouped: true)
@@ -440,8 +528,21 @@ struct TodayVitals: View {
         }
     }
 
+    /// `from` says which night a figure belongs to. A figure from a night the record only partly holds
+    /// is not set against the athlete's usual: the comparison would be of unlike things.
     private func tile(_ label: String, _ value: Double?, _ decimals: Int, _ unit: String, _ tone: LumaTone, _ symbol: String,
-                      baseline: LBaseline?, better: Bool?, dest: LumaDest, signed: Bool = false, grouped: Bool = false) -> some View {
+                      baseline: LBaseline?, better: Bool?, dest: LumaDest, signed: Bool = false, grouped: Bool = false,
+                      from: String? = nil) -> some View {
+        let partial = from != nil && night?.day == analysis.today && analysis.night.isPartial
+        let usual: LBaseline? = partial ? nil : baseline
+        return tileBody(label, value, decimals, unit, tone, symbol, baseline: usual, better: better, dest: dest, signed: signed,
+                        grouped: grouped, caption: value == nil ? "No reading" : (from ?? (signed ? "from your baseline" : "today")),
+                        warn: partial && value != nil)
+    }
+
+    private func tileBody(_ label: String, _ value: Double?, _ decimals: Int, _ unit: String, _ tone: LumaTone, _ symbol: String,
+                          baseline: LBaseline?, better: Bool?, dest: LumaDest, signed: Bool, grouped: Bool, caption: String,
+                          warn: Bool) -> some View {
         Button { router.push(dest) } label: {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 6) {
@@ -453,8 +554,7 @@ struct TodayVitals: View {
                 if let value, let baseline {
                     DeltaBadge(delta: value - baseline.center, decimals: decimals, higherIsBetter: better, suffix: "vs usual")
                 } else {
-                    Text(value == nil ? "No reading yet" : (signed ? "from your baseline" : "today"))
-                        .font(LumaFont.body(12)).foregroundStyle(Luma.smoke)
+                    Text(caption).font(LumaFont.body(12)).foregroundStyle(warn ? Luma.amber : Luma.smoke)
                 }
             }
             .padding(16)

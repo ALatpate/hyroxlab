@@ -16,6 +16,8 @@ final class LumaRepoSource: LumaDataSource {
     /// The stored rows behind the sessions last handed to the interface, keyed by `LWorkout.id`, so an
     /// edit or a delete can name the exact row it replaces.
     private var rows: [String: WorkoutRow] = [:]
+    /// The state of the strap link, supplied by the bridge, for the data check.
+    var linkFacts: (() -> [LFact])?
 
     init(repo: Repository) { self.repo = repo }
 
@@ -141,6 +143,52 @@ final class LumaRepoSource: LumaDataSource {
         guard let row = rows[workout.id] else { return }
         await repo.deleteWorkout(row)
         await repo.refresh()
+    }
+
+    // MARK: Recovery baseline
+
+    /// How many nights the recovery baseline has of the number it needs, counted exactly as the strap
+    /// layer counts them for its own ring; nil once there are enough, or once today has a score.
+    func calibration() async -> LCalibration? {
+        let history = repo.chargeBaselines?.hrvHistory
+        guard let have = RecoveryScorer.calibrationNights(nightlyHrv: history?.values ?? [], dayKeys: history?.dayKeys ?? [],
+                                                          hasRecovery: repo.today?.recovery != nil) else { return nil }
+        return LCalibration(have: have, need: Baselines.minNightsSeed)
+    }
+
+    // MARK: Data check
+
+    /// What is stored on the phone for the last day, as counts, and the sleep blocks as the strap layer
+    /// holds them, after the state of the strap link. Read fresh each time; nothing is interpreted.
+    func facts() async -> [LFact] {
+        var out: [LFact] = linkFacts?() ?? []
+        let calendar = Calendar.current
+        let now = Int(Date().timeIntervalSince1970)
+        let from = now - 86_400
+        func count(_ n: Int, cap: Int) -> String { n >= cap ? "\(LFormat.grouped(Double(cap))) or more" : LFormat.grouped(Double(n)) }
+
+        let stored = "Stored on this phone, last 24 hours"
+        // One reading a second is 86,400 a day, so these limits are only reached by a duplicate record.
+        let hr: [HRSample] = await repo.hrSamples(from: from, to: now, limit: 120_000)
+        out.append(LFact(stored, "Heart-rate readings", count(hr.count, cap: 120_000)))
+        let newest: Int? = hr.map { $0.ts }.max()
+        out.append(LFact(stored, "Newest heart-rate reading", newest.map { RecordReport.stamp(Double($0), calendar: calendar) } ?? "none"))
+        let beats = await repo.rrIntervals(from: from, to: now, limit: 200_000)
+        out.append(LFact(stored, "Beat-to-beat intervals", count(beats.count, cap: 200_000)))
+        let motion = await repo.gravitySamplesUnion(from: from, to: now, limit: 200_000)
+        out.append(LFact(stored, "Movement readings", count(motion.count, cap: 200_000)))
+
+        let blocks = "Sleep blocks as the strap layer holds them"
+        let sessions = await repo.allSleepSessions(days: 3)
+        if sessions.isEmpty { out.append(LFact(blocks, "Last three days", "none")) }
+        for (index, block) in sessions.sorted(by: { $0.endTs > $1.endTs }).prefix(6).enumerated() {
+            var value: String = RecordReport.stamp(Double(block.effectiveStartTs), calendar: calendar) + " to "
+                + RecordReport.stamp(Double(block.endTs), calendar: calendar)
+            if block.userEdited { value += ", times set by hand" }
+            if block.stagingSparse == true { value += ", staged on sparse movement" }
+            out.append(LFact(blocks, "Block \(index + 1)", value))
+        }
+        return out
     }
 
     // MARK: Suggested sessions

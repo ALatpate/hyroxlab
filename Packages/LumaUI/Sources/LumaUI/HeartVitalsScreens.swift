@@ -13,13 +13,15 @@ struct HeartScreen: View {
     var body: some View {
         let a = env.analysis
         let zones = env.profile.zones()
+        // Laid on the clock from the start of the day, so time with no readings shows as a break.
+        let grid = TimeGrid(day, from: LDate.startOfDay(a.today)?.timeIntervalSince1970 ?? (day.first?.t ?? 0), step: 300)
         LumaDetailScreen(title: "Heart", tone: .heart) {
             LiveHeartHero(strap: live.strap, zones: zones, maxHR: env.profile.resolvedMaxHR())
             if day.count > 6 {
                 LumaCard {
                     VStack(alignment: .leading, spacing: 12) {
                         LumaLabel("Today")
-                        LumaLineChart(values: day.map { $0.bpm }, labels: day.map { LumaText.time($0.t) }, color: Luma.coral, height: 170)
+                        LumaLineChart(values: grid.values, labels: grid.labels, color: Luma.coral, height: 170, gaps: true)
                         HStack(spacing: 0) {
                             dayStat("Lowest", day.map { $0.lo }.min())
                             dayStat("Average", LStat.mean(day.map { $0.bpm }))

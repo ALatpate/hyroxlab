@@ -107,6 +107,13 @@ public struct LDay: Codable, Equatable, Sendable, Identifiable {
 
     /// True when the night behind this day has been scored.
     public var hasNight: Bool { sleepMin != nil || recovery != nil || hrv != nil }
+
+    /// The day with everything read off its night removed, for a night only part of which was recorded:
+    /// such figures describe the recorded part, and must not shape a baseline, a trend or an average.
+    /// What the day itself measured (strain, steps, energy, sessions) stays.
+    public var withoutNight: LDay {
+        LDay(day: day, strain: strain, workouts: workouts, steps: steps, activeKcal: activeKcal, sleepNeedMin: sleepNeedMin)
+    }
 }
 
 /// A metric that can be read off an `LDay`, with display metadata. One list drives trends, the coach
@@ -484,8 +491,27 @@ public protocol LumaDataSource: AnyObject {
     /// Stretches of raised heart rate in the last `days` days that no stored session covers. A read
     /// of days of raw heart rate, so callers ask sparingly.
     func suggestedSessions(days: Int) async -> [LSuggestedSession]
+    /// How far the recovery baseline has got; nil once it is learned (or where that is not known).
+    func calibration() async -> LCalibration?
+    /// What the layer under Luma holds, as plain facts for the data check: nothing interpreted.
+    func facts() async -> [LFact]
 }
 
 public extension LumaDataSource {
     func suggestedSessions(days: Int) async -> [LSuggestedSession] { [] }
+    func calibration() async -> LCalibration? { nil }
+    func facts() async -> [LFact] { [] }
+}
+
+/// One fact for the data check: what it is about, what is measured, and the value as read.
+public struct LFact: Equatable, Sendable, Identifiable {
+    public var section: String
+    public var label: String
+    public var value: String
+
+    public init(_ section: String, _ label: String, _ value: String) {
+        self.section = section; self.label = label; self.value = value
+    }
+
+    public var id: String { section + "|" + label }
 }

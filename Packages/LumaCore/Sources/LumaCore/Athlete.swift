@@ -33,6 +33,9 @@ public struct LProfile: Codable, Equatable, Sendable {
     public var morningBrief: Bool = true
     /// Show live heart rate and today's numbers on the Lock Screen while the strap is streaming.
     public var lockScreenHeartRate: Bool = true
+    /// Keep the strap streaming heart rate to the phone at all times, not only while Luma is on screen,
+    /// so nights are recorded in full and the Lock Screen card stays live. Costs strap battery.
+    public var continuousRecording: Bool = true
     /// 0 until the Luma setup flow has been completed.
     public var setupVersion: Int = 0
 
@@ -43,7 +46,7 @@ public struct LProfile: Codable, Equatable, Sendable {
     enum CodingKeys: String, CodingKey {
         case name, sex, birthYear, heightCm, weightKg, maxHR, lthr, format, fiveKSeconds, raceDate, raceName
         case sleepNeedHours, gym, goals, voiceCues, cueEveryKm, autoPause, strainOn21, shareHealthWithCoach
-        case coachModel, morningBrief, lockScreenHeartRate, setupVersion
+        case coachModel, morningBrief, lockScreenHeartRate, continuousRecording, setupVersion
     }
 
     public init(from decoder: Decoder) throws {
@@ -70,6 +73,7 @@ public struct LProfile: Codable, Equatable, Sendable {
         coachModel = try c.decodeIfPresent(String.self, forKey: .coachModel)
         morningBrief = try c.decodeIfPresent(Bool.self, forKey: .morningBrief) ?? true
         lockScreenHeartRate = try c.decodeIfPresent(Bool.self, forKey: .lockScreenHeartRate) ?? true
+        continuousRecording = try c.decodeIfPresent(Bool.self, forKey: .continuousRecording) ?? true
         setupVersion = try c.decodeIfPresent(Int.self, forKey: .setupVersion) ?? 0
     }
 

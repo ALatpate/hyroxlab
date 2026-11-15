@@ -251,6 +251,9 @@ struct LumaLineChart: View {
         var fill: Bool = false
         var dashed: Bool = false
         var width: CGFloat = 2.6
+        /// Break the line where a value is missing instead of joining across it. For readings over
+        /// time, where a missing stretch is time in which nothing was recorded.
+        var gaps: Bool = false
     }
 
     var series: [Series]
@@ -294,6 +297,24 @@ struct LumaLineChart: View {
         s.values.enumerated().compactMap { i, v in v.map { CGPoint(x: xUnit(i), y: scale.unit($0)) } }
     }
 
+    /// The series as runs of neighbouring points, each drawn as its own line. Without `gaps` there is
+    /// one run: missing values are skipped and the line joins across them.
+    private func unitRuns(_ s: Series, _ scale: ChartScale) -> [[CGPoint]] {
+        guard s.gaps else { return [unitPoints(s, scale)] }
+        var runs: [[CGPoint]] = []
+        var current: [CGPoint] = []
+        for (i, v) in s.values.enumerated() {
+            if let v {
+                current.append(CGPoint(x: xUnit(i), y: scale.unit(v)))
+            } else if !current.isEmpty {
+                runs.append(current)
+                current = []
+            }
+        }
+        if !current.isEmpty { runs.append(current) }
+        return runs
+    }
+
     var body: some View {
         GeometryReader { geo in
             let axisW: CGFloat = showAxis ? axisWidth : 0
@@ -314,22 +335,24 @@ struct LumaLineChart: View {
                         .stroke(Luma.mist.opacity(0.55), style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
                 }
                 ForEach(series) { s in
-                    let pts = unitPoints(s, scale)
+                    let runs = unitRuns(s, scale)
                     ZStack {
-                        if s.fill {
-                            LineShape(points: pts, smooth: smooth, area: true)
-                                .fill(LinearGradient(colors: [s.color.opacity(0.32), s.color.opacity(0.0)], startPoint: .top, endPoint: .bottom))
-                                .mask(alignment: .leading) { Rectangle().frame(width: plot.width * progress) }
+                        ForEach(Array(runs.enumerated()), id: \.offset) { _, pts in
+                            if s.fill {
+                                LineShape(points: pts, smooth: smooth, area: true)
+                                    .fill(LinearGradient(colors: [s.color.opacity(0.32), s.color.opacity(0.0)], startPoint: .top, endPoint: .bottom))
+                                    .mask(alignment: .leading) { Rectangle().frame(width: plot.width * progress) }
+                            }
+                            LineShape(points: pts, smooth: smooth)
+                                .trim(from: 0, to: progress)
+                                .stroke(s.color.opacity(0.55), style: StrokeStyle(lineWidth: s.width + 5, lineCap: .round, lineJoin: .round))
+                                .blur(radius: 6)
+                                .opacity(s.dashed ? 0 : 1)
+                            LineShape(points: pts, smooth: smooth)
+                                .trim(from: 0, to: progress)
+                                .stroke(s.color, style: StrokeStyle(lineWidth: s.width, lineCap: .round, lineJoin: .round, dash: s.dashed ? [5, 5] : []))
                         }
-                        LineShape(points: pts, smooth: smooth)
-                            .trim(from: 0, to: progress)
-                            .stroke(s.color.opacity(0.55), style: StrokeStyle(lineWidth: s.width + 5, lineCap: .round, lineJoin: .round))
-                            .blur(radius: 6)
-                            .opacity(s.dashed ? 0 : 1)
-                        LineShape(points: pts, smooth: smooth)
-                            .trim(from: 0, to: progress)
-                            .stroke(s.color, style: StrokeStyle(lineWidth: s.width, lineCap: .round, lineJoin: .round, dash: s.dashed ? [5, 5] : []))
-                        if let last = pts.last, !s.dashed {
+                        if let last = runs.last?.last, !s.dashed {
                             Circle().fill(s.color)
                                 .frame(width: 8, height: 8)
                                 .overlay(Circle().stroke(Luma.night, lineWidth: 2))
@@ -399,9 +422,26 @@ extension LumaLineChart {
     init(values: [Double?], labels: [String] = [], color: Color, fill: Bool = true, band: ClosedRange<Double>? = nil,
          goal: Double? = nil, yRange: ClosedRange<Double>? = nil, height: CGFloat = 190,
          format: @escaping (Double) -> String = { String(format: "%.0f", $0) }, replay: AnyHashable = 0,
-         onSelect: ((Int?) -> Void)? = nil, ticks: [Double]? = nil, axisWidth: CGFloat = 34) {
-        self.init(series: [Series(id: "main", values: values, color: color, fill: fill)], labels: labels, band: band,
+         onSelect: ((Int?) -> Void)? = nil, ticks: [Double]? = nil, axisWidth: CGFloat = 34, gaps: Bool = false) {
+        self.init(series: [Series(id: "main", values: values, color: color, fill: fill, gaps: gaps)], labels: labels, band: band,
                   bandColor: color, goal: goal, yRange: yRange, height: height, format: format, replay: replay, onSelect: onSelect,
                   ticks: ticks, axisWidth: axisWidth)
+    }
+}
+
+/// Readings over time laid on evenly spaced slots, for a line that leaves missing time empty. A chart
+/// that plots one point after another by position draws a stretch with no readings as if it were not
+/// there, and joins the two sides of it.
+struct TimeGrid {
+    let values: [Double?]
+    let labels: [String]
+
+    /// From `from` to `to` (or to the end of the newest reading), one slot every `step` seconds.
+    init(_ points: [LHRPoint], from: Double, to: Double? = nil, step: Double) {
+        let newest: Double = points.map { $0.t }.max() ?? from
+        let end: Double = to ?? (newest + step)
+        let slots: [Double?] = RecordCheck.slots(points, from: from, to: end, step: step)
+        values = slots
+        labels = slots.indices.map { LumaText.time(from + Double($0) * step) }
     }
 }
