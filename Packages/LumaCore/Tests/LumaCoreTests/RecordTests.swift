@@ -79,9 +79,16 @@ final class RecordTests: XCTestCase {
     }
 
     func testANightWithNoRecordBehindItIsNotJudged() {
-        XCTAssertEqual(RecordCheck.night(start: at(1, 0), end: at(9, 0), stretches: [], now: at(10, 0)), .complete)
+        XCTAssertEqual(RecordCheck.night(start: at(1, 0), end: at(9, 0), stretches: [], now: at(10, 0)), .unjudged)
         let yesterday = [RecordStretch(start: at(0, 0) - 20 * 3600, end: at(0, 0) - 19 * 3600)]
-        XCTAssertEqual(RecordCheck.night(start: at(1, 0), end: at(9, 0), stretches: yesterday, now: at(10, 0)), .complete)
+        XCTAssertEqual(RecordCheck.night(start: at(1, 0), end: at(9, 0), stretches: yesterday, now: at(10, 0)), .unjudged)
+        // Not judged is not partial, and not whole either: it is said to be what it is.
+        XCTAssertFalse(NightRecord.unjudged.isPartial)
+        XCTAssertFalse(NightRecord.unjudged.isComplete)
+        XCTAssertEqual(RecordCheck.gap(recovery: nil, night: .unjudged, reading: false, calibration: nil), .unscored)
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        XCTAssertEqual(RecordReport.nightLine(.unjudged, calendar: cal), "no heart-rate record covers the night; it is taken as stored")
     }
 
     func testAMarkedHoleCountsUntilTheRecordFillsIt() {
@@ -193,11 +200,19 @@ final class RecordTests: XCTestCase {
         // Given no record to check against, the same night is taken as it stands: one hour of sleep.
         let plain = LumaAnalysis.build(days: days, sleeps: sleeps, workouts: [], profile: LProfile(), planned: [],
                                        today: today, now: now, calendar: cal)
-        XCTAssertEqual(plain.night, .complete)
+        XCTAssertEqual(plain.night, .unjudged)
         XCTAssertEqual(plain.gap, .unscored)
         XCTAssertEqual(plain.call.title, "No recovery score")
         XCTAssertEqual(plain.sleep.last?.partial, false)
         XCTAssertEqual(plain.sleep.debtMin, 436.5, accuracy: 0.001)
+
+        // The same with no record on hand, but with the verdict already reached for this night kept:
+        // the verdict stands, and the night stays out of the sleep debt.
+        let marked = LumaAnalysis.build(days: days, sleeps: sleeps, workouts: [], profile: LProfile(), planned: [],
+                                        marks: [NightMark(day: today, at: at(2, 0), resumes: at(9, 50))],
+                                        today: today, now: now, calendar: cal)
+        XCTAssertEqual(marked.night, .cutOff(at: at(2, 0), resumes: at(9, 50)))
+        XCTAssertEqual(marked.sleep.debtMin, 31.5, accuracy: 0.001)
 
         // A record read a while ago says nothing about the time since: judged as of when it was read,
         // the night is still going, not cut off by the hours the phone did not look.

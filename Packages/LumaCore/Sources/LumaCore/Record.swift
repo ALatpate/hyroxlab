@@ -18,14 +18,16 @@ public struct RecordStretch: Equatable, Sendable {
 public enum NightRecord: Equatable, Sendable {
     /// No night for the day.
     case none
+    /// No heart-rate record covers the night (an imported night, or none was read), so it is not judged
+    /// and is taken as it is stored. Nothing is known about it either way.
+    case unjudged
     /// The record ends with the night and has not been quiet for long: the night may not be over, or
     /// what followed may simply not have arrived yet.
     case stillGoing
     /// An hour or more of the night, or of the time right after the record of it stops, has no readings.
     /// The record stops at `at`; `resumes` is when readings start again, if they do.
     case cutOff(at: Double, resumes: Double?)
-    /// Readings carry on past the end of the night, so its end was observed; or no hole in it reaches an
-    /// hour; or the night is not backed by this record at all (imported) and is not judged here.
+    /// Whole: the record covers the night, and no hour or more is missing in it or right after it.
     case complete
 
     public var isComplete: Bool { self == .complete }
@@ -34,7 +36,7 @@ public enum NightRecord: Equatable, Sendable {
     public var isPartial: Bool {
         switch self {
         case .cutOff, .stillGoing: return true
-        case .none, .complete: return false
+        case .none, .unjudged, .complete: return false
         }
     }
 }
@@ -165,7 +167,7 @@ public enum RecordCheck {
         let sorted = stretches.sorted { $0.start < $1.start }
         let inside = sorted.filter { $0.end > start && $0.start < end }
         // Nothing of this night is in the record (an imported night): not judged.
-        guard let last = inside.last else { return .complete }
+        guard let last = inside.last else { return .unjudged }
         // A hole inside the night, up to where the record itself ends.
         if let hole = gaps(inside, from: start, to: min(end, last.end), minimum: holeSeconds).first {
             return .cutOff(at: hole.start, resumes: hole.end)
@@ -197,7 +199,7 @@ public enum RecordCheck {
         case .none: return .noNight
         case .stillGoing: return .stillGoing
         case .cutOff(let at, _): return .cutOff(at: at)
-        case .complete: return .unscored
+        case .complete, .unjudged: return .unscored
         }
     }
 }
@@ -270,7 +272,8 @@ public enum RecordReport {
         case .cutOff(let at, let resumes):
             let tail = resumes.map { ", readings start again at \(clock($0, calendar: calendar))" } ?? ", nothing since"
             return "the record stops at \(clock(at, calendar: calendar))\(tail)"
-        case .complete: return "the record runs past the end of the night"
+        case .unjudged: return "no heart-rate record covers the night; it is taken as stored"
+        case .complete: return "whole (no hole of an hour or more in it or right after it)"
         }
     }
 

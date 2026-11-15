@@ -39,27 +39,31 @@ public struct LumaAnalysis: Sendable {
 
     /// `record` is where the heart-rate record has readings and `recordAsOf` when it was read, `reading`
     /// whether the strap's stored record is still arriving, `calibration` how far the recovery baseline
-    /// has got, and `partialNights` the earlier wake days whose night was only partly recorded. Left at
-    /// their defaults, nothing is held back: every night is taken as complete.
+    /// has got, and `marks` the nights already found only partly recorded. Left at their defaults,
+    /// nothing is held back: every night is taken as it is stored.
     public static func build(days: [LDay], sleeps: [LSleep], workouts: [LWorkout], profile: LProfile, planned: [PlannedSession],
                              checkIns: [CheckIn] = [], personalBests: [PersonalBest] = [],
                              record: [RecordStretch] = [], recordAsOf: Double? = nil, reading: Bool = false,
-                             calibration: LCalibration? = nil, partialNights: Set<String> = [],
+                             calibration: LCalibration? = nil, marks: [NightMark] = [],
                              today: String, now: Date = Date(), calendar: Calendar = LDate.calendar) -> LumaAnalysis {
         let day = days.last { $0.day == today }
         let lastNight = days.last { $0.day <= today && $0.hasNight }
         let lastScored = days.last { $0.day < today && $0.recovery != nil }
 
         // Today's night, and how much of it the record holds.
-        let night: NightRecord
+        var night: NightRecord
         if let main = SleepModel.mainBlock(on: today, sleeps: sleeps) {
             night = RecordCheck.night(start: main.start, end: main.end, stretches: record,
                                       now: recordAsOf ?? now.timeIntervalSince1970)
         } else {
-            night = lastNight?.day == today ? .complete : .none
+            night = lastNight?.day == today ? .unjudged : .none
+        }
+        // With no record to judge by, a verdict already reached for tonight stands.
+        if night == .unjudged, let mark = marks.first(where: { $0.day == today }) {
+            night = .cutOff(at: mark.at, resumes: mark.resumes)
         }
         // Today's verdict is the one just reached; earlier days keep the one they were given.
-        var partial = partialNights
+        var partial = Set(marks.map { $0.day })
         if night.isPartial { partial.insert(today) } else { partial.remove(today) }
         // What a part-recorded night measured describes only that part, so it shapes no baseline, trend
         // or pattern. The night's own row is still shown, marked for what it is.

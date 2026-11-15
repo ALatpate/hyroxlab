@@ -37,7 +37,7 @@ enum LumaWords {
         switch night {
         case .cutOff(let at, _): return "to \(LumaText.time(at))"
         case .stillGoing: return "so far"
-        case .none, .complete: return nil
+        case .none, .unjudged, .complete: return nil
         }
     }
 
@@ -50,7 +50,7 @@ enum LumaWords {
             }
             return "The record of this night stops at \(LumaText.time(at))."
         case .stillGoing: return "This night is still being recorded."
-        case .none, .complete: return nil
+        case .none, .unjudged, .complete: return nil
         }
     }
 }
@@ -295,9 +295,15 @@ struct DataCheckScreen: View {
         .task(id: "\(Int(asOf))|\(live.strap.connected)|\(live.strap.syncing)") { facts = await env.source.facts() }
     }
 
+    /// What is known about the record behind last night. A night nothing covers is said to be that,
+    /// not passed off as whole.
     private var recordLine: String {
-        if let sentence = LumaWords.nightSentence(env.analysis.night) { return sentence }
-        return env.analysis.night == NightRecord.none ? "–" : "Runs past the end of the night."
+        switch env.analysis.night {
+        case .none: return "–"
+        case .unjudged: return "No heart-rate record covers this night, so it is shown as stored."
+        case .complete: return "Whole: no hour or more is missing in it or right after it."
+        case .cutOff, .stillGoing: return LumaWords.nightSentence(env.analysis.night) ?? "–"
+        }
     }
 
     /// Fact headings in the order they first appear.

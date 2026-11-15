@@ -509,7 +509,7 @@ struct TodayVitals: View {
         guard night.day == analysis.today else { return LumaText.dayTitle(night.day, today: analysis.today).lowercased() + "'s night" }
         switch analysis.night {
         case .cutOff, .stillGoing: return "part of last night"
-        case .none, .complete: return "last night"
+        case .none, .unjudged, .complete: return "last night"
         }
     }
 

@@ -559,7 +559,7 @@ public final class LumaEnv: ObservableObject {
         let built = LumaAnalysis.build(days: days, sleeps: sleeps, workouts: workouts, profile: profile, planned: planned,
                                        checkIns: checkIns, personalBests: runPBs, record: judged, recordAsOf: recordAsOf,
                                        reading: live.strap.reading, calibration: calibration,
-                                       partialNights: Set(nightMarks.map { $0.day }), today: today)
+                                       marks: nightMarks, today: today)
         analysis = built
         // Nothing is concluded about tonight's mark before the strap data has been read once.
         if loaded { mark(built.night, on: today) }
@@ -575,7 +575,8 @@ public final class LumaEnv: ObservableObject {
             marks.append(NightMark(day: day, at: at, resumes: resumes))
         case .complete, .none:
             marks.removeAll { $0.day == day }
-        case .stillGoing:
+        case .stillGoing, .unjudged:
+            // Not settled, or nothing to judge by: what was concluded before stands.
             break
         }
         keep(marks)
