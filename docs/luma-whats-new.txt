@@ -1,8 +1,10 @@
 Accuracy update.
-Heart rate is now live on every screen and on the Lock Screen card: the strap streams to the phone all
-the time, not only while the Heart screen is open. This uses more strap battery; it can be switched off
-under Settings, Recording. Keep Luma open in the background overnight: swiping it away stops the recording.
-Luma no longer shows a figure it did not measure. When part of a night never reached the phone it says
-so, with the times, marks that night's numbers, and leaves the night out of sleep debt and averages.
-A missing recovery score now comes with its real reason, for example how many more recorded nights it needs.
+Luma now asks the strap to send heart rate all the time, not only while the Heart screen is open, so
+every screen and the Lock Screen card can show it live and whole nights can be recorded. This uses more
+strap battery; switch it off under Settings, Recording. Keep Luma open in the background overnight:
+swiping it away stops the recording.
+Luma no longer shows a figure it did not measure. When part of a night, a session or the day never
+reached the phone it says so, with the times, marks the numbers, and leaves that night out of sleep debt
+and averages. A missing recovery score comes with its real reason, such as how many recorded nights it
+still needs.
 New under Settings: Data check shows, hour by hour, where heart rate reached the phone, and sends a report.
