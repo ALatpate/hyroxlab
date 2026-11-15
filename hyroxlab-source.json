@@ -21,11 +21,11 @@
       "versions": [
         {
           "version": "12.1.0",
-          "buildVersion": "12",
-          "date": "2026-11-14",
-          "localizedDescription": "Build 12. Each build now has its own download link, so an update always installs the build this page lists. The app is the same as build 11: every screen is Luma's own, sessions your strap recorded are offered to keep, the coach takes several photos, food and supplements are logged by photo or typing, and the Lock Screen card and widgets are redesigned.",
-          "downloadURL": "https://github.com/ALatpate/hyroxlab/releases/download/build-12/Luma.ipa",
-          "size": 24493609,
+          "buildVersion": "13",
+          "date": "2026-11-15",
+          "localizedDescription": "Build 13. Accuracy update. Luma now asks the strap to send heart rate all the time, not only while the Heart screen is open, so every screen and the Lock Screen card can show it live and whole nights can be recorded. This uses more strap battery; switch it off under Settings, Recording. Keep Luma open in the background overnight: swiping it away stops the recording. Luma no longer shows a figure it did not measure. When part of a night, a session or the day never reached the phone it says so, with the times, marks the numbers, and leaves that night out of sleep debt and averages. A missing recovery score comes with its real reason, such as how many recorded nights it still needs. New under Settings: Data check shows, hour by hour, where heart rate reached the phone, and sends a report.",
+          "downloadURL": "https://github.com/ALatpate/hyroxlab/releases/download/build-13/Luma.ipa",
+          "size": 24634723,
           "minOSVersion": "17.0"
         }
       ],
