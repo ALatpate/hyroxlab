@@ -71,8 +71,10 @@ public struct LumaStrap: Equatable {
         return secure ? "Connected" : "Connected, not paired"
     }
 
-    /// The strap's stored record is still arriving: being read now, or known to hold more than the phone has.
-    public var reading: Bool { connected && (syncing || historyPending) }
+    /// The strap's stored record is still arriving: being read now, or known to hold more than the phone
+    /// has. Not so for a strap that has handed over nothing in repeated reads: its reads go on being
+    /// tried, and saying "reading last night" each time would promise what does not come.
+    public var reading: Bool { connected && !historyEmpty && (syncing || historyPending) }
 }
 
 public struct LumaFoundStrap: Identifiable, Equatable {

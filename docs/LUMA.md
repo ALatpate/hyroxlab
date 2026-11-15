@@ -45,6 +45,9 @@ bridge implements them:
   give different reasons, and none names a cause that was not established. The same holds for the state
   of the data (`DataNotice.resolve`): Today and the strap screen carry the one card. Both state what
   the strap layer reports (`LiveState`), such as "holds data not yet read"; they do not re-derive it.
+  A strap that has handed over nothing in repeated reads is not announced as "being read" each time
+  another read is tried. A night with no heart-rate record behind it at all is `unjudged`: taken as
+  stored and said to be that, never passed off as whole.
 - **A missing figure is a dash.** No reading becomes a zero, and a figure from an earlier night says
   which night it is from. A heart-rate line is laid on the clock (`TimeGrid`, `RecordCheck.slots`), so
   time with no readings is a break in the line, not a stroke joining the two sides of it.

@@ -142,6 +142,9 @@ final class RecordTests: XCTestCase {
         XCTAssertEqual(notice(historyEmpty: true, continuous: false, syncError: "x"), .notRecording)
         XCTAssertEqual(notice(historyEmpty: true, syncError: "stopped early"), .syncError("stopped early"))
         XCTAssertNil(notice(historyEmpty: true))
+        // Its reads are still tried, and are not announced: nothing comes of them.
+        XCTAssertNil(notice(syncing: true, pending: true, historyEmpty: true))
+        XCTAssertEqual(notice(syncing: true, historyEmpty: true, night: cut), .hole(from: at(2, 0), to: at(9, 50), lost: true))
         XCTAssertNil(notice(syncError: ""))
         XCTAssertNil(notice(night: .stillGoing))
     }

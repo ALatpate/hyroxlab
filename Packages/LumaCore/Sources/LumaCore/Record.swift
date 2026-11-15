@@ -232,8 +232,12 @@ public enum DataNotice: Equatable, Sendable {
         guard connected else { return .offline(lastSync: lastSync) }
         if !secure { return .notPaired }
         if needsRestart { return .needsRestart }
-        if syncing { return .reading(parts: parts) }
-        if pending { return .pending }
+        // A strap that has handed over nothing in repeated reads is not "being read": the attempts go
+        // on in the background and nothing comes of them, so they are not announced each time.
+        if !historyEmpty {
+            if syncing { return .reading(parts: parts) }
+            if pending { return .pending }
+        }
         if case .cutOff(let at, let resumes) = night { return .hole(from: at, to: resumes, lost: historyEmpty) }
         if historyEmpty && !continuous { return .notRecording }
         if let error = syncError, !error.isEmpty { return .syncError(error) }
