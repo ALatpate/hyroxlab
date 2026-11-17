@@ -9,7 +9,7 @@ everything described here sits beside it. [`AGENTS.md`](../AGENTS.md) still gove
 
 | Path | What lives here |
 |---|---|
-| `Packages/LumaCore` | Pure Foundation, no UI, builds and tests on Linux. Models, analysis (recovery, sleep, load, running, fitness, race readiness), the food and supplement model, session state machines, and the coach's wire format and tools. |
+| `Packages/LumaCore` | Pure Foundation, no UI, builds and tests on Linux. Models, analysis (recovery, sleep, load, running, fitness, race readiness), the training log with its muscle model and progress read, the body figure's outlines, the food and supplement model, session state machines, and the coach's wire format and tools. |
 | `Packages/LumaUI`, target `LumaKit` | Design tokens, primitives, the glance snapshot, and the views for widgets and the Lock Screen card. No dependencies, so the widget extension links it alone. |
 | `Packages/LumaUI`, target `LumaUI` | Every screen, the charts, the environment object (`LumaEnv`), the session controllers and the coach engine. Depends on `LumaCore` and re-exports `LumaKit`. |
 | `LumaGallery/` | A small host app that mounts `LumaUI` over demo data. Used only to build and photograph the screens quickly. |
@@ -66,6 +66,45 @@ bridge implements them:
   is stored until the athlete keeps one. A kept or hand-logged session is stored as a manual row, and
   the strap layer then fills its heart rate and strain from its own record at read time. The search
   reads days of raw heart rate, so it runs only while the app is on screen.
+- **The training log holds what was done, and only what is known of it.** A logged session
+  (`LiftSession`) carries its kind, its movements and sets, where it was logged from and, when it was
+  read from a photo, the photo and the board as it was written. A set counts reps, distance, time or
+  calories. A load is only what was written for the athlete, said by them or typed in: reading a board
+  never fills one in (`CoachPrompt.workoutExtraction`), and a set without a load counts as work and
+  gives no estimated max. Photos are read in one go into separate sessions, each sorted into its kind,
+  and nothing is saved until the athlete has checked it (`WorkoutPhotoSheet`). A logged session of a
+  fitting kind marks that day's plan entry done through `Schedule.days`, which the calendar and the
+  coach both read.
+- **A movement has one name.** `ExerciseLibrary.match` files a movement under Luma's own name when it
+  knows it by that wording, so its history lines up whether it came from a photo, the coach or the
+  picker. A variation ("paused back squat") keeps the name it was given, takes the muscles of the lift
+  it varies, and is not graded. "Row" alone is the machine; a row inside a longer name is a lift.
+- **An estimated max has one definition** (`LiftMath.estimate`): Epley, from done sets of 12 reps or
+  fewer with a load. A pull-up, chin-up or dip counts bodyweight plus whatever was added. Best lifts,
+  the session screen, the Progress view and the coach all read it.
+- **Strength levels are Luma's own yardstick, and say so.** `StrengthScale` grades a lift by its
+  estimated max as a multiple of bodyweight against five fixed marks, set around milestones lifters
+  commonly use; women's marks are scaled by a rule of thumb. It is not a population percentile and no
+  screen calls it one. A lift's figure is the best of its last six weeks (or of the six before, when
+  it has not been lifted since), and progress is that against the six weeks before. A muscle takes the
+  level of the graded lift that measures it. A muscle no graded lift of the last twelve weeks measures
+  is "not measured": a dashed outline on the figure, never drawn as low.
+- **Sets for a muscle are counted one way** (`TrainingProgress.sets`): 1 where a movement trains the
+  muscle directly, ½ where the muscle assists, and nothing for a run or an erg. That is the
+  "fractional" count of Pelland et al. (SportRxiv, 2024). The groups shown beside it (under 5, 5 to 9,
+  10 or more a week) are those Schoenfeld, Ogborn and Krieger compared (J Sports Sci, 2017); the app
+  gives them as how studies grouped weekly sets, with their limits, not as a target.
+- **A weak point comes with its evidence.** A lift graded well below the others, a lift whose
+  estimate has fallen, muscle groups no logged session has reached in two weeks (said only once three
+  sessions are logged in that time), and muscles at half their usual work: each names the lift or the
+  count behind it (`TrainingProgress.weakNotes`).
+- **A habit read from a log is only known on days that have the log** (`EffectFactor.known`). Alcohol,
+  late caffeine and a late meal can be ticked in a check-in or read from the food log; each is one
+  factor fed by both. A supplement is compared only from its first logged day. The food log is set
+  against training only on days full enough to read (two entries and 1,000 kcal). Findings are worded
+  as patterns with their counts, never as causes.
+- **The body figure is Luma's own drawing** (`BodyMap`): closed smooth curves through hand-placed
+  points, the right half written down and the left its mirror image. No third-party artwork.
 - **Race predictions come from one resolver** (`RaceReadiness.assess`), and the live race screen takes
   its targets from the same model (`RaceReadiness.targets`).
 - **Stored identifiers are never renamed.** Bundle ids, the App Group, `noop.*` defaults keys, the
@@ -110,7 +149,9 @@ SideStore pointing at that release.
 
 None of this exercises a strap. Pairing, sync, buzzes, the double tap, live recording and the Lock
 Screen card's real cadence have to be checked on a phone with a strap, as do Health access under a
-sideload signature and a real coach request. A change is not verified on hardware until someone says
+sideload signature and a real coach request. Reading workouts from photos is a coach request: the
+gallery has no coach, so it opens the checking step on a read made up for it (`sheet.workouts.review`),
+and how well real boards and screens are read is only known from a phone. A change is not verified on hardware until someone says
 what they tried.
 
 Still to be confirmed on a strap: that recording all the time keeps the app receiving heart rate through

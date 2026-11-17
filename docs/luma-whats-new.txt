@@ -1,10 +1,10 @@
-Accuracy update.
-Luma now asks the strap to send heart rate all the time, not only while the Heart screen is open, so
-every screen and the Lock Screen card can show it live and whole nights can be recorded. This uses more
-strap battery; switch it off under Settings, Recording. Keep Luma open in the background overnight:
-swiping it away stops the recording.
-Luma no longer shows a figure it did not measure. When part of a night, a session or the day never
-reached the phone it says so, with the times, marks the numbers, and leaves that night out of sleep debt
-and averages. A missing recovery score comes with its real reason, such as how many recorded nights it
-still needs.
-New under Settings: Data check shows, hour by hour, where heart rate reached the phone, and sends a report.
+Training log and progress.
+Train has a new button: Add from photos. Pick up to eight pictures of your workouts (the board, the
+class screen, your tracking app). Luma reads them, splits them into sessions, sorts each one by type
+and lists the movements and sets. You check it, add the loads you used, and save. This uses your coach key.
+Train also has a new Progress view. A body figure, front and back, shows each muscle's strength level,
+how it is moving, and how much work it got this week; tap a muscle for the numbers. Below it: strong
+and weak points, each lift's estimated max over time, sets by muscle, your food set against training
+days, how often you took each supplement, and what your habits do to the next morning.
+Strength levels are Luma's own scale and the maxes are estimates from your logged sets. A muscle with
+no loaded lift behind it shows as not measured, not as weak.
