@@ -679,6 +679,9 @@ enum LumaText {
 
     static func km(_ metres: Double, decimals: Int = 2) -> String { String(format: "%.\(decimals)f", metres / 1000) }
 
+    /// A load as it is written on a bar: "100", "102.5".
+    static func kg(_ v: Double) -> String { v == v.rounded() ? String(format: "%.0f", v) : String(format: "%.1f", v) }
+
     /// Facts on one line, separated by dots. When the line wraps, a value stays with its unit and the
     /// dot stays at the end of the line it closes rather than opening the next one.
     static func line(_ parts: [String]) -> String {

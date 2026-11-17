@@ -196,6 +196,7 @@ struct LumaSheetView: View {
         case .routine: RoutineSheet()
         case .coachSetup: CoachSetupSheet()
         case .manualWorkout: ManualWorkoutSheet()
+        case .workoutPhotos(let day): WorkoutPhotoSheet(day: day)
         }
     }
 }
@@ -246,6 +247,9 @@ enum LumaRoute {
         case "train.lift":
             if let first = env.lifts.sorted(by: { $0.start > $1.start }).first { r.open(.train, .lift(first.id)) } else { r.tab = .train }
         case "train.strength": r.open(.train, .strength)
+        case "train.progress": r.tab = .train; r.trainView = .progress
+        case "sheet.workouts": r.tab = .train; r.sheet = .workoutPhotos(today)
+        case "sheet.workouts.review": r.tab = .train; LumaLaunch.page = 1; r.sheet = .workoutPhotos(today)
         case "train.history": r.open(.train, .history)
         case "fuel": r.tab = .fuel
         case "fuel.supplements": r.open(.fuel, .supplements)

@@ -237,7 +237,7 @@ final class AthleteTests: XCTestCase {
         XCTAssertEqual(LiftMath.e1RM(kg: 100, reps: 1), 100)
         XCTAssertEqual(LiftMath.e1RM(kg: 100, reps: 5), 100 * (1 + 5.0 / 30), accuracy: 1e-9)
         let s = LumaDemoContent.lifts(today: Date(timeIntervalSince1970: 1_794_657_600))
-        let rec = LiftMath.records(s)
+        let rec = LiftMath.records(s, bodyKg: 78)
         XCTAssertNotNil(rec["Back squat"])
         XCTAssertFalse(LiftMath.lastSets("Back squat", in: s).isEmpty)
     }

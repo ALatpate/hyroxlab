@@ -11,24 +11,32 @@ struct StrengthScreen: View {
 
     var body: some View {
         let sessions = env.lifts.sorted { $0.start > $1.start }
-        let records = LiftMath.records(env.lifts).sorted { $0.value.e1RM > $1.value.e1RM }
-        LumaDetailScreen(title: "Strength", tone: .strain) {
-            Button { router.cover = .lift } label: { Label("Start a strength session", systemImage: "dumbbell.fill").frame(maxWidth: .infinity) }
-                .buttonStyle(LumaPrimaryButtonStyle())
+        let records = LiftMath.records(env.lifts, bodyKg: env.profile.weightKg).sorted { $0.value.e1RM > $1.value.e1RM }
+        LumaDetailScreen(title: "Training log", tone: .strain) {
+            HStack(spacing: 10) {
+                Button { router.sheet = .workoutPhotos(env.today) } label: {
+                    Label("From photos", systemImage: "photo.on.rectangle.angled").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(LumaPrimaryButtonStyle(compact: false))
+                Button { router.cover = .lift } label: { Label("Set by set", systemImage: "dumbbell.fill").frame(maxWidth: .infinity) }
+                    .buttonStyle(LumaSecondaryButtonStyle())
+            }
             if sessions.isEmpty {
                 LumaCard {
-                    LumaEmpty(symbol: "dumbbell", title: "No strength sessions yet",
-                              message: "Log sets and loads as you lift. Luma keeps your best lifts and prefills your last numbers next time.")
+                    LumaEmpty(symbol: "dumbbell", title: "Nothing logged yet",
+                              message: "Add sessions from photos of the board or your tracking app, or log a strength session set by set. Luma keeps your best lifts and offers your last loads next time.")
                 }
             } else {
-                volumeCard(sessions)
-                LumaSection(title: "Best lifts")
-                LumaGroup {
-                    ForEach(records.prefix(12), id: \.key) { name, rec in
-                        LumaRow(symbol: "trophy.fill", symbolColor: Luma.amber, title: name, subtitle: "Set \(LumaText.shortDay(rec.day))") {
-                            HStack(alignment: .firstTextBaseline, spacing: 3) {
-                                Text(String(format: "%.0f", rec.e1RM)).font(LumaFont.numeral(22)).foregroundStyle(Luma.frost)
-                                Text("kg est. 1RM").font(LumaFont.body(11)).foregroundStyle(Luma.smoke)
+                if sessions.contains(where: { $0.volumeKg > 0 }) { volumeCard(sessions.filter { $0.volumeKg > 0 }) }
+                if !records.isEmpty {
+                    LumaSection(title: "Best lifts")
+                    LumaGroup {
+                        ForEach(records.prefix(12), id: \.key) { name, rec in
+                            LumaRow(symbol: "trophy.fill", symbolColor: Luma.amber, title: name, subtitle: "Set \(LumaText.shortDay(rec.day))") {
+                                HStack(alignment: .firstTextBaseline, spacing: 3) {
+                                    Text(String(format: "%.0f", rec.e1RM)).font(LumaFont.numeral(22)).foregroundStyle(Luma.frost)
+                                    Text("kg est. max").font(LumaFont.body(11)).foregroundStyle(Luma.smoke)
+                                }
                             }
                         }
                     }
@@ -37,10 +45,12 @@ struct StrengthScreen: View {
                 LumaGroup {
                     ForEach(sessions) { s in
                         Button { router.push(.lift(s.id)) } label: {
-                            LumaRow(symbol: "dumbbell.fill", symbolColor: Luma.ember, title: s.title,
-                                    subtitle: "\(LumaText.shortDay(s.day)) · \(s.exercises.count) exercises · \(s.doneSets) sets", chevron: true) {
-                                Text(LFormat.grouped(s.volumeKg)).font(LumaFont.numeral(18, .semibold)).foregroundStyle(Luma.frost)
-                                Text("kg").font(LumaFont.body(11)).foregroundStyle(Luma.smoke)
+                            LumaRow(symbol: s.resolvedKind.sport.symbol, symbolColor: s.resolvedKind.sport.tone.color, title: s.title,
+                                    subtitle: "\(LumaText.shortDay(s.day)) · \(LoggedSessionCard.line(s))", chevron: true) {
+                                if s.volumeKg > 0 {
+                                    Text(LFormat.grouped(s.volumeKg)).font(LumaFont.numeral(18, .semibold)).foregroundStyle(Luma.frost)
+                                    Text("kg").font(LumaFont.body(11)).foregroundStyle(Luma.smoke)
+                                }
                             }
                         }
                         .buttonStyle(.plain)
@@ -54,7 +64,7 @@ struct StrengthScreen: View {
         let recent = Array(sessions.prefix(12).reversed())
         return LumaCard {
             VStack(alignment: .leading, spacing: 10) {
-                LumaLabel("Volume per session (kg lifted)")
+                LumaLabel("Load lifted per session (kg)")
                 LumaBarChart(bars: recent.enumerated().map { i, s in
                     LumaBarChart.Bar(id: i, value: s.volumeKg, color: Luma.ember, label: LumaText.shortDay(s.day))
                 }, height: 140, format: { LFormat.grouped($0) })
@@ -63,49 +73,99 @@ struct StrengthScreen: View {
     }
 }
 
+/// One logged session in full: what it was, every movement and set, the board it was read from.
 struct LiftDetailScreen: View {
     let id: UUID
     @EnvironmentObject private var env: LumaEnv
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        LumaDetailScreen(title: "Strength session", tone: .strain) {
+        LumaDetailScreen(title: env.lifts.first(where: { $0.id == id })?.resolvedKind.title ?? "Session", tone: .strain) {
             if let s = env.lifts.first(where: { $0.id == id }) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(s.title).font(LumaFont.title(26)).foregroundStyle(Luma.frost)
-                    Text(s.start.formatted(date: .complete, time: .shortened)).font(LumaFont.body(13.5)).foregroundStyle(Luma.mist)
+                    Text(heading(s)).font(LumaFont.body(13.5)).foregroundStyle(Luma.mist)
                 }
                 StatGrid {
-                    StatCell(label: "Volume", value: LFormat.grouped(s.volumeKg), unit: "kg")
+                    StatCell(label: "Movements", value: "\(s.exercises.count)")
                     StatCell(label: "Sets", value: "\(s.doneSets)")
+                    if s.volumeKg > 0 { StatCell(label: "Load lifted", value: LFormat.grouped(s.volumeKg), unit: "kg") }
+                    if let m = s.minutes { StatCell(label: "Length", value: "\(Int(m.rounded()))", unit: "min") }
                 }
                 ForEach(s.exercises) { e in
-                    LumaCard {
-                        VStack(alignment: .leading, spacing: 10) {
-                            HStack {
-                                Text(e.name).font(LumaFont.heading(16)).foregroundStyle(Luma.frost)
-                                Spacer()
-                                if let best = e.bestE1RM { Text(String(format: "est. 1RM %.0f kg", best)).font(LumaFont.body(12.5)).foregroundStyle(Luma.mist) }
-                            }
-                            ForEach(Array(e.sets.filter { $0.done }.enumerated()), id: \.offset) { i, set in
-                                HStack {
-                                    Text("Set \(i + 1)").font(LumaFont.body(13.5)).foregroundStyle(Luma.smoke).frame(width: 52, alignment: .leading)
-                                    Text("\(set.reps)").font(LumaFont.numeral(20)).foregroundStyle(Luma.frost)
-                                    Text("×").foregroundStyle(Luma.smoke)
-                                    Text(set.kg == set.kg.rounded() ? String(format: "%.0f", set.kg) : String(format: "%.1f", set.kg)).font(LumaFont.numeral(20)).foregroundStyle(Luma.frost)
-                                    Text("kg").font(LumaFont.body(11)).foregroundStyle(Luma.smoke)
-                                    Spacer()
-                                }
-                            }
-                        }
+                    LumaCard(padding: 16) { LiftExerciseDetail(exercise: e, bodyKg: env.profile.weightKg) }
+                }
+                if let written = s.asWritten, !written.isEmpty {
+                    LumaSection(title: "As it was written")
+                    LumaCard(padding: 16) {
+                        Text(written).font(LumaFont.body(14)).foregroundStyle(Luma.mist).fixedSize(horizontal: false, vertical: true)
                     }
                 }
+                photos(s)
                 if !s.note.isEmpty { LumaNote(s.note) }
                 Button("Delete this session") {
                     env.delete(s)
                     dismiss()
                 }
                 .font(LumaFont.body(15, .semibold)).foregroundStyle(Luma.coral).buttonStyle(.plain).frame(maxWidth: .infinity)
+            }
+        }
+    }
+
+    private func heading(_ s: LiftSession) -> String {
+        let when = s.source == "live" || s.source == nil ? s.start.formatted(date: .complete, time: .shortened)
+                                                          : s.start.formatted(date: .complete, time: .omitted)
+        switch s.source {
+        case "photo": return when + " · read from a photo"
+        case "coach": return when + " · logged by the coach"
+        default: return when
+        }
+    }
+
+    @ViewBuilder
+    private func photos(_ s: LiftSession) -> some View {
+        let images: [UIImage] = (s.photos ?? []).compactMap { env.photoData($0) }.compactMap { UIImage(data: $0) }
+        if !images.isEmpty {
+            ScrollView(.horizontal) {
+                HStack(spacing: 10) {
+                    ForEach(Array(images.enumerated()), id: \.offset) { _, image in
+                        Image(uiImage: image).resizable().scaledToFit().frame(height: 220)
+                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    }
+                }
+            }
+            .scrollIndicators(.hidden)
+        }
+    }
+}
+
+/// One movement of a logged session: its sets as they were counted, and the max they point to.
+struct LiftExerciseDetail: View {
+    let exercise: LiftExercise
+    let bodyKg: Double
+
+    var body: some View {
+        let done = exercise.sets.filter { $0.done && $0.hasContent }
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(exercise.name).font(LumaFont.heading(16)).foregroundStyle(Luma.frost)
+                Spacer()
+                if let best = LiftMath.best(exercise, bodyKg: bodyKg) {
+                    Text(String(format: "est. max %.0f kg", best)).font(LumaFont.body(12.5)).foregroundStyle(Luma.mist)
+                }
+            }
+            if let note = exercise.note, !note.isEmpty {
+                Text(note).font(LumaFont.body(13)).foregroundStyle(Luma.mist).fixedSize(horizontal: false, vertical: true)
+            }
+            if done.isEmpty {
+                Text("No sets listed").font(LumaFont.body(13.5)).foregroundStyle(Luma.smoke)
+            }
+            ForEach(Array(done.enumerated()), id: \.offset) { i, set in
+                HStack {
+                    Text("Set \(i + 1)").font(LumaFont.body(13.5)).foregroundStyle(Luma.smoke).frame(width: 52, alignment: .leading)
+                    Text(set.text).font(LumaFont.numeral(19, .semibold)).foregroundStyle(Luma.frost)
+                    Spacer()
+                }
             }
         }
     }
@@ -118,7 +178,7 @@ struct LiftLiveScreen: View {
     @EnvironmentObject private var env: LumaEnv
     @EnvironmentObject private var live: LumaLive
     @Environment(\.dismiss) private var dismiss
-    @State private var session = LiftSession(title: "Strength")
+    @State private var session = LiftSession(title: "Strength", kind: .strength, source: "live")
     @State private var started = Date()
     @State private var now = Date()
     @State private var restUntil: Date?

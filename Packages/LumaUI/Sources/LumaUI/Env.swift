@@ -224,6 +224,8 @@ enum LumaSheetDest: Identifiable {
     case routine
     case coachSetup
     case manualWorkout
+    /// Add sessions to the training log from photos; the day they are filed under when no photo says.
+    case workoutPhotos(String)
 
     var id: String {
         switch self {
@@ -235,11 +237,15 @@ enum LumaSheetDest: Identifiable {
         case .routine: return "routine"
         case .coachSetup: return "coach-setup"
         case .manualWorkout: return "manual-workout"
+        case .workoutPhotos(let d): return "workout-photos-\(d)"
         }
     }
 }
 
 enum FuelAddMode: String { case meal, photo, supplement, water }
+
+/// The two faces of the Train tab: the calendar of what is planned and done, and what it has added up to.
+enum TrainView: String { case calendar, progress }
 
 enum LumaCoverDest: Identifiable {
     case run(RunPlan)
@@ -280,6 +286,7 @@ public final class LumaRouter: ObservableObject {
     @Published var coachPath: [LumaDest] = []
     @Published var sheet: LumaSheetDest?
     @Published var cover: LumaCoverDest?
+    @Published var trainView: TrainView = .calendar
     /// A question handed to the coach from elsewhere in the app.
     @Published var coachPrompt: String?
 
@@ -433,10 +440,13 @@ public final class LumaEnv: ObservableObject {
     @Published public var profile: LProfile { didSet { if profile != oldValue { disk.save(profile, "profile.json"); onProfileChange?(profile); refreshAnalysis() } } }
     @Published var routine: [RoutineSlot] { didSet { disk.save(routine, "routine.json") } }
     @Published var planned: [PlannedSession] { didSet { disk.save(planned, "planned.json") } }
-    @Published var fuel: [FuelEntry] { didSet { disk.save(fuel, "fuel.json") } }
-    @Published var supplements: [SupplementPlan] { didSet { disk.save(supplements, "supplements.json") } }
+    @Published var fuel: [FuelEntry] { didSet { disk.save(fuel, "fuel.json"); refreshProgress() } }
+    @Published var supplements: [SupplementPlan] { didSet { disk.save(supplements, "supplements.json"); refreshProgress() } }
     @Published var checkIns: [CheckIn] { didSet { disk.save(checkIns, "checkins.json") } }
-    @Published var lifts: [LiftSession] { didSet { disk.save(lifts, "lifts.json") } }
+    @Published var lifts: [LiftSession] { didSet { disk.save(lifts, "lifts.json"); refreshProgress() } }
+    /// What the training, food and supplement logs add up to: lifts, muscles, strong and weak points.
+    /// Rebuilt whenever a log it reads changes, so every screen that shows a figure from it shows the same one.
+    @Published private(set) var progress: TrainingProgress = .empty
     @Published private(set) var sessions: [HXSession] = []
     @Published private(set) var benchmarks = Benchmarks()
     @Published var runPBs: [PersonalBest] { didSet { disk.save(runPBs, "runpbs.json") } }
@@ -468,6 +478,8 @@ public final class LumaEnv: ObservableObject {
         dismissedStretches = SessionSuggestions.prune(Set(disk.load([String].self, "stretches-dismissed.json") ?? []),
                                                       now: Date().timeIntervalSince1970)
         nightMarks = disk.load([NightMark].self, "night-marks.json") ?? []
+        progress = TrainingProgress.build(lifts: lifts, workouts: [], fuel: fuel, supplements: supplements, profile: profile,
+                                          today: LumaAnalysis.todayKey())
         sessions = disk.list(prefix: "session-").compactMap { disk.load(HXSession.self, $0) }.sorted { $0.startedAt > $1.startedAt }
         // Whether the strap's record is still arriving decides what Luma says about the night, so the
         // analysis is rebuilt the moment that changes, not at the next reload.
@@ -559,13 +571,20 @@ public final class LumaEnv: ObservableObject {
         // they are taken at; only a staged situation is judged against a record.
         let judged: [RecordStretch] = (isDemo && demoScenario == nil) ? [] : record
         let built = LumaAnalysis.build(days: days, sleeps: sleeps, workouts: workouts, profile: profile, planned: planned,
-                                       checkIns: checkIns, personalBests: runPBs, record: judged, recordAsOf: recordAsOf,
+                                       checkIns: checkIns, personalBests: runPBs, fuel: fuel, supplements: supplements,
+                                       record: judged, recordAsOf: recordAsOf,
                                        reading: live.strap.reading, calibration: calibration,
                                        marks: nightMarks, today: today)
         analysis = built
+        refreshProgress()
         // Nothing is concluded about tonight's mark before the strap data has been read once.
         if loaded { mark(built.night, on: today) }
         onGlanceChange?()
+    }
+
+    func refreshProgress() {
+        progress = TrainingProgress.build(lifts: lifts, workouts: workouts, fuel: fuel, supplements: supplements, profile: profile,
+                                          today: LumaAnalysis.todayKey())
     }
 
     /// Records today's verdict: a night found cut off is marked, one found whole is unmarked.
@@ -673,7 +692,7 @@ public final class LumaEnv: ObservableObject {
     // MARK: Schedule
 
     func scheduleDays(_ keys: [String]) -> [ScheduleDay] {
-        Schedule.days(keys, planned: planned, workouts: workouts)
+        Schedule.days(keys, planned: planned, workouts: workouts, logs: lifts)
     }
 
     func upsert(_ p: PlannedSession) {

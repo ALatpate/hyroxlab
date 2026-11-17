@@ -384,27 +384,66 @@ public enum LumaDemoContent {
         return out
     }
 
+    /// Twelve weeks of training log: two strength sessions a week logged set by set, and a HYROX
+    /// class and a conditioning class a week read from photos of the board. The squat climbs, the
+    /// bench has slipped and the push press sits a level below the rest, so the progress view has
+    /// something of each kind to show.
     public static func lifts(today: Date = Date()) -> [LiftSession] {
         func sets(_ kg: Double, _ reps: Int, _ n: Int) -> [LiftSet] { (0..<n).map { _ in LiftSet(reps: reps, kg: kg, done: true) } }
-        return (0..<8).map { i in
+        func lengths(_ m: Double, _ kg: Double, _ n: Int) -> [LiftSet] {
+            (0..<n).map { _ in LiftSet(reps: 0, kg: kg, done: true, meters: m) }
+        }
+        func holds(_ s: Double, _ n: Int) -> [LiftSet] { (0..<n).map { _ in LiftSet(reps: 0, kg: 0, done: true, seconds: s) } }
+        var out: [LiftSession] = []
+        for i in 0..<24 {
             let d = today.addingTimeInterval(-Double(i) * 3.5 * 86_400 - 9 * 3600)
-            let gain = Double(8 - i) * 1.25
+            let week = Double(23 - i) / 2
+            let squat: Double = 100 + (week * 1.25).rounded()
+            let hinge: Double = 85 + week.rounded()
+            let bench: Double = week < 6 ? 80 : 75
             let lower: [LiftExercise] = [
-                LiftExercise(name: "Back squat", sets: sets(100 + gain, 5, 4)),
-                LiftExercise(name: "Romanian deadlift", sets: sets(90 + gain, 8, 3)),
+                LiftExercise(name: "Back squat", sets: sets(squat, 5, 4)),
+                LiftExercise(name: "Romanian deadlift", sets: sets(hinge, 8, 3)),
                 LiftExercise(name: "Walking lunge", sets: sets(30, 12, 3)),
-                LiftExercise(name: "Sled push", sets: sets(140 + gain * 2, 1, 4)),
+                LiftExercise(name: "Calf raise", sets: sets(60, 12, 2)),
             ]
             let upper: [LiftExercise] = [
-                LiftExercise(name: "Bench press", sets: sets(75 + gain * 0.6, 5, 4)),
+                LiftExercise(name: "Bench press", sets: sets(bench, 5, 4)),
                 LiftExercise(name: "Pull-up", sets: sets(10, 6, 4)),
-                LiftExercise(name: "Push press", sets: sets(52.5 + gain * 0.5, 6, 3)),
-                LiftExercise(name: "Wall ball", sets: sets(6, 25, 3)),
+                LiftExercise(name: "Push press", sets: sets(45, 6, 3)),
+                LiftExercise(name: "Barbell row", sets: sets(60, 8, 3)),
             ]
             let lowerDay = i % 2 == 0
-            return LiftSession(start: d, end: d.addingTimeInterval(3300), title: lowerDay ? "Lower body strength" : "Upper body strength",
-                               exercises: lowerDay ? lower : upper)
+            out.append(LiftSession(start: d, end: d.addingTimeInterval(3300), title: lowerDay ? "Lower body strength" : "Upper body strength",
+                                   exercises: lowerDay ? lower : upper, kind: .strength, source: "live"))
         }
+        for i in 0..<11 {
+            let d = today.addingTimeInterval(-Double(i * 7 + 2) * 86_400 - 10 * 3600)
+            let race: [LiftExercise] = [
+                LiftExercise(name: "SkiErg", sets: lengths(500, 0, 4)),
+                LiftExercise(name: "Sled push", sets: lengths(25, 152, 4)),
+                LiftExercise(name: "Sled pull", sets: lengths(25, 103, 4)),
+                LiftExercise(name: "Burpee broad jump", sets: lengths(20, 0, 4)),
+                LiftExercise(name: "Farmers carry", sets: lengths(50, 24, 4), note: "24 kg in each hand"),
+                LiftExercise(name: "Wall ball", sets: sets(6, 25, 4)),
+                LiftExercise(name: "Run", sets: lengths(400, 0, 4)),
+            ]
+            let board = "4 rounds\n500 m ski\n25 m sled push 152 kg\n25 m sled pull 103 kg\n20 m burpee broad jump\n50 m farmers carry 2 x 24 kg\n25 wall balls 6 kg\n400 m run"
+            out.append(LiftSession(start: d, end: d.addingTimeInterval(3900), title: "HYROX class", exercises: race, kind: .hyrox,
+                                   source: "photo", asWritten: board))
+            let c = today.addingTimeInterval(-Double(i * 7 + 5) * 86_400 - 10 * 3600)
+            let circuit: [LiftExercise] = [
+                LiftExercise(name: "Thruster", sets: sets(30, 10, 5)),
+                LiftExercise(name: "Kettlebell swing", sets: sets(24, 15, 5)),
+                LiftExercise(name: "Row", sets: lengths(250, 0, 5)),
+                LiftExercise(name: "Push-up", sets: sets(0, 12, 5)),
+                LiftExercise(name: "Plank", sets: holds(60, 3)),
+            ]
+            let plan = "5 rounds, 90 s rest\n10 thrusters 30 kg\n15 kettlebell swings 24 kg\n250 m row\n12 push-ups\nFinisher: 3 x 60 s plank"
+            out.append(LiftSession(start: c, end: c.addingTimeInterval(3000), title: "Conditioning class", exercises: circuit, kind: .gymClass,
+                                   source: "photo", asWritten: plan))
+        }
+        return out.sorted { $0.start > $1.start }
     }
 }
 

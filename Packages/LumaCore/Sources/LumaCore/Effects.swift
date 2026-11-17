@@ -50,43 +50,95 @@ public struct LinkFinding: Equatable, Sendable, Identifiable {
     public let sentence: String
 }
 
+/// A habit or circumstance, as the set of days it applied to.
+public struct EffectFactor: Sendable {
+    public let key: String
+    public let title: String
+    /// How it reads after the word "After".
+    public let phrase: String
+    public let days: Set<String>
+    /// The days on which it is known whether the factor applied. A habit read from a log is only
+    /// known on days that have the log; nil means every day with strap data.
+    public let known: Set<String>?
+}
+
 public enum EffectModel {
     public static let minimumWith = 4
     public static let minimumWithout = 8
+    /// Caffeine from this hour of the day counts as late; a meal from `lateMealHour` does.
+    public static let lateCaffeineHour = 14
+    public static let lateMealHour = 21
 
-    /// Named day sets: the check-in tags plus circumstances derived from the data itself. A factor on
-    /// day D is tested against the night that ends on D+1.
-    public static func factors(days: [LDay], checkIns: [CheckIn], workouts: [LWorkout], calendar: Calendar = LDate.calendar)
-        -> [(key: String, title: String, phrase: String, days: Set<String>)] {
-        var out: [(key: String, title: String, phrase: String, days: Set<String>)] = []
+    /// Named day sets: what the athlete ticked in a check-in or logged in the food and supplement
+    /// logs, plus circumstances derived from the strap data itself. A factor on day D is tested
+    /// against the night that ends on D+1.
+    ///
+    /// Alcohol, late caffeine and a late meal can be ticked in a check-in or read from the food log;
+    /// either way they are one habit, so each is one factor fed by both.
+    public static func factors(days: [LDay], checkIns: [CheckIn], workouts: [LWorkout], fuel: [FuelEntry] = [],
+                               supplements: [SupplementPlan] = [], profile: LProfile? = nil,
+                               calendar: Calendar = LDate.calendar) -> [EffectFactor] {
+        var out: [EffectFactor] = []
+        let checked = Set(checkIns.map { $0.day })
+        let food = fuel.filter { $0.kind != .water && $0.kind != .supplement }
+        let foodByDay = Dictionary(grouping: food, by: { $0.day })
+        let foodDays = Set(foodByDay.keys)
+        func hour(_ e: FuelEntry) -> Int { calendar.component(.hour, from: e.at) }
+        var fromLog: [CheckInTag: Set<String>] = [:]
+        fromLog[.alcohol] = Set(food.filter { $0.alcoholG > 0 }.map { $0.day })
+        fromLog[.lateCaffeine] = Set(food.filter { $0.caffeineMg > 0 && hour($0) >= lateCaffeineHour }.map { $0.day })
+        fromLog[.lateMeal] = Set(food.filter { $0.kind != .drink && $0.kcal >= 200 && hour($0) >= lateMealHour }.map { $0.day })
         for tag in CheckInTag.allCases {
-            let set = Set(checkIns.filter { $0.tags.contains(tag) }.map { $0.day })
-            if !set.isEmpty { out.append((tag.rawValue, tag.title, tag.phrase, set)) }
+            let ticked = Set(checkIns.filter { $0.tags.contains(tag) }.map { $0.day })
+            let logged = fromLog[tag]
+            let set = ticked.union(logged ?? [])
+            // A check-in answers for every tag; the food log answers only for what it can show.
+            let known = logged == nil ? checked : checked.union(foodDays)
+            if !set.isEmpty { out.append(EffectFactor(key: tag.rawValue, title: tag.title, phrase: tag.phrase, days: set, known: known)) }
+        }
+        if let profile {
+            // Protein is judged only on days whose food log is full enough to read.
+            let usable = Set(foodByDay.filter { TrainingProgress.isUsable($0.value) }.keys)
+            let target = FuelPlanner.proteinTarget(profile)
+            let met = usable.filter { FuelTotals.of(foodByDay[$0] ?? []).proteinG >= target }
+            if !met.isEmpty {
+                out.append(EffectFactor(key: "proteinMet", title: "Protein target met", phrase: "a day at your protein target",
+                                        days: met, known: usable))
+            }
+        }
+        for plan in supplements where plan.active {
+            let taken = TrainingProgress.supplementDays(plan.dose.name, fuel: fuel)
+            guard let first = taken.min() else { continue }
+            // Before the first log there is no telling whether it was being taken.
+            let known = Set(days.map { $0.day }.filter { $0 >= first })
+            out.append(EffectFactor(key: "supplement:" + plan.dose.name, title: plan.dose.name,
+                                    phrase: "a day you took " + plan.dose.name.lowercased(), days: taken, known: known))
         }
         let hard = Set(days.filter { ($0.strain.map(LScale.strain21) ?? 0) >= 14 }.map { $0.day })
-        if !hard.isEmpty { out.append(("hardDay", "Hard training day", "a hard training day", hard)) }
+        if !hard.isEmpty { out.append(EffectFactor(key: "hardDay", title: "Hard training day", phrase: "a hard training day", days: hard, known: nil)) }
         let late = Set(workouts.filter { w in
             let end = Date(timeIntervalSince1970: w.end)
             let c = calendar.dateComponents([.hour, .minute], from: end)
             return (c.hour ?? 0) * 60 + (c.minute ?? 0) >= 19 * 60 + 30
         }.map { $0.day })
-        if !late.isEmpty { out.append(("lateSession", "Evening session", "an evening session", late)) }
+        if !late.isEmpty { out.append(EffectFactor(key: "lateSession", title: "Evening session", phrase: "an evening session", days: late, known: nil)) }
         let trained = Set(workouts.map { $0.day })
         let rest = Set(days.map { $0.day }).subtracting(trained)
-        if !rest.isEmpty, !trained.isEmpty { out.append(("restDay", "Rest day", "a rest day", rest)) }
+        if !rest.isEmpty, !trained.isEmpty { out.append(EffectFactor(key: "restDay", title: "Rest day", phrase: "a rest day", days: rest, known: nil)) }
         return out
     }
 
-    public static func analyze(days: [LDay], checkIns: [CheckIn], workouts: [LWorkout],
+    public static func analyze(days: [LDay], checkIns: [CheckIn], workouts: [LWorkout], fuel: [FuelEntry] = [],
+                               supplements: [SupplementPlan] = [], profile: LProfile? = nil,
                                outcomes: [LMetric] = [.recovery, .hrv, .restingHR, .sleepHours, .deepMin],
                                calendar: Calendar = LDate.calendar) -> [EffectFinding] {
         let byDay = Dictionary(days.map { ($0.day, $0) }, uniquingKeysWith: { a, _ in a })
-        // Only days the athlete actually logged count as "without" for check-in tags.
-        let logged = Set(checkIns.map { $0.day })
         var raw: [(key: String, title: String, phrase: String, outcome: LMetric, test: LStat.GroupTest)] = []
-        for f in factors(days: days, checkIns: checkIns, workouts: workouts, calendar: calendar) {
-            let isTag = CheckInTag(rawValue: f.key) != nil
-            let universe = isTag ? logged : Set(byDay.keys)
+        let all = factors(days: days, checkIns: checkIns, workouts: workouts, fuel: fuel, supplements: supplements, profile: profile,
+                          calendar: calendar)
+        for f in all {
+            // Only days on which the habit is known either way count as "without".
+            let universe = f.known ?? Set(byDay.keys)
             for outcome in outcomes {
                 var with: [Double] = [], without: [Double] = []
                 for d in universe {

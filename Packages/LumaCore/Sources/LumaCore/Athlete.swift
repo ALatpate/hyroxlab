@@ -211,8 +211,18 @@ public struct ScheduleDay: Equatable, Sendable, Identifiable {
     public let workouts: [LWorkout]
     /// Planned-session id → the recorded workout that fulfilled it.
     public let matches: [UUID: String]
+    /// What was logged of the day's training: sessions logged set by set, read from photos or told to
+    /// the coach.
+    public let logs: [LiftSession]
+    /// Planned-session id → the logged session that fulfilled it, for an entry no recorded workout did.
+    public let logged: [UUID: UUID]
 
-    public func isDone(_ p: PlannedSession) -> Bool { p.status == .done || matches[p.id] != nil }
+    public init(day: String, planned: [PlannedSession], workouts: [LWorkout], matches: [UUID: String], logs: [LiftSession] = [],
+                logged: [UUID: UUID] = [:]) {
+        self.day = day; self.planned = planned; self.workouts = workouts; self.matches = matches; self.logs = logs; self.logged = logged
+    }
+
+    public func isDone(_ p: PlannedSession) -> Bool { p.status == .done || matches[p.id] != nil || logged[p.id] != nil }
     public var unplannedWorkouts: [LWorkout] {
         let used = Set(matches.values)
         return workouts.filter { !used.contains($0.id) }
@@ -247,9 +257,13 @@ public enum Schedule {
         }
     }
 
-    public static func days(_ keys: [String], planned: [PlannedSession], workouts: [LWorkout]) -> [ScheduleDay] {
+    /// A plan entry is fulfilled by a recorded workout of a fitting sport, or failing that by a session
+    /// logged that day of a fitting kind: a class logged from a photo of its board was done, whether or
+    /// not the strap recorded it.
+    public static func days(_ keys: [String], planned: [PlannedSession], workouts: [LWorkout], logs: [LiftSession] = []) -> [ScheduleDay] {
         let pByDay = Dictionary(grouping: planned.filter { $0.status != .removed }, by: { $0.day })
         let wByDay = Dictionary(grouping: workouts, by: { $0.day })
+        let lByDay = Dictionary(grouping: logs, by: { $0.day })
         return keys.map { key in
             let ps = (pByDay[key] ?? []).sorted { ($0.startMinutes ?? 720, $0.title) < ($1.startMinutes ?? 720, $1.title) }
             let ws = (wByDay[key] ?? []).sorted { $0.start < $1.start }
@@ -260,7 +274,15 @@ public enum Schedule {
                     matches[p.id] = w.id; used.insert(w.id)
                 }
             }
-            return ScheduleDay(day: key, planned: ps, workouts: ws, matches: matches)
+            let ls = (lByDay[key] ?? []).sorted { $0.start < $1.start }
+            var logged: [UUID: UUID] = [:]
+            var taken = Set<UUID>()
+            for p in ps where p.status != .skipped && matches[p.id] == nil {
+                if let l = ls.first(where: { !taken.contains($0.id) && p.kind.matches($0.resolvedKind.sport) }) {
+                    logged[p.id] = l.id; taken.insert(l.id)
+                }
+            }
+            return ScheduleDay(day: key, planned: ps, workouts: ws, matches: matches, logs: ls, logged: logged)
         }
     }
 
@@ -371,26 +393,80 @@ public struct CheckIn: Codable, Equatable, Sendable, Identifiable {
     }
 }
 
-// MARK: - Strength log
+// MARK: - Training log
 
+/// One set of work. A lift counts reps at a load; a sled length, a carry or an erg counts distance,
+/// time or calories instead, and any of them may come with a load.
 public struct LiftSet: Codable, Equatable, Sendable, Identifiable {
     public var id: UUID
     public var reps: Int
+    /// Load in kg; 0 when the set had none or none was written down.
     public var kg: Double
     public var done: Bool
-    public init(id: UUID = UUID(), reps: Int, kg: Double, done: Bool = false) { self.id = id; self.reps = reps; self.kg = kg; self.done = done }
+    public var meters: Double?
+    public var seconds: Double?
+    public var calories: Double?
+
+    public init(id: UUID = UUID(), reps: Int, kg: Double, done: Bool = false, meters: Double? = nil, seconds: Double? = nil,
+                calories: Double? = nil) {
+        self.id = id; self.reps = reps; self.kg = kg; self.done = done
+        self.meters = meters; self.seconds = seconds; self.calories = calories
+    }
+
+    /// Whether the set says anything at all about what was done.
+    public var hasContent: Bool { reps > 0 || (meters ?? 0) > 0 || (seconds ?? 0) > 0 || (calories ?? 0) > 0 }
+
+    /// "5 × 100 kg", "12 reps", "25 m · 140 kg", "500 m", "45 s", "20 cal".
+    public var text: String {
+        let load = kg > 0 ? LiftSet.number(kg) + " kg" : nil
+        var parts: [String] = []
+        if let m = meters, m > 0 { parts.append(m >= 1000 ? LiftSet.number(m / 1000) + " km" : LiftSet.number(m) + " m") }
+        if let s = seconds, s > 0 {
+            let whole = Int(s.rounded())
+            parts.append(whole >= 90 ? String(format: "%d:%02d", whole / 60, whole % 60) : "\(whole) s")
+        }
+        if let c = calories, c > 0 { parts.append(LiftSet.number(c) + " cal") }
+        if reps > 0 {
+            if parts.isEmpty, let load { return "\(reps) × \(load)" }
+            parts.insert(reps == 1 ? "1 rep" : "\(reps) reps", at: 0)
+        }
+        if parts.isEmpty { return load ?? "No detail" }
+        if let load { parts.append(load) }
+        return parts.joined(separator: " · ")
+    }
+
+    static func number(_ v: Double) -> String {
+        v == v.rounded() ? String(Int(v)) : String(format: "%.1f", v)
+    }
 }
 
 public struct LiftExercise: Codable, Equatable, Sendable, Identifiable {
     public var id: UUID
     public var name: String
     public var sets: [LiftSet]
-    public init(id: UUID = UUID(), name: String, sets: [LiftSet] = []) { self.id = id; self.name = name; self.sets = sets }
+    /// Muscles the movement works, as read from a photo, for a movement Luma's own list does not know.
+    public var muscles: [String]?
+    /// How the movement was to be done, as written: "tempo 3-1-1", "each side", "AMRAP 12 min".
+    public var note: String?
+
+    public init(id: UUID = UUID(), name: String, sets: [LiftSet] = [], muscles: [String]? = nil, note: String? = nil) {
+        self.id = id; self.name = name; self.sets = sets; self.muscles = muscles; self.note = note
+    }
 
     public var volumeKg: Double { sets.filter { $0.done }.reduce(0) { $0 + Double($1.reps) * $1.kg } }
-    public var bestE1RM: Double? { sets.filter { $0.done && $0.reps > 0 && $0.kg > 0 }.map { LiftMath.e1RM(kg: $0.kg, reps: $0.reps) }.max() }
+
+    /// The done sets in a line: "4 × 5 × 100 kg" when they are all alike, each one listed otherwise.
+    public var setsText: String {
+        let done = sets.filter { $0.done && $0.hasContent }
+        guard let first = done.first else { return "No sets" }
+        let texts = done.map { $0.text }
+        if texts.allSatisfy({ $0 == first.text }) { return done.count == 1 ? first.text : "\(done.count) × \(first.text)" }
+        return texts.joined(separator: ", ")
+    }
 }
 
+/// What was done in one training session: a strength session logged set by set, or a class, a HYROX
+/// session or a conditioning piece read from a photo or told to the coach.
 public struct LiftSession: Codable, Equatable, Sendable, Identifiable {
     public var id: UUID
     public var start: Date
@@ -398,25 +474,57 @@ public struct LiftSession: Codable, Equatable, Sendable, Identifiable {
     public var title: String
     public var exercises: [LiftExercise]
     public var note: String
-    public init(id: UUID = UUID(), start: Date = Date(), end: Date? = nil, title: String = "Strength", exercises: [LiftExercise] = [], note: String = "") {
+    /// What kind of session it was; nil for logs made before sessions carried a kind (strength).
+    public var kind: SessionKind?
+    /// Where the log came from: "live" (logged set by set), "photo", "coach".
+    public var source: String?
+    /// File names of the photos the log was read from.
+    public var photos: [String]?
+    /// The workout as it was written on the board or screen, kept word for word.
+    public var asWritten: String?
+
+    public init(id: UUID = UUID(), start: Date = Date(), end: Date? = nil, title: String = "Strength", exercises: [LiftExercise] = [],
+                note: String = "", kind: SessionKind? = nil, source: String? = nil, photos: [String]? = nil, asWritten: String? = nil) {
         self.id = id; self.start = start; self.end = end; self.title = title; self.exercises = exercises; self.note = note
+        self.kind = kind; self.source = source; self.photos = photos; self.asWritten = asWritten
     }
 
     public var volumeKg: Double { exercises.reduce(0) { $0 + $1.volumeKg } }
     public var doneSets: Int { exercises.reduce(0) { $0 + $1.sets.filter { $0.done }.count } }
     public var day: String { LDate.key(start) }
+    public var resolvedKind: SessionKind { kind ?? .strength }
+    /// How long the session ran, when both ends are known and differ.
+    public var minutes: Double? { end.map { $0.timeIntervalSince(start) / 60 }.flatMap { $0 >= 1 ? $0 : nil } }
 }
 
 public enum LiftMath {
+    /// Sets of more reps than this say little about a one-rep max, so they give no estimate.
+    public static let maxRepsForEstimate = 12
+
     /// Estimated one-rep max (Epley). A single is its own max.
     public static func e1RM(kg: Double, reps: Int) -> Double { reps <= 1 ? kg : kg * (1 + Double(reps) / 30) }
 
+    /// The one-rep max a done set stands for, or nil when it says nothing about one: no reps, more
+    /// than `maxRepsForEstimate`, or no load. A lift that moves the body as well (a pull-up, a dip)
+    /// is worked out on bodyweight plus whatever was added, so it needs no added load.
+    public static func estimate(_ set: LiftSet, bodyweightLift: Bool, bodyKg: Double) -> Double? {
+        guard set.done, set.reps > 0, set.reps <= maxRepsForEstimate else { return nil }
+        let load = bodyweightLift ? bodyKg + set.kg : set.kg
+        return load > 0 ? e1RM(kg: load, reps: set.reps) : nil
+    }
+
+    /// The best estimate among an exercise's sets.
+    public static func best(_ e: LiftExercise, bodyKg: Double) -> Double? {
+        let own = ExerciseLibrary.match(e.name)?.bodyweight ?? false
+        return e.sets.compactMap { estimate($0, bodyweightLift: own, bodyKg: bodyKg) }.max()
+    }
+
     /// Best estimated 1RM per exercise across sessions, with the day it was set.
-    public static func records(_ sessions: [LiftSession]) -> [String: (e1RM: Double, day: String)] {
+    public static func records(_ sessions: [LiftSession], bodyKg: Double) -> [String: (e1RM: Double, day: String)] {
         var out: [String: (e1RM: Double, day: String)] = [:]
         for s in sessions.sorted(by: { $0.start < $1.start }) {
             for e in s.exercises {
-                guard let best = e.bestE1RM else { continue }
+                guard let best = best(e, bodyKg: bodyKg) else { continue }
                 if best > (out[e.name]?.e1RM ?? 0) { out[e.name] = (best, s.day) }
             }
         }
@@ -431,6 +539,11 @@ public enum LiftMath {
             }
         }
         return []
+    }
+
+    /// The load last used for an exercise, when one was written down.
+    public static func lastLoad(_ name: String, in sessions: [LiftSession]) -> Double? {
+        lastSets(name, in: sessions).map { $0.kg }.filter { $0 > 0 }.max()
     }
 
     public static let catalog: [String] = [

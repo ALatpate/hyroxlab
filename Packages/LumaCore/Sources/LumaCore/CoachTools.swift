@@ -125,7 +125,8 @@ public enum CoachTools {
         AITool(name: "get_insights", description: "Patterns found in the athlete's own data: the insight feed, measured effects of habits (alcohol, late caffeine, sauna, hard days…) on next-morning metrics, and day-to-day links between metrics."),
         AITool(name: "get_schedule", description: "The training calendar over a date range: planned sessions with their ids and whether each was done, recorded sessions, and the standing weekly routine.", properties: dateRange, required: ["start_date"]),
         AITool(name: "get_nutrition", description: "Food, drink, water and supplements over a date range: daily totals against targets, and every entry when the range is three days or fewer. Also returns the supplement stack.", properties: dateRange, required: ["start_date"]),
-        AITool(name: "get_strength_log", description: "Strength sessions from the last 90 days with sets, plus the best estimated one-rep max per exercise.", properties: ["exercise": AISchema.string("Only this exercise")]),
+        AITool(name: "get_strength_log", description: "The training log of the last 90 days: every logged session (strength, class, HYROX, conditioning) with its kind, movements and sets as done, plus the best estimated one-rep max per lift.", properties: ["exercise": AISchema.string("Only this exercise")]),
+        AITool(name: "get_progress", description: "Strength and training progress: each lift's estimated one-rep max, its level on Luma's scale and its six-week change; per-muscle level, weekly sets and last direct work; strong and weak points; the food log set against training days; supplement adherence. Call this for questions about strength, muscles, weak points, balance or progress."),
         AITool(name: "get_hyrox", description: "HYROX status: best time per station at race load, best 1 km, race simulations with splits, and an indicative readiness verdict and predicted finish range for each race format."),
         AITool(name: "get_checkins", description: "Daily check-ins over a date range: tags (alcohol, late caffeine, sauna, travel, unwell…), energy and soreness ratings, notes.", properties: dateRange, required: ["start_date"]),
         foodTool(),
@@ -169,17 +170,7 @@ public enum CoachTools {
             "avg_hr": AISchema.number("Average heart rate, if known"),
             "notes": AISchema.string("What was done: the workout as written, loads, times"),
         ], required: ["sport", "duration_min"]),
-        AITool(name: "log_strength_session", description: "Record a strength session with its exercises and sets.", properties: [
-            "date": AISchema.string("YYYY-MM-DD. Omit for today."),
-            "title": AISchema.string("e.g. \"Lower body strength\""),
-            "exercises": AISchema.array("Exercises in order", items: AISchema.object([
-                "name": AISchema.string("Exercise name"),
-                "sets": AISchema.array("Sets done", items: AISchema.object([
-                    "reps": AISchema.integer("Repetitions"),
-                    "kg": AISchema.number("Load in kg (0 for bodyweight)"),
-                ], required: ["reps", "kg"])),
-            ], required: ["name", "sets"])),
-        ], required: ["title", "exercises"]),
+        sessionTool(),
         AITool(name: "update_profile", description: "Update facts in the athlete's profile when they tell you them. Only the fields given are changed.", properties: [
             "weight_kg": AISchema.number("Body mass in kg"),
             "max_hr": AISchema.number("Measured maximum heart rate"),
@@ -201,7 +192,7 @@ public enum CoachTools {
 
     public static let readNames: Set<String> = ["get_overview", "get_daily_metrics", "get_sleep", "get_workouts", "get_training_load",
                                                 "get_trends_and_fitness", "get_insights", "get_schedule", "get_nutrition",
-                                                "get_strength_log", "get_hyrox", "get_checkins"]
+                                                "get_strength_log", "get_progress", "get_hyrox", "get_checkins"]
 
     /// A short label for a tool call while it runs.
     public static func activity(_ name: String) -> String {
@@ -215,7 +206,8 @@ public enum CoachTools {
         case "get_insights": return "Looking for patterns"
         case "get_schedule": return "Reading your calendar"
         case "get_nutrition": return "Reading your food log"
-        case "get_strength_log": return "Reading your lifts"
+        case "get_strength_log": return "Reading your training log"
+        case "get_progress": return "Checking your progress"
         case "get_hyrox": return "Checking HYROX benchmarks"
         case "get_checkins": return "Reading your check-ins"
         case "log_food": return "Logging food"
@@ -284,9 +276,9 @@ public enum CoachTools {
                 return .array([.string(k)] + metrics.map { m in JSONValue.rounded(m.value(d), m.decimals) })
             }
             // Nights only partly recorded are named, so their rows are not read as short or poor nights.
-            let partNights: [JSONValue] = a.sleep.nights.filter { $0.partial && keys.contains($0.day) }.map { .string($0.day) }
+            let partNights: [JSONValue] = a.sleep.nights.filter { $0.partial && keys.contains($0.day) }.map { JSONValue.string($0.day) }
             var out: [String: JSONValue] = [
-                "columns": .array([.string("date")] + metrics.map { .string($0.rawValue) }),
+                "columns": .array([.string("date")] + metrics.map { JSONValue.string($0.rawValue) }),
                 "units": "recovery %, strain 0-21, sleepHours h, hrv ms (RMSSD), restingHR bpm, respRate breaths/min, skinTempDev °C from baseline, deepMin/remMin min, sleepEfficiency %, activeKcal kcal",
                 "rows": .array(rows), "days_without_data": .number(Double(keys.count - rows.count)),
             ]
@@ -359,8 +351,8 @@ public enum CoachTools {
                     "links": .array(a.links.map { ["x": .string($0.xLabel), "y": .string($0.yLabel), "rank_correlation": .rounded($0.r, 2), "days": .number(Double($0.n)), "reliable": .bool($0.reliable)] })]
         case "get_schedule":
             let keys = range(input, world: w, maxDays: 60, calendar: calendar)
-            let days = Schedule.days(keys, planned: w.planned, workouts: w.workouts)
-            let rows: [JSONValue] = days.filter { !$0.planned.isEmpty || !$0.workouts.isEmpty }.map { d -> JSONValue in
+            let days = Schedule.days(keys, planned: w.planned, workouts: w.workouts, logs: w.lifts)
+            let rows: [JSONValue] = days.filter { !$0.planned.isEmpty || !$0.workouts.isEmpty || !$0.logs.isEmpty }.map { d -> JSONValue in
                 ["date": .string(d.day), "weekday": .string(weekdayName(d.day, calendar)),
                  "planned": .array(d.planned.map { p -> JSONValue in
                     ["id": .string(p.id.uuidString), "kind": .string(p.kind.rawValue), "title": .string(p.title), "detail": .string(p.detail),
@@ -368,7 +360,10 @@ public enum CoachTools {
                      "start_time": .optional(p.startMinutes.map { LFormat.timeOfDay(minutes: Double($0)) }), "from": .string(p.origin.rawValue),
                      "status": .string(d.isDone(p) ? "done" : p.status.rawValue)]
                  }),
-                 "recorded": .array(d.workouts.map(workoutJSON))]
+                 "recorded": .array(d.workouts.map(workoutJSON)),
+                 "logged": .array(d.logs.map { l -> JSONValue in
+                    ["title": .string(l.title), "kind": .string(l.resolvedKind.rawValue), "movements": .number(Double(l.exercises.count))]
+                 })]
             }
             return ["today": .string(w.today), "days": .array(rows),
                     "weekly_routine": .array(w.routine.map { ["weekday": .number(Double($0.weekday)), "kind": .string($0.kind.rawValue), "title": .string($0.title),
@@ -401,15 +396,25 @@ public enum CoachTools {
         case "get_strength_log":
             let only = input["exercise"]?.string?.lowercased()
             let cutoff = w.now.addingTimeInterval(-90 * 86_400)
-            let sessions = w.lifts.filter { $0.start >= cutoff }.sorted { $0.start > $1.start }.prefix(30)
-            let rec = LiftMath.records(w.lifts)
+            let sessions = w.lifts.filter { $0.start >= cutoff }.sorted { $0.start > $1.start }.prefix(40)
+            let rec = LiftMath.records(w.lifts, bodyKg: w.profile.weightKg)
             return ["sessions": .array(sessions.map { s -> JSONValue in
-                        ["date": .string(s.day), "title": .string(s.title), "volume_kg": .rounded(s.volumeKg, 0),
-                         "exercises": .array(s.exercises.filter { only == nil || $0.name.lowercased().contains(only ?? "") }.map { e -> JSONValue in
-                            ["name": .string(e.name), "sets": .array(e.sets.filter { $0.done }.map { ["reps": .number(Double($0.reps)), "kg": .rounded($0.kg)] })]
-                         })]
+                        var o: [String: JSONValue] = ["date": .string(s.day), "title": .string(s.title), "kind": .string(s.resolvedKind.rawValue),
+                                                      "volume_kg": .rounded(s.volumeKg, 0)]
+                        if let m = s.minutes { o["duration_min"] = .rounded(m, 0) }
+                        if let src = s.source { o["logged_from"] = .string(src) }
+                        if !s.note.isEmpty { o["note"] = .string(s.note) }
+                        o["movements"] = .array(s.exercises.filter { only == nil || $0.name.lowercased().contains(only ?? "") }.map { e -> JSONValue in
+                            var m: [String: JSONValue] = ["name": .string(e.name), "sets": .array(e.sets.filter { $0.done }.map { JSONValue.string($0.text) })]
+                            if let n = e.note { m["note"] = .string(n) }
+                            return .object(m)
+                        })
+                        return .object(o)
                     }),
-                    "best_estimated_1rm_kg": .object(Dictionary(rec.map { ($0.key, JSONValue.rounded($0.value.e1RM)) }, uniquingKeysWith: { x, _ in x }))]
+                    "best_estimated_1rm_kg": .object(Dictionary(rec.map { ($0.key, JSONValue.rounded($0.value.e1RM)) }, uniquingKeysWith: { x, _ in x })),
+                    "note": "A set with no kg had no load written down. Estimated maxes use sets of 12 reps or fewer; pull-ups, chin-ups and dips count bodyweight plus any added load."]
+        case "get_progress":
+            return progressJSON(w, calendar: calendar)
         case "get_hyrox":
             let ready = RaceReadiness.assess(benchmarks: w.benchmarks, sessions: w.sessions, sex: w.profile.sex, personalBests: w.personalBests)
             return ["station_bests_s": .object(Dictionary(Station.allCases.compactMap { st -> (String, JSONValue)? in
@@ -428,14 +433,14 @@ public enum CoachTools {
                     }),
                     "readiness_by_format": .array(ready.map { r -> JSONValue in
                         ["format": .string(r.format.title), "verdict": .string("\(r.verdict)"), "predicted_low_s": .rounded(r.predictedLowS, 0),
-                         "predicted_high_s": .rounded(r.predictedHighS, 0), "confidence_0_1": .rounded(r.confidence, 2), "gaps": .array(r.gaps.map { .string($0) }),
+                         "predicted_high_s": .rounded(r.predictedHighS, 0), "confidence_0_1": .rounded(r.confidence, 2), "gaps": .array(r.gaps.map { JSONValue.string($0) }),
                          "assumption": .optional(r.assumption)]
                     }),
                     "note": "Readiness is indicative: it comes from the athlete's own benchmark and simulation times, not from a lab or race result."]
         case "get_checkins":
             let keys = Set(range(input, world: w, maxDays: 120, calendar: calendar))
             return ["checkins": .array(w.checkIns.filter { keys.contains($0.day) }.sorted { $0.day < $1.day }.map { c -> JSONValue in
-                ["date": .string(c.day), "tags": .array(c.tags.map { .string($0.rawValue) }), "energy_1_5": .whole(c.energy),
+                ["date": .string(c.day), "tags": .array(c.tags.map { JSONValue.string($0.rawValue) }), "energy_1_5": .whole(c.energy),
                  "soreness_1_5": .whole(c.soreness), "note": .string(c.note)]
             })]
         default:
@@ -476,7 +481,7 @@ public enum CoachTools {
         let fresh = night?.day == w.today
         let t = FuelTotals.of(w.fuel.filter { $0.day == w.today })
         let target = w.fuelTargets(on: w.today)
-        let todaysPlan = Schedule.days([w.today], planned: w.planned, workouts: w.workouts).first
+        let todaysPlan = Schedule.days([w.today], planned: w.planned, workouts: w.workouts, logs: w.lifts).first
 
         let factors: [JSONValue] = (a.recovery?.factors ?? []).map { f -> JSONValue in
             let pull = f.direction > 0 ? "helping" : (f.direction < 0 ? "dragging" : "neutral")

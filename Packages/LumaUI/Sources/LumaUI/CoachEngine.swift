@@ -321,7 +321,7 @@ public final class CoachEngine: ObservableObject {
             return Outcome(result: "Logged \(workout.sport), \(Int(workout.durationS / 60)) min on \(workout.day).", card: .done("Logged \(workout.sport), \(Int(workout.durationS / 60)) min"))
         case .logStrength(let s):
             env.save(s)
-            return Outcome(result: "Logged strength session \(s.title) with \(s.exercises.count) exercises.", card: .done("Logged \(s.title)"))
+            return Outcome(result: "Logged \(s.title) on \(s.day) with \(s.exercises.count) movements.", card: .done("Logged \(s.title)"))
         case .updateProfile(let p):
             env.profile = p
             return Outcome(result: "Profile updated.", card: .done("Profile updated"))
@@ -468,12 +468,33 @@ public final class CoachEngine: ObservableObject {
         }
     }
 
+    /// Reads photos and/or a note of training sessions into sessions for the athlete to review, each
+    /// with the positions (1 is the first) of the photos it was read from. `day` is the day a session
+    /// is filed under when nothing in the photo or note says which day it was.
+    func readWorkouts(text: String, photos: [Data], day: String) async throws -> [(session: LiftSession, photos: [Int])] {
+        let w = world()
+        let nothing = "No workout could be read. Try a clearer photo, or type what you did."
+        let acc = try await extract(system: CoachPrompt.workoutExtraction(today: w.today, sex: w.profile.sex),
+                                    tool: CoachTools.workoutsTool(name: "submit_workouts"),
+                                    text: text.isEmpty ? "Log the training sessions these photos show." : text, photos: photos, maxTokens: 8192)
+        guard let call = acc.toolCalls.first(where: { $0.name == "submit_workouts" }) else {
+            throw CoachError.message(acc.text.isEmpty ? nothing : acc.text)
+        }
+        let read = CoachTools.loggedSessions(call.input, day: day, now: Date())
+        if read.isEmpty { throw CoachError.message(nothing) }
+        return read
+    }
+
     private func extract(kind: String, tool: AITool, text: String, photos: [Data]) async throws -> AIStreamAccumulator {
+        try await extract(system: CoachPrompt.extraction(kind: kind), tool: tool, text: text, photos: photos, maxTokens: 4096)
+    }
+
+    private func extract(system: String, tool: AITool, text: String, photos: [Data], maxTokens: Int) async throws -> AIStreamAccumulator {
         guard let key = env.secrets.coachKey(), !key.isEmpty else { throw CoachError.noKey }
         let model = try await resolveModel(key: key)
         let images = photos.prefix(CoachEngine.maxPhotos).compactMap { CoachEngine.prepare($0) }.map { (base64: $0.base64EncodedString(), mediaType: "image/jpeg") }
-        let request = AIRequest(model: model, system: CoachPrompt.extraction(kind: kind), messages: [AIMessage.user(text, images: images)],
-                                tools: [tool], maxTokens: 4096, stream: false)
+        let request = AIRequest(model: model, system: system, messages: [AIMessage.user(text, images: images)],
+                                tools: [tool], maxTokens: maxTokens, stream: false)
         return try await complete(request, key: key)
     }
 

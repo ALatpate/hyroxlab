@@ -183,6 +183,9 @@ public enum FuelPlanner {
         return .rest
     }
 
+    /// The day's protein target: 2 g for each kg of body mass.
+    public static func proteinTarget(_ p: LProfile) -> Double { (p.weightKg * 2).rounded() }
+
     /// Daily targets for a hybrid athlete: energy from resting need × an activity factor for the day,
     /// protein at 2 g/kg, carbohydrate scaled to the day's work, fat as the remainder (never under
     /// 0.8 g/kg), and fluid from body mass plus sweat allowance for training.
@@ -196,7 +199,7 @@ public enum FuelPlanner {
         case .race: factor = 2.0; carbPerKg = 8
         }
         let kcal = (rest * factor / 10).rounded() * 10
-        let protein = (p.weightKg * 2).rounded()
+        let protein = proteinTarget(p)
         var carbs = (p.weightKg * carbPerKg).rounded()
         let minFat = p.weightKg * 0.8
         var fat = (kcal - protein * 4 - carbs * 4) / 9

@@ -4,7 +4,8 @@ import LumaKit
 
 // MARK: - Train tab
 
-/// The calendar: what was planned, what was actually done, and the week around it.
+/// The Train tab, in two faces: the calendar (what was planned, what was done, the week around it) and
+/// progress (what it has added up to).
 struct TrainScreen: View {
     @EnvironmentObject private var env: LumaEnv
     @EnvironmentObject private var router: LumaRouter
@@ -18,45 +19,56 @@ struct TrainScreen: View {
         let keys = (0..<7).map { LDate.adding($0, to: week) }
         let days = env.scheduleDays(keys)
         let current = days.first { $0.day == day } ?? env.scheduleDays([day])[0]
-        LumaTabScreen(title: "Train", subtitle: weekTitle(keys), tone: .run) {
+        let onCalendar = router.trainView == .calendar
+        LumaTabScreen(title: "Train", subtitle: onCalendar ? weekTitle(keys) : "Progress", tone: .run) {
             HStack(spacing: 8) {
-                LumaIconButton(symbol: "repeat") { router.sheet = .routine }
-                LumaIconButton(symbol: "plus") { router.sheet = .plan(nil, day) }
+                LumaIconButton(symbol: "photo.on.rectangle.angled") { router.sheet = .workoutPhotos(min(day, env.today)) }
+                    .accessibilityLabel("Add workouts from photos")
+                if onCalendar {
+                    LumaIconButton(symbol: "repeat") { router.sheet = .routine }
+                    LumaIconButton(symbol: "plus") { router.sheet = .plan(nil, day) }
+                }
             }
         } content: {
-            SuggestedSessions()
-            WeekStrip(days: days, selected: day, today: env.today, onSelect: { selected = $0 },
-                      onShift: { delta in
-                          let next = LDate.adding(delta * 7, to: week)
-                          weekStart = next
-                          selected = delta == 0 ? env.today : (next == LDate.weekStart(env.today) ? env.today : next)
-                      })
-            DayAgenda(day: current)
-            WeekSummary(days: days)
-            if env.routine.isEmpty && env.planned.filter({ $0.status != .removed }).isEmpty {
-                LumaCard(tint: Luma.volt.opacity(0.5)) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Set up your week").font(LumaFont.title(22)).foregroundStyle(Luma.frost)
-                        LumaNote("Tell Luma which classes and sessions repeat every week. They appear on the calendar automatically, and everything you record is matched against them.")
-                        Button("Add my weekly routine") { router.sheet = .routine }.buttonStyle(LumaPrimaryButtonStyle())
-                    }
+            LumaSegmented(selection: $router.trainView, options: [(TrainView.calendar, "Calendar"), (TrainView.progress, "Progress")], tint: Luma.volt)
+            if onCalendar { calendar(days: days, current: current) } else { TrainProgressView() }
+        }
+    }
+
+    @ViewBuilder
+    private func calendar(days: [ScheduleDay], current: ScheduleDay) -> some View {
+        SuggestedSessions()
+        WeekStrip(days: days, selected: day, today: env.today, onSelect: { selected = $0 },
+                  onShift: { delta in
+                      let next = LDate.adding(delta * 7, to: week)
+                      weekStart = next
+                      selected = delta == 0 ? env.today : (next == LDate.weekStart(env.today) ? env.today : next)
+                  })
+        DayAgenda(day: current)
+        WeekSummary(days: days)
+        if env.routine.isEmpty && env.planned.filter({ $0.status != .removed }).isEmpty {
+            LumaCard(tint: Luma.volt.opacity(0.5)) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Set up your week").font(LumaFont.title(22)).foregroundStyle(Luma.frost)
+                    LumaNote("Tell Luma which classes and sessions repeat every week. They appear on the calendar automatically, and everything you record is matched against them.")
+                    Button("Add my weekly routine") { router.sheet = .routine }.buttonStyle(LumaPrimaryButtonStyle())
                 }
             }
-            HStack(spacing: 8) {
-                LumaQuickAction(symbol: "sparkles", title: "Plan my week", tint: Luma.volt) {
-                    router.askCoach("Plan my training for the next 7 days. Read my calendar, routine, recovery and load first, work around my standing classes, and put the sessions on my calendar.")
-                }
-                LumaQuickAction(symbol: "text.magnifyingglass", title: "Review my week", tint: Luma.volt) {
-                    router.askCoach("Review my last 7 days: what I planned against what I did, load, recovery and sleep. What went well and what should change next week?")
-                }
+        }
+        HStack(spacing: 8) {
+            LumaQuickAction(symbol: "sparkles", title: "Plan my week", tint: Luma.volt) {
+                router.askCoach("Plan my training for the next 7 days. Read my calendar, routine, recovery and load first, work around my standing classes, and put the sessions on my calendar.")
             }
-            LumaSection(title: "More")
-            LumaGroup {
-                link("clock.arrow.circlepath", "All sessions", "\(env.workouts.count) recorded", .history)
-                link("flag.checkered", "HYROX readiness", "Benchmarks, simulations and race prediction", .raceReadiness)
-                link("dumbbell.fill", "Strength log", "\(env.lifts.count) sessions, personal records", .strength)
-                link("chart.line.uptrend.xyaxis", "Training load", env.analysis.load.status.title, .load)
+            LumaQuickAction(symbol: "text.magnifyingglass", title: "Review my week", tint: Luma.volt) {
+                router.askCoach("Review my last 7 days: what I planned against what I did, load, recovery and sleep. What went well and what should change next week?")
             }
+        }
+        LumaSection(title: "More")
+        LumaGroup {
+            link("clock.arrow.circlepath", "All sessions", "\(env.workouts.count) recorded", .history)
+            link("flag.checkered", "HYROX readiness", "Benchmarks, simulations and race prediction", .raceReadiness)
+            link("dumbbell.fill", "Training log", "\(env.lifts.count) sessions, best lifts", .strength)
+            link("chart.line.uptrend.xyaxis", "Training load", env.analysis.load.status.title, .load)
         }
     }
 
@@ -196,7 +208,7 @@ struct DayAgenda: View {
         let planned = day.planned
         VStack(alignment: .leading, spacing: 12) {
             LumaSection(title: LumaText.dayTitle(day.day, today: env.today), action: "Add") { router.sheet = .plan(nil, day.day) }
-            if planned.isEmpty && day.workouts.isEmpty {
+            if planned.isEmpty && day.workouts.isEmpty && day.logs.isEmpty {
                 LumaCard {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(day.day < env.today ? "Nothing recorded" : "Nothing planned").font(LumaFont.heading(16)).foregroundStyle(Luma.frost)
@@ -211,12 +223,20 @@ struct DayAgenda: View {
             ForEach(planned) { p in
                 PlannedCard(session: p, done: day.isDone(p), workout: day.matches[p.id].flatMap { id in day.workouts.first { $0.id == id } }, isToday: day.day == env.today)
             }
+            ForEach(day.logs) { LoggedSessionCard(session: $0) }
             if !day.unplannedWorkouts.isEmpty {
                 LumaGroup {
                     ForEach(day.unplannedWorkouts) { w in
                         Button { router.push(.workout(w.id)) } label: { WorkoutRow(workout: w, on21: env.profile.strainOn21) }.buttonStyle(.plain)
                     }
                 }
+            }
+            if day.day <= env.today {
+                Button { router.sheet = .workoutPhotos(day.day) } label: {
+                    Label(day.logs.isEmpty ? "Add what you did from photos" : "Add more from photos", systemImage: "photo.on.rectangle.angled")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(LumaSecondaryButtonStyle(compact: true))
             }
         }
     }

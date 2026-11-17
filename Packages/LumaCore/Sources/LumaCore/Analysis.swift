@@ -40,9 +40,11 @@ public struct LumaAnalysis: Sendable {
     /// `record` is where the heart-rate record has readings and `recordAsOf` when it was read, `reading`
     /// whether the strap's stored record is still arriving, `calibration` how far the recovery baseline
     /// has got, and `marks` the nights already found only partly recorded. Left at their defaults,
-    /// nothing is held back: every night is taken as it is stored.
+    /// nothing is held back: every night is taken as it is stored. `fuel` and `supplements` are the
+    /// athlete's logs, read for habits that may move the next morning's numbers.
     public static func build(days: [LDay], sleeps: [LSleep], workouts: [LWorkout], profile: LProfile, planned: [PlannedSession],
                              checkIns: [CheckIn] = [], personalBests: [PersonalBest] = [],
+                             fuel: [FuelEntry] = [], supplements: [SupplementPlan] = [],
                              record: [RecordStretch] = [], recordAsOf: Double? = nil, reading: Bool = false,
                              calibration: LCalibration? = nil, marks: [NightMark] = [],
                              today: String, now: Date = Date(), calendar: Calendar = LDate.calendar) -> LumaAnalysis {
@@ -96,7 +98,8 @@ public struct LumaAnalysis: Sendable {
         let trends = TrendModel.all(days: whole, today: today, calendar: calendar)
         let fitness = FitnessModel.build(workouts: workouts, pbs: personalBests, restHR: rest, maxHR: profile.resolvedMaxHR(on: now),
                                          today: today, calendar: calendar)
-        let effects = EffectModel.analyze(days: whole, checkIns: checkIns, workouts: workouts, calendar: calendar)
+        let effects = EffectModel.analyze(days: whole, checkIns: checkIns, workouts: workouts, fuel: fuel, supplements: supplements,
+                                          profile: profile, calendar: calendar)
         let links = EffectModel.links(days: whole, calendar: calendar)
         let insights = InsightEngine.build(days: whole, today: today, baselines: baselines, sleep: sleep, load: load, watch: watch,
                                            trends: trends, effects: effects, links: links, fitness: fitness, calendar: calendar)

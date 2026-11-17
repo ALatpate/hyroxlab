@@ -112,18 +112,15 @@ public extension CoachTools {
                                                  avgHR: input["avg_hr"]?.number, distanceM: input["distance_km"]?.number.map { $0 * 1000 },
                                                  notes: input["notes"]?.string)))
         case "log_strength_session":
-            let exercises: [LiftExercise] = (input["exercises"]?.array ?? []).compactMap { e in
-                guard let name = e["name"]?.string, !name.isEmpty else { return nil }
-                let sets: [LiftSet] = (e["sets"]?.array ?? []).compactMap { s in
-                    guard let reps = s["reps"]?.int, reps > 0 else { return nil }
-                    return LiftSet(reps: reps, kg: max(0, s["kg"]?.number ?? 0), done: true)
-                }
-                return sets.isEmpty ? nil : LiftExercise(name: name, sets: sets)
+            // A session that has been done is not dated after today.
+            let day = min(self.day(input["date"], world: w, calendar: calendar), w.today)
+            var fields = input
+            // The day has been resolved against the athlete's own clock ("yesterday", a missing date).
+            if case .object(var o) = fields { o["date"] = .string(day); fields = .object(o) }
+            guard let session = loggedSession(fields, day: day, source: "coach", now: w.now, calendar: calendar), !session.exercises.isEmpty else {
+                return .failure(CoachToolError("No movements were given. Provide each movement with its sets."))
             }
-            guard !exercises.isEmpty else { return .failure(CoachToolError("No exercises with sets were given.")) }
-            let day = self.day(input["date"], world: w, calendar: calendar)
-            let start = date(day: day, time: nil, world: w, calendar: calendar)
-            return .success(.logStrength(LiftSession(start: start, end: start, title: input["title"]?.string ?? "Strength", exercises: exercises)))
+            return .success(.logStrength(session))
         case "update_profile":
             var p = w.profile
             if let v = input["weight_kg"]?.number, (30...250).contains(v) { p.weightKg = v }
@@ -165,9 +162,10 @@ public enum CoachPrompt {
         - Ground every claim about the athlete in tool results from this conversation. Do not guess numbers. If the data is missing or thin, say so plainly and say what would fill the gap.
         - Call tools without asking permission, including several in a row. Read before you advise: for "how am I doing" start with get_overview; for trends pull the date range you need.
         - When the athlete tells you something they ate, drank or took, or sends a photo of it, log it straight away with log_food / log_supplement / log_water, then confirm in one or two lines with the totals. Do not ask them to confirm first; they can undo.
-        - Photos of meals: identify each item, estimate portions from plate and utensil scale, and be conservative with oils and sauces. Photos of nutrition labels: use the label's numbers for the amount eaten (ask only if servings are truly unclear, otherwise assume one serving and say so). Photos of supplement bottles or facts panels: read the product and dose per serving. Photos of whiteboards or machine screens: read the workout and log or plan it.
+        - Photos of meals: identify each item, estimate portions from plate and utensil scale, and be conservative with oils and sauces. Photos of nutrition labels: use the label's numbers for the amount eaten (ask only if servings are truly unclear, otherwise assume one serving and say so). Photos of supplement bottles or facts panels: read the product and dose per serving. Photos of whiteboards, class screens or tracking apps: read the session and log it with log_strength_session, movement by movement, with loads only where they are written or the athlete states them.
         - When asked to plan training, read the calendar and routine first, work around standing classes, respect recovery and load, and write sessions with plan_sessions. Give each session a clear main set with paces, loads or heart-rate zones.
         - Use remember for durable facts the athlete tells you (injuries, constraints, preferences). Use update_profile for profile facts.
+        - For strength, muscles, weak points, balance or progress, read get_progress. Its levels are Luma's own scale and its maxes are estimates from logged sets: say so once, and treat a muscle that is "not measured" as missing data, not as weak.
         - Use show_chart when a picture helps.
 
         How to answer
