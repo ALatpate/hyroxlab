@@ -301,9 +301,12 @@ public struct LumaFuelWidgetView: View {
     let glance: LumaGlance?
     let family: LumaWidgetFamily
     let current: Bool
+    /// A control set beside the title on the Home Screen sizes: the widget extension puts the button
+    /// that logs a glass of water here.
+    let action: AnyView?
 
-    public init(glance: LumaGlance?, family: LumaWidgetFamily, current: Bool = true) {
-        self.glance = glance; self.family = family; self.current = current
+    public init(glance: LumaGlance?, family: LumaWidgetFamily, current: Bool = true, action: AnyView? = nil) {
+        self.glance = glance; self.family = family; self.current = current; self.action = action
     }
 
     /// Yesterday's intake is not today's: after the rollover the log reads empty until something is logged.
@@ -317,7 +320,11 @@ public struct LumaFuelWidgetView: View {
         switch family {
         case .small:
             VStack(alignment: .leading, spacing: 8) {
-                Text("Fuel").font(LumaFont.heading(13)).foregroundStyle(Luma.frost)
+                HStack(spacing: 4) {
+                    Text("Fuel").font(LumaFont.heading(13)).foregroundStyle(Luma.frost)
+                    Spacer(minLength: 0)
+                    if let action { action }
+                }
                 Spacer(minLength: 0)
                 GlanceFuelRows(glance: shown, compact: true)
             }
@@ -325,6 +332,7 @@ public struct LumaFuelWidgetView: View {
             HStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Fuel").font(LumaFont.heading(13)).foregroundStyle(Luma.frost)
+                    if let action { action.padding(.top, 4) }
                     Spacer(minLength: 0)
                     Text(shown.map { grouped(max(0, $0.kcalTarget - $0.kcal)) } ?? "–").font(LumaFont.numeral(42)).foregroundStyle(Luma.frost)
                     Text("kcal to go").font(LumaFont.label(9)).foregroundStyle(Luma.mist)
@@ -375,6 +383,25 @@ public struct LumaFuelWidgetView: View {
             .frame(height: 3)
             .widgetAccentable()
         }
+    }
+}
+
+/// The label of the widget button that logs a glass of water.
+public struct GlanceWaterChip: View {
+    let ml: Int
+
+    public init(ml: Int = 250) { self.ml = ml }
+
+    public var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "plus").font(.system(size: 9, weight: .heavy))
+            Text("\(ml) ml").font(.system(size: 11, weight: .semibold))
+        }
+        .foregroundStyle(Luma.ink)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Capsule().fill(Luma.sky))
+        .accessibilityLabel("Log \(ml) millilitres of water")
     }
 }
 

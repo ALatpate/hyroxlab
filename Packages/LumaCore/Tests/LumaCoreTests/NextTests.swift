@@ -299,6 +299,14 @@ final class NextTests: XCTestCase {
         XCTAssertNil(open.checks.first { $0.id == "protein" }?.met)
         // A thin log on a finished day is not read at all.
         XCTAssertFalse(FuelMatch.read(day: d, entries: [meal(d, hour: 8, kcal: 300)], workouts: [], strain21: 3, profile: profile(), closed: true).usable)
+        // Shown beside the day's targets, the read takes their class for the day: the two then judge the
+        // same carbohydrate figure. The same food that matches a training day is short for a race day.
+        let training = FuelMatch.read(day: d, entries: good, workouts: [workout], strain21: 16, dayClass: .moderate, profile: profile(), closed: true)
+        XCTAssertEqual(training.dayClass, .moderate)
+        XCTAssertEqual(training.checks.first { $0.id == "carbs" }?.met, true)
+        let race = FuelMatch.read(day: d, entries: good, workouts: [workout], strain21: 16, dayClass: .race, profile: profile(), closed: true)
+        XCTAssertEqual(race.dayClass, .race)
+        XCTAssertEqual(race.checks.first { $0.id == "carbs" }?.met, false)
     }
 
     // MARK: Weight and energy

@@ -195,7 +195,7 @@ struct DevWidgetsScreen: View {
     private var homeA: some View {
         HStack(spacing: 22) {
             widget(158, 158) { LumaTodayWidgetView(glance: glance, family: .small) }
-            widget(158, 158, tint: Luma.mint) { LumaFuelWidgetView(glance: glance, family: .small) }
+            widget(158, 158, tint: Luma.mint) { LumaFuelWidgetView(glance: glance, family: .small, action: AnyView(GlanceWaterChip())) }
         }
         widget(338, 158) { LumaTodayWidgetView(glance: glance, family: .medium) }
         widget(338, 354) { LumaTodayWidgetView(glance: glance, family: .large) }
@@ -214,6 +214,6 @@ struct DevWidgetsScreen: View {
         widget(338, 158, tint: Luma.amber) {
             LumaStressWidgetView(hours: demoStress)
         }
-        widget(338, 158, tint: Luma.mint) { LumaFuelWidgetView(glance: glance, family: .medium) }
+        widget(338, 158, tint: Luma.mint) { LumaFuelWidgetView(glance: glance, family: .medium, action: AnyView(GlanceWaterChip())) }
     }
 }

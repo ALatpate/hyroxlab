@@ -1,6 +1,7 @@
 import WidgetKit
 import SwiftUI
 import ActivityKit
+import AppIntents
 import LumaKit
 
 /// The widget extension entry point: Luma's Home Screen and Lock Screen widgets, the heart-rate
@@ -22,6 +23,7 @@ struct LumaWidgetBundle: WidgetBundle {
         LumaHeartWidget()
         LumaStressWidget()
         LumaSyncActivity()
+        LumaBuddyWidget()
     }
 }
 
@@ -136,7 +138,9 @@ struct LumaFuelWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "LumaFuelWidget", provider: GlanceProvider()) { entry in
             GlanceHost(tint: Luma.mint, route: "fuel") { family in
-                LumaFuelWidgetView(glance: entry.glance, family: family, current: entry.current)
+                // The button logs a glass of water without opening Luma; the rest of the widget opens the Fuel tab.
+                LumaFuelWidgetView(glance: entry.glance, family: family, current: entry.current,
+                                   action: AnyView(Button(intent: LogWaterIntent(millilitres: 250)) { GlanceWaterChip(ml: 250) }.buttonStyle(.plain)))
             }
         }
         .configurationDisplayName("Fuel")
@@ -205,6 +209,80 @@ struct LumaStressWidget: Widget {
         return (snapshot?.stressCurve(now: date) ?? []).map { point in
             (hour: calendar.component(.hour, from: Date(timeIntervalSince1970: TimeInterval(point.ts))), level: point.level)
         }
+    }
+}
+
+// MARK: - The companion
+
+struct BuddyEntry: TimelineEntry {
+    let date: Date
+    let frame: BuddyFrame
+    let name: String
+    let shape: BuddyShape
+}
+
+/// The companion's timeline: its states for the next few hours as the app worked them out, a shift of
+/// weight every few minutes, and a hop and a wave straight after a tap. The widget decides nothing.
+struct BuddyProvider: TimelineProvider {
+    private static let sample = BuddyEntry(date: Date(), frame: BuddyFrame(date: Date(), kind: .charged, title: "Charged",
+                                                                           line: "Recovery 74%. Good to push today.", energy: 0.74),
+                                           name: "Glim", shape: BuddyShape(levels: [2.6, 2.4, 2.8, 2.2, 2.5, 3.2]))
+
+    func placeholder(in context: Context) -> BuddyEntry { BuddyProvider.sample }
+
+    func getSnapshot(in context: Context, completion: @escaping (BuddyEntry) -> Void) {
+        completion(context.isPreview ? BuddyProvider.sample : (entries(from: Date()).first ?? BuddyProvider.sample))
+    }
+
+    func getTimeline(in context: Context, completion: @escaping (Timeline<BuddyEntry>) -> Void) {
+        let now = Date()
+        // The app writes a new schedule whenever a number behind it changes; this is the fallback.
+        completion(Timeline(entries: entries(from: now), policy: .after(now.addingTimeInterval(150 * 60))))
+    }
+
+    private func entries(from now: Date) -> [BuddyEntry] {
+        LumaGlanceStore.suiteName = WidgetSnapshot.suiteName
+        let buddy = LumaGlanceStore.load()?.buddy
+        let shape = BuddyShape(levels: buddy?.levels ?? [])
+        let name = buddy?.name ?? "Glim"
+        return BuddyTimeline.frames(buddy, from: now, poke: LumaQuickLog.lastPoke).map {
+            BuddyEntry(date: $0.date, frame: $0, name: name, shape: shape)
+        }
+    }
+}
+
+struct BuddyWidgetBody: View {
+    @Environment(\.widgetFamily) private var family
+    let entry: BuddyEntry
+
+    var body: some View {
+        let lock = family.isAccessory
+        let spark = Luma.recovery(entry.frame.energy < 0 ? nil : entry.frame.energy * 100)
+        ZStack {
+            if family == .accessoryCircular { AccessoryWidgetBackground() }
+            LumaBuddyWidgetView(frame: entry.frame, name: entry.name, family: family.luma) {
+                // A tap on the figure is answered by the figure; a tap anywhere else opens Luma.
+                Button(intent: PokeBuddyIntent()) {
+                    BuddyFigure(frame: entry.frame, shape: entry.shape, style: lock ? .vibrant : .color(spark: spark))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .containerBackground(for: .widget) {
+            if !lock { GlanceBackdrop(tint: spark) }
+        }
+        .widgetURL(URL(string: "noop://luma/buddy"))
+    }
+}
+
+struct LumaBuddyWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "LumaBuddyWidget", provider: BuddyProvider()) { entry in
+            BuddyWidgetBody(entry: entry)
+        }
+        .configurationDisplayName("Companion")
+        .description("A small companion whose state follows your day and whose build follows your lifts. Tap it for a wave.")
+        .supportedFamilies([.accessoryCircular, .accessoryRectangular, .accessoryInline, .systemSmall, .systemMedium])
     }
 }
 

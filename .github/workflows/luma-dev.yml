@@ -149,6 +149,13 @@ jobs:
           for f in "$APP/Info.plist" "$W/Info.plist"; do
             plutil -convert xml1 -o - "$f" | grep -E "<string>[^<]* [^<]*NOOP|NOOP [^<]*</string>" || echo "none in $(basename "$(dirname "$f")")"
           done
+          # The typeface ships as a package resource bundle. The app must hold it; the widget extension
+          # reads its own copy or, failing that, the app's (LumaType.fontFiles).
+          echo "--- font bundles"
+          find "$APP" -maxdepth 3 -name 'LumaUI_LumaKit.bundle' | sed "s#^$APP#app#" || true
+          FONTS=$(find "$APP" -path '*LumaUI_LumaKit.bundle*' -name 'BarlowCondensed-*.ttf' | wc -l | tr -d ' ')
+          echo "font files: $FONTS"
+          test "$FONTS" -ge 4 || { echo "::error::the Barlow Condensed fonts are not in the app bundle"; exit 1; }
           rm -rf Payload && mkdir Payload && cp -R "$APP" Payload/
           zip -qr dry-run.ipa Payload
           echo "ipa size: $(stat -f%z dry-run.ipa) bytes"

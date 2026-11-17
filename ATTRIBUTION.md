@@ -99,6 +99,9 @@ remains available as a fallback.
 - **GRDB.swift** (`groue/GRDB.swift`) — SQLite persistence (via Swift Package Manager).
 - **MarkdownUI** (`gonzalezreal/swift-markdown-ui`) — renders the AI Coach's Markdown
   replies (via Swift Package Manager).
+- **Barlow Condensed** (The Barlow Project Authors, `jpt/barlow`) — the typeface of Luma's titles
+  and figures, bundled under the SIL Open Font License 1.1. The four weights shipped and the licence
+  text are in `Packages/LumaUI/Sources/LumaKit/Fonts/`.
 
 NOOP contains no WHOOP proprietary code, binaries, firmware, logos, or assets, and
 performs no DRM circumvention. It operates only with the user's own device and data.

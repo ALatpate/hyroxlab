@@ -153,6 +153,22 @@ struct NOOPShortcuts: AppShortcutsProvider {
                     ],
                     shortTitle: "Ask Coach",
                     systemImageName: "sparkles")
+        // Luma's logging without opening the app (StrandiOSShared/LumaQuickIntents.swift).
+        AppShortcut(intent: LogWaterIntent(),
+                    phrases: [
+                        "Log water in \(.applicationName)",
+                        "Add water in \(.applicationName)",
+                    ],
+                    shortTitle: "Log Water",
+                    systemImageName: "drop.fill")
+        AppShortcut(intent: TickSupplementsIntent(),
+                    phrases: ["Tick my supplements in \(.applicationName)"],
+                    shortTitle: "Tick Supplements",
+                    systemImageName: "pills.fill")
+        AppShortcut(intent: LogWeightIntent(),
+                    phrases: ["Log my weight in \(.applicationName)"],
+                    shortTitle: "Log Weight",
+                    systemImageName: "scalemass.fill")
     }
 }
 #endif

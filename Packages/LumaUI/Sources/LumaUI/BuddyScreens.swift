@@ -81,9 +81,16 @@ struct BuddyStrip: View {
 
     var body: some View {
         if env.extras.buddyOnToday {
-            let look = env.buddyLook()
-            let repeats: [BuddyMood] = [.charged, .steady, .drained, .waiting]
-            Button { router.push(.buddy, from: "buddy") } label: {
+            // Looked at again each minute: its state can change with the clock alone.
+            TimelineView(.periodic(from: .now, by: 60)) { context in
+                strip(env.buddyLook(now: context.date))
+            }
+        }
+    }
+
+    private func strip(_ look: BuddyLook) -> some View {
+        let repeats: [BuddyMood] = [.charged, .steady, .drained, .waiting]
+        return Button { router.push(.buddy, from: "buddy") } label: {
                 HStack(spacing: 14) {
                     LiveBuddy(look: look, shape: env.next.build.shape, spark: Luma.recovery(look.energy.map { $0 * 100 }))
                         .frame(width: 70, height: 84)
@@ -101,10 +108,9 @@ struct BuddyStrip: View {
                 .padding(.horizontal, 16)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(LumaPanel(radius: 22))
-            }
-            .buttonStyle(.plain)
-            .lumaZoomSource("buddy")
         }
+        .buttonStyle(.plain)
+        .lumaZoomSource("buddy")
     }
 }
 
@@ -117,9 +123,16 @@ struct BuddyScreen: View {
     private var build: BuddyBuild { env.next.build }
 
     var body: some View {
-        let look = env.buddyLook()
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+            screen(env.buddyLook(now: context.date), now: context.date)
+        }
+        .onAppear { name = env.extras.buddyName }
+        .onDisappear { rename() }
+    }
+
+    private func screen(_ look: BuddyLook, now: Date) -> some View {
         let spark = Luma.recovery(look.energy.map { $0 * 100 })
-        LumaDetailScreen(title: env.extras.name, tone: .recovery) {
+        return LumaDetailScreen(title: env.extras.name, tone: .recovery) {
             VStack(spacing: 6) {
                 LiveBuddy(look: look, shape: build.shape, spark: spark)
                     .frame(height: 250)
@@ -148,7 +161,7 @@ struct BuddyScreen: View {
                 }
             }
 
-            BuddyDayCard(now: Date())
+            BuddyDayCard(now: now)
 
             LumaSection(title: "On your Lock Screen")
             LumaCard {
@@ -187,8 +200,6 @@ struct BuddyScreen: View {
             LumaSection(title: "Every state")
             BuddyMoodGrid(shape: build.shape)
         }
-        .onAppear { name = env.extras.buddyName }
-        .onDisappear { rename() }
     }
 
     private func rename() {

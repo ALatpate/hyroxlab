@@ -45,6 +45,8 @@ final class LumaBridge: ObservableObject, LumaDeviceControl {
         self.source = source
         self.recorder = recorder
         LumaGlanceStore.suiteName = WidgetSnapshot.suiteName
+        // Labels and running text follow the text size set in Settings. Widgets do not: they have no room.
+        LumaType.followsTextSize = true
         env = LumaEnv(source: source, live: live, secrets: LumaKeychain())
         env.device = self
         env.recorder = recorder
@@ -179,7 +181,15 @@ final class LumaBridge: ObservableObject, LumaDeviceControl {
 
         // Widgets and the Lock Screen card.
         env.onGlanceChange = { [weak self] in self?.publishGlance() }
-        recorder.onChange = { [weak self] in self?.liveActivity?.refresh() }
+        // Reminders ask iOS for leave the first time one is switched on.
+        env.requestNotifications = { await LumaReminders.requestAuthorization() }
+        // Something was logged by a shortcut or Siri while the app is running: file it now.
+        NotificationCenter.default.publisher(for: LumaQuickIntents.changed)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.publishGlance() }
+            .store(in: &bag)
+        // A session starting or ending changes the Lock Screen card and the companion's state.
+        recorder.onChange = { [weak self] in self?.publishGlance() }
         liveActivity?.decorate = { [weak self] state in self?.decorate(&state) }
 
         refreshStrap()
@@ -464,10 +474,16 @@ final class LumaBridge: ObservableObject, LumaDeviceControl {
     // MARK: Widgets and the Lock Screen
 
     private func publishGlance() {
+        // First, whatever a widget button or a shortcut logged since the app last ran: the glance about
+        // to be written must hold it, or the widget that was tapped would step back.
+        env.applyQuickLog()
         let glance = env.glance()
         lastGlance = glance
         if LumaGlanceStore.save(glance) { WidgetCenter.shared.reloadAllTimelines() }
         liveActivity?.refresh()
+        // Reminders are planned from the same numbers. Nothing is planned, or cleared, before the strap
+        // data has been read once: an empty plan then would only mean "not known yet".
+        if env.loaded { LumaReminders.sync(env.plannedReminders()) }
     }
 
     /// The day's scores as every other Luma surface shows them, the athlete's own zone for the reading,

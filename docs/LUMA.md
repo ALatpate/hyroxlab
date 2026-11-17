@@ -10,11 +10,12 @@ everything described here sits beside it. [`AGENTS.md`](../AGENTS.md) still gove
 | Path | What lives here |
 |---|---|
 | `Packages/LumaCore` | Pure Foundation, no UI, builds and tests on Linux. Models, analysis (recovery, sleep, load, running, fitness, race readiness), the training log with its muscle model and progress read, the body figure's outlines, the food and supplement model, session state machines, and the coach's wire format and tools. |
-| `Packages/LumaUI`, target `LumaKit` | Design tokens, primitives, the glance snapshot, and the views for widgets and the Lock Screen card. No dependencies, so the widget extension links it alone. |
+| `Packages/LumaUI`, target `LumaKit` | Design tokens (colour, type, motion), the bundled fonts, primitives, the glance snapshot, the queue for things logged from outside the app, the companion's drawing, and the views for widgets and the Lock Screen card. No dependencies, so the widget extension links it alone. |
 | `Packages/LumaUI`, target `LumaUI` | Every screen, the charts, the environment object (`LumaEnv`), the session controllers and the coach engine. Depends on `LumaCore` and re-exports `LumaKit`. |
 | `LumaGallery/` | A small host app that mounts `LumaUI` over demo data. Used only to build and photograph the screens quickly. |
 | `StrandiOS/Luma/` | The bridge between Luma and the strap layer: `LumaRepoSource` (reads), `LumaBridge` (strap control, live state, widgets, Lock Screen card), `LumaWorkoutRecorder`, `LumaKeychain`, and `LumaShell`, which the app mounts as its root. |
 | `StrandiOSWidgets/LumaWidgets.swift` | The widget bundle and the Live Activity, drawn with `LumaKit` views. |
+| `StrandiOSShared/LumaQuickIntents.swift` | Luma's App Intents (log water, tick supplements, log a weigh-in, the tap on the companion), compiled into the app and the widget extension. |
 
 `LumaUI` knows nothing about Bluetooth, the database or HealthKit. It sees four protocols and the
 bridge implements them:
@@ -110,6 +111,58 @@ bridge implements them:
   points, the right half written down and the left its mirror image. No third-party artwork.
 - **Race predictions come from one resolver** (`RaceReadiness.assess`), and the live race screen takes
   its targets from the same model (`RaceReadiness.targets`).
+- **The companion has one set of rules, and no figures of its own.** Its state is resolved in one
+  place (`Buddy.look`) from facts every one of which some screen already shows (`LumaEnv.buddyFacts`
+  reads them from where that screen does), in a fixed order: what is happening now, then how the body
+  is, then what the logs are missing. The app writes every state from now until the morning after next
+  into the glance (`Buddy.schedule`); a widget only looks up the moment that has begun
+  (`BuddyTimeline`), so the Lock Screen cannot say something the app does not. On Today, where the
+  recovery figure and the call already stand, a state that only repeats them is given by name alone.
+- **The companion's build is the athlete's strength levels, and an unmeasured part is plain.** Each of
+  its six parts is the mean level of the muscles it stands for (`Buddy.build`), the same levels the
+  body figure shows. A part no graded lift measures is drawn at the plain build, never smaller: "not
+  measured" must not read as "weak". The drawing is Luma's own (`BuddyRig`): simple shapes turned
+  about their joints, so a change of pose is a change of position and angle that a widget can animate
+  between two entries. No third-party artwork.
+- **A widget moves only as iOS lets it.** A widget is a list of dated pictures. The companion's are
+  its changes of state, a shift of weight every five minutes, and a hop and a wave straight after a
+  tap (`PokeBuddyIntent`). Continuous motion is in the app only. A still pose must always be a
+  truthful one: there is no frame that would look wrong if the next one came late.
+- **What is logged from outside the app is queued, not written.** A widget button or a shortcut may
+  run in the widget extension, which cannot reach the app's records. It queues the entry in the App
+  Group (`LumaQuickLog`) and moves the stored glance to match; the app files the queue before it next
+  writes a glance (`LumaBridge.publishGlance`), so the widget that was tapped never steps back.
+- **A trial is planned before it is read.** A supplement trial is blocks on and blocks off in pairs,
+  the order inside each pair drawn at random when it is set up (`SupplementTrial.plan`), with the
+  first days of every block left out. A day counts only when the plan was followed on it. The result
+  is a difference with the range it most likely lies in, widened for nights that follow one another,
+  and "not clear" is a result. One trial runs at a time.
+- **A pattern in the athlete's days is not a cause, and is checked for chance.** Dose curves, the
+  recovery model and the training-weeks read word everything as "goes with", give the days or nights
+  each stands on, and call a pattern clear only when it survives a false-discovery check across
+  everything tested together (`PatternStrength`). The recovery model fits its inputs side by side
+  (`DriverModel`) and gives a forecast only when it predicts nights it was not fitted on.
+- **One weight.** The weight log is read as a trend (`BodyWeight.read`), and the trend is the weight:
+  a weigh-in moves it and the profile follows, so energy, protein and strength ratios all read one
+  number. Real burn (`EnergyModel`) is given with its range and says that unlogged food makes it higher.
+- **The day's food and the day's targets name the day the same way.** `FuelMatch.read` is given the
+  class the targets were built from, so the card and the targets beside it cannot disagree about what
+  kind of day it was. A line is only marked short once the day is over.
+- **Easing off is an offer.** After two low-recovery mornings in a row Luma offers an easier version
+  of today's hard session (`EaseOff.offer`). It changes nothing until the athlete says so, and is not
+  offered again for a session once answered.
+- **Reminders are worked out, not scheduled.** Each is planned on the phone from the day's own
+  numbers (`ReminderPlanner`) with a stable id, and the plan is handed to iOS each time a number behind
+  it changes (`LumaReminders.sync`): one whose reason has gone is no longer in the plan and is
+  removed. All are off until switched on. Nothing is planned or cleared before the strap data has been
+  read once.
+- **One set of timings.** Every animation takes its timing from `LumaMotion`, and each is nil under
+  Reduce Motion, so the change simply happens. A heart only beats at a rate that is being read
+  (`BeatingHeart`); with no live reading it is still.
+- **Type.** Titles and figures are Barlow Condensed (SIL Open Font License 1.1; the fonts and their
+  licence are in `LumaKit/Fonts`); labels and running text are the system face and follow the text size
+  set in Settings, within limits the layouts hold at. A widget does not follow it. A missing font is
+  not an error: the text falls back to the system face.
 - **Stored identifiers are never renamed.** Bundle ids, the App Group, `noop.*` defaults keys, the
   keychain service, the `noop` URL scheme, widget kinds and `NOOPActivityAttributes` keep their names:
   renaming any of them orphans data or placed widgets on an installed phone. Only text a person reads
@@ -155,7 +208,13 @@ Screen card's real cadence have to be checked on a phone with a strap, as do Hea
 sideload signature and a real coach request. Reading workouts from photos is a coach request: the
 gallery has no coach, so it opens the checking step on a read made up for it (`sheet.workouts.review`,
 and `sheet.workouts.hand` for a workout typed in by hand),
-and how well real boards and screens are read is only known from a phone. A change is not verified on hardware until someone says
+and how well real boards and screens are read is only known from a phone. The weekly review is a coach
+request too; the gallery shows one worded from the demo week's own figures.
+
+Only a phone shows how the companion's widget really behaves: how promptly iOS draws each entry of its
+timeline on the Lock Screen, whether the tap is answered within a second, and what it costs the
+widget's refresh budget. The gallery draws the same views still (`dev.buddy`, `dev.buddy.builds`).
+Notifications, Siri phrases and the widget's water button are likewise only exercised on a phone. A change is not verified on hardware until someone says
 what they tried.
 
 Still to be confirmed on a strap: that recording all the time keeps the app receiving heart rate through
