@@ -220,10 +220,10 @@ jobs:
   # cancelled for any other reason (by hand, or by a newer push) is left alone.
   again:
     needs: [gallery, gallery-intel, app, package]
-    # A job no runner took shows as cancelled in the list of jobs, but its result here has been seen to
-    # be something else (the run itself ends as a failure), so this job runs after any job that did not
-    # succeed and decides from the cancelled job's own note whether to ask again.
-    if: always() && (contains(join(needs.*.result, ' '), 'cancelled') || contains(join(needs.*.result, ' '), 'failure'))
+    # After every run, whatever became of its jobs. The results this job is handed for the jobs it
+    # waits on do not say "cancelled" for a job no runner took (a condition written on them skipped
+    # this job twice), so it reads the list of jobs itself and goes by that.
+    if: always()
     runs-on: ubuntu-24.04
     permissions:
       actions: write
@@ -233,14 +233,22 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           ATTEMPT: ${{ inputs.attempt || '0' }}
-          GALLERY: ${{ needs.gallery.result }}
-          INTEL: ${{ needs.gallery-intel.result }}
+          NEEDS: ${{ toJSON(needs) }}
         run: |
           set -euo pipefail
+          echo "results as handed to this job: $(echo "$NEEDS" | tr -d ' \n' | cut -c1-600)"
+          jobs=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?per_page=50" \
+                   -q '.jobs[] | [.name, (.conclusion // "-"), (.id|tostring)] | @tsv')
+          echo "the list of jobs:"; echo "$jobs"
+          # Each reads its whole input and matches in the shell: with pipefail on, a reader that stops
+          # early can fail the pipe that feeds it, and a match would then read as none.
+          field() { awk -F'\t' -v n="$1" -v c="$2" '$1==n && !seen {print $c; seen=1}' <<< "$jobs"; }
+          how() { field "$1" 2; }
           # The note that says why a job was cancelled can arrive a little after the job ends.
           unclaimed() {
             for try in 1 2 3 4 5 6; do
-              if gh api "repos/${GITHUB_REPOSITORY}/check-runs/$1/annotations" -q '.[].message' | grep -q "not acquired by Runner"; then return 0; fi
+              notes=$(gh api "repos/${GITHUB_REPOSITORY}/check-runs/$1/annotations" -q '.[].message' || true)
+              case "$notes" in *"not acquired by Runner"*) return 0;; esac
               sleep 10
             done
             return 1
@@ -248,14 +256,13 @@ jobs:
           want=""
           for pair in gallery:gallery gallery-intel:intel app:app package:package; do
             job=${pair%%:*}; token=${pair##*:}
-            id=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?per_page=50" \
-                   -q ".jobs[] | select(.name==\"$job\" and .conclusion==\"cancelled\") | .id" | head -1)
-            [ -n "$id" ] || continue
+            [ "$(how "$job")" = "cancelled" ] || continue
+            id=$(field "$job" 3)
             if unclaimed "$id"; then want="$want $token"; fi
           done
           # One set of pictures is enough: when either gallery made it, the other is not asked for again.
-          if [ "$GALLERY" = "success" ]; then want=$(echo " $want " | sed 's/ intel / /'); fi
-          if [ "$INTEL" = "success" ]; then want=$(echo " $want " | sed 's/ gallery / /'); fi
+          if [ "$(how gallery)" = "success" ]; then want=$(echo " $want " | sed 's/ intel / /'); fi
+          if [ "$(how gallery-intel)" = "success" ]; then want=$(echo " $want " | sed 's/ gallery / /'); fi
           want=$(echo $want)
           if [ -z "$want" ]; then echo "nothing to ask for again"; exit 0; fi
           n=$((ATTEMPT + 1))

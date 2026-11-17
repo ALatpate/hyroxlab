@@ -151,10 +151,10 @@ jobs:
   # any other reason (by hand, or by a newer push taking its place) is left alone.
   again:
     needs: [ios]
-    # A job no runner took shows as cancelled in the list of jobs, but its result here has been seen to
-    # be something else (the run itself ends as a failure), so this job runs after any build that did
-    # not succeed and decides from the job's own note whether to ask again.
-    if: always() && needs.ios.result != 'success' && needs.ios.result != 'skipped'
+    # After every run, whatever became of the build. The result this job is handed for the build does
+    # not say "cancelled" for a job no runner took (a condition written on it skipped the same job in
+    # the development workflow twice), so it reads the list of jobs itself and goes by that.
+    if: always()
     runs-on: ubuntu-24.04
     permissions:
       actions: write
@@ -164,17 +164,24 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           ATTEMPT: ${{ inputs.attempt || '0' }}
+          NEEDS: ${{ toJSON(needs) }}
         run: |
           set -euo pipefail
-          id=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs" -q '.jobs[] | select(.name=="ios") | .id' | head -1)
+          echo "result as handed to this job: $(echo "$NEEDS" | tr -d ' \n' | cut -c1-300)"
+          line=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs" \
+                   -q '[.jobs[] | select(.name=="ios")][0] | [(.conclusion // "-"), (.id|tostring)] | @tsv' || true)
+          how=$(cut -f1 <<< "$line"); id=$(cut -f2 <<< "$line")
+          echo "the build in the list of jobs: ${how:-not found}"
+          if [ "$how" != "cancelled" ] || [ -z "$id" ]; then echo "nothing to ask for again"; exit 0; fi
           # The note that says why the job was cancelled can arrive a little after the job ends.
           unclaimed=no
-          if [ -n "$id" ]; then
-            for try in 1 2 3 4 5 6; do
-              if gh api "repos/${GITHUB_REPOSITORY}/check-runs/${id}/annotations" -q '.[].message' | grep -q "not acquired by Runner"; then unclaimed=yes; break; fi
-              sleep 10
-            done
-          fi
+          for try in 1 2 3 4 5 6; do
+            # Matched in the shell: with pipefail on, a reader that stops early can fail the pipe that
+            # feeds it, and a match would then read as none.
+            notes=$(gh api "repos/${GITHUB_REPOSITORY}/check-runs/${id}/annotations" -q '.[].message' || true)
+            case "$notes" in *"not acquired by Runner"*) unclaimed=yes; break;; esac
+            sleep 10
+          done
           if [ "$unclaimed" != "yes" ]; then
             echo "the build was not cancelled for want of a runner; not asking again"
             exit 0

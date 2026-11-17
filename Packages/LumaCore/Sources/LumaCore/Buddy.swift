@@ -181,16 +181,22 @@ public enum Buddy {
     /// Whether `now` falls inside the athlete's usual night.
     static func isUsualNight(_ f: BuddyFacts, at now: Date, calendar: Calendar) -> Bool {
         guard let bed = f.usualBedtime, let wake = f.usualWake, wake > 0, wake < 15 * 60, wake - bed >= 180 else { return false }
-        let c = calendar.dateComponents([.hour, .minute], from: now)
-        let m = Double((c.hour ?? 0) * 60 + (c.minute ?? 0))
+        let m = clockMinutes(now, calendar: calendar)
         return m - 1440 >= bed || (m >= bed && m < wake)
     }
 
     /// Minutes from the midnight inside this training day's night: 23:00 is −60, 00:30 is 30.
     static func eveningMinutes(_ now: Date, calendar: Calendar) -> Double {
-        let c = calendar.dateComponents([.hour, .minute], from: now)
-        let m = Double((c.hour ?? 0) * 60 + (c.minute ?? 0))
+        let m = clockMinutes(now, calendar: calendar)
         return m >= 240 ? m - 1440 : m
+    }
+
+    /// The time of day in minutes, to the second. Bed and wake times are averages and seldom fall on a
+    /// whole minute; read to the minute only, the clock would still be short of such a time at the very
+    /// moment the schedule sets for it, and the change would wait for the next half-hour mark.
+    static func clockMinutes(_ now: Date, calendar: Calendar) -> Double {
+        let c = calendar.dateComponents([.hour, .minute, .second], from: now)
+        return Double((c.hour ?? 0) * 60 + (c.minute ?? 0)) + Double(c.second ?? 0) / 60
     }
 
     static func litres(_ ml: Double) -> String { String(format: "%.1f", ml / 1000) }

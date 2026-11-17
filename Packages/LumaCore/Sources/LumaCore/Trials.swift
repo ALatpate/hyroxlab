@@ -161,18 +161,21 @@ public enum TrialModel {
         let t = LStat.studentTQuantile(0.95, df: max(2, df))
         let low = test.delta - t * se, high = test.delta + t * se
         let verdict: TrialRead.Verdict = low > 0 ? .higher : (high < 0 ? .lower : .unclear)
-        let size = trial.outcome.show(abs(test.delta))
+        // The difference is worded as it reads from the two averages shown with it, so the three agree.
+        let shown = trial.outcome.shownDifference(test.meanA, test.meanB)
+        let size = trial.outcome.gap(abs(shown))
         let counts = "\(on.count) nights on, \(off.count) off"
         let text: String
         switch verdict {
         case .higher, .lower:
             let dir = verdict == .higher ? "higher" : "lower"
-            let a = trial.outcome.format(min(abs(low), abs(high))), b = trial.outcome.show(max(abs(low), abs(high)))
-            text = "Your \(what) ran \(size) \(dir) on \(name), most likely between \(a) and \(b) (\(counts))."
+            let a = trial.outcome.format(min(abs(low), abs(high))), b = trial.outcome.gap(max(abs(low), abs(high)))
+            let ran = shown == 0 ? "a little \(dir)" : "\(size) \(dir)"
+            text = "Your \(what) ran \(ran) on \(name), most likely between \(a) and \(b) (\(counts))."
         default:
-            let dir = test.delta >= 0 ? "higher" : "lower"
-            let ends = "\(trial.outcome.show(abs(low))) \(low < 0 ? "lower" : "higher") to \(trial.outcome.show(abs(high))) \(high < 0 ? "lower" : "higher")"
-            text = "Your \(what) was \(size) \(dir) on \(name), but it could be anywhere from \(ends). Not clear\(finished ? "" : " yet") (\(counts))."
+            let was = shown == 0 ? "the same on \(name) as off it" : "\(size) \(shown > 0 ? "higher" : "lower") on \(name)"
+            let ends = "\(trial.outcome.gap(abs(low))) \(low < 0 ? "lower" : "higher") to \(trial.outcome.gap(abs(high))) \(high < 0 ? "lower" : "higher")"
+            text = "Your \(what) was \(was), but it could be anywhere from \(ends). Not clear\(finished ? "" : " yet") (\(counts))."
         }
         return TrialRead(nOn: on.count, nOff: off.count, meanOn: test.meanA, meanOff: test.meanB, delta: test.delta, low: low, high: high,
                          verdict: verdict, followed: followed, broken: broken, roundsDone: roundsDone, finished: finished, sentence: text)

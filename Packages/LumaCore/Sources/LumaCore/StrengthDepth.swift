@@ -38,7 +38,10 @@ public struct StalledLift: Equatable, Sendable, Identifiable {
     public var id: String { name }
     public let name: String
     public let sessions: Int
+    /// The whole sentence, for where the lift is not already named.
     public let text: String
+    /// The same without the lift's name, for under a row that carries it.
+    public let detail: String
 }
 
 /// A muscle's sets week by week, oldest first; the last entry is the seven days ending today.
@@ -102,8 +105,8 @@ public enum StrengthDepth {
         for lift in progress.lifts where lift.trend == .steady {
             let recent = lift.points.filter { LDate.daysBetween($0.day, today, calendar: calendar) < TrainingProgress.trendDays }.count
             guard recent >= stallSessions, let now = lift.recentBest else { continue }
-            let text = "\(lift.name) has stayed at about \(Int(now.rounded())) kg estimated max for twelve weeks, over \(recent) sessions in the last six."
-            out.append(StalledLift(name: lift.name, sessions: recent, text: text))
+            let detail = "at about \(Int(now.rounded())) kg estimated max for twelve weeks, over \(recent) sessions in the last six."
+            out.append(StalledLift(name: lift.name, sessions: recent, text: "\(lift.name) has stayed \(detail)", detail: "Has stayed \(detail)"))
         }
         return out.sorted { $0.sessions > $1.sessions }
     }

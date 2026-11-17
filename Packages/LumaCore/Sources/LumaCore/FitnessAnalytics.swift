@@ -38,7 +38,7 @@ public struct TrendRead: Equatable, Sendable, Identifiable {
         let name = metric.title
         guard direction != 0 else { return "\(name) is steady: \(metric.show(recent)) this week against \(metric.format(prior)) before." }
         let verb = direction > 0 ? "rising" : "falling"
-        return "\(name) has been \(verb) for four weeks, about \(metric.show(abs(perWeek))) per week. This week averages \(metric.format(recent)) against \(metric.format(prior)) before."
+        return "\(name) has been \(verb) for four weeks, about \(metric.gap(abs(perWeek))) per week. This week averages \(metric.format(recent)) against \(metric.format(prior)) before."
     }
 }
 

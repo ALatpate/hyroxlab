@@ -55,15 +55,20 @@ READY="$DATA/tmp/luma-ready"
 
 n=0
 late=0
+missed=0
 while IFS='|' read -r name screen scroll data wait || [ -n "${name:-}" ]; do
   case "${name:-}" in ''|\#*) continue;; esac
   xcrun simctl terminate "$UDID" "$BID" 2>/dev/null || true
   [ -n "$DATA" ] && rm -f "$READY"
   xcrun simctl launch "$UDID" "$BID" ${EXTRA[@]+"${EXTRA[@]}"} -lumaScreen "$screen" -lumaScroll "${scroll:-0}" -lumaData "${data:-demo}" >/dev/null 2>&1 \
     || { echo "launch failed: $name"; continue; }
-  if [ -n "$DATA" ] && [ -n "${screen:-}" ]; then
-    for _ in $(seq 1 180); do [ -f "$READY" ] && break; sleep 0.5; done
-    if [ -f "$READY" ]; then sleep 2; else late=$((late+1)); echo "not ready in time: $name"; fi
+  # Three screens in a row that never said so, and the signal is taken to be broken: the rest get a
+  # fixed wait, so a run costs minutes more and not the job's whole time limit.
+  if [ -n "$DATA" ] && [ -n "${screen:-}" ] && [ "$missed" -lt 3 ]; then
+    for _ in $(seq 1 120); do [ -f "$READY" ] && break; sleep 0.5; done
+    if [ -f "$READY" ]; then sleep 2; missed=0; else late=$((late+1)); missed=$((missed+1)); echo "not ready in time: $name"; fi
+  elif [ -n "${screen:-}" ]; then
+    late=$((late+1)); sleep 10
   else
     sleep "${wait:-4}"
   fi

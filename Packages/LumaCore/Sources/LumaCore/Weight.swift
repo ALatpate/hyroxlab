@@ -30,11 +30,25 @@ public struct WeightRead: Equatable, Sendable {
     /// The trend today, when there has been a weigh-in lately; otherwise the log is too old to speak for today.
     public let current: Double?
     public let latest: WeightEntry?
-    /// Trend now against the trend four weeks ago.
+    /// How far the weight has moved over the last four weeks (`BodyWeight.line`); nil until there are
+    /// enough weigh-ins in them to say.
     public let change28: Double?
     public let weighIns: Int
 
     public static let empty = WeightRead(points: [], current: nil, latest: nil, change28: nil, weighIns: 0)
+}
+
+/// How fast the weight has moved over the last four weeks: a straight line through the days that had
+/// a weigh-in, with the range its rate lies in. It is the one answer to that question, so the change
+/// shown beside the trend and the rate the energy estimate is built on cannot differ.
+public struct WeightLine: Equatable, Sendable {
+    public let kgPerDay: Double
+    /// The range the rate most likely lies in (nine times in ten).
+    public let low: Double
+    public let high: Double
+
+    /// The change over the four weeks the line was fitted on.
+    public var change: Double { kgPerDay * Double(BodyWeight.lineDays) }
 }
 
 public enum BodyWeight {
@@ -43,6 +57,27 @@ public enum BodyWeight {
     public static let smoothingDays = 5.0
     /// A log with no weigh-in in this many days no longer says what the athlete weighs today.
     public static let staleAfterDays = 21
+    /// The line is fitted on this many days up to today, and needs this much to be fitted at all.
+    public static let lineDays = 28
+    public static let lineWeighIns = 5
+    public static let lineSpanDays = 14
+
+    /// The weigh-ins of the last four weeks, counted by day, and the line through them when there are
+    /// enough: `lineWeighIns` days with a weigh-in, the first and last at least `lineSpanDays` apart.
+    public static func line(_ entries: [WeightEntry], today: String,
+                            calendar: Calendar = LDate.calendar) -> (weighDays: Int, span: Int, line: WeightLine?) {
+        let first = LDate.adding(-lineDays, to: today, calendar: calendar)
+        var weighed: [String: [Double]] = [:]
+        for w in entries where w.day >= first && w.day <= today && w.kg >= 30 && w.kg <= 250 { weighed[w.day, default: []].append(w.kg) }
+        let days = weighed.keys.sorted()
+        let span = days.first.flatMap { a in days.last.map { LDate.daysBetween(a, $0, calendar: calendar) } } ?? 0
+        guard days.count >= lineWeighIns, span >= lineSpanDays else { return (days.count, span, nil) }
+        let xs = days.map { [Double(LDate.daysBetween(first, $0, calendar: calendar))] }
+        let ys = days.map { LStat.mean(weighed[$0] ?? []) ?? 0 }
+        guard let fit = LStat.regress(y: ys, rows: xs) else { return (days.count, span, nil) }
+        let range = fit.interval(1, level: 0.9)
+        return (days.count, span, WeightLine(kgPerDay: fit.coefficients[1], low: range.low, high: range.high))
+    }
 
     public static func read(_ entries: [WeightEntry], today: String, window: Int = 120, calendar: Calendar = LDate.calendar) -> WeightRead {
         let from = LDate.adding(-(window - 1), to: today, calendar: calendar)
@@ -68,10 +103,8 @@ public enum BodyWeight {
             day = LDate.adding(1, to: day, calendar: calendar)
         }
         let fresh = LDate.daysBetween(latest.day, today, calendar: calendar) <= staleAfterDays
-        let then = LDate.adding(-28, to: today, calendar: calendar)
-        let before = points.last { $0.day <= then }?.trend
         return WeightRead(points: points, current: fresh ? trend : nil, latest: latest,
-                          change28: fresh ? before.map { trend - $0 } : nil, weighIns: usable.count)
+                          change28: fresh ? line(entries, today: today, calendar: calendar).line?.change : nil, weighIns: usable.count)
     }
 }
 
@@ -87,6 +120,8 @@ public struct EnergyRead: Equatable, Sendable {
     public let weighIns: Int
     public let intake: Double?
     public let kgPerWeek: Double?
+    /// The same rate as a change over the four weeks: the figure shown beside the weight trend.
+    public let kgChange: Double?
     public let burn: Double?
     public let low: Double?
     public let high: Double?
@@ -97,15 +132,15 @@ public struct EnergyRead: Equatable, Sendable {
     /// Raised when a shortfall has run for weeks alongside slipping overnight signals.
     public let shortfall: String?
 
-    public static let empty = EnergyRead(window: EnergyModel.window, loggedDays: 0, weighIns: 0, intake: nil, kgPerWeek: nil, burn: nil,
-                                         low: nil, high: nil, balance: nil, missing: nil, shortfall: nil)
+    public static let empty = EnergyRead(window: EnergyModel.window, loggedDays: 0, weighIns: 0, intake: nil, kgPerWeek: nil, kgChange: nil,
+                                         burn: nil, low: nil, high: nil, balance: nil, missing: nil, shortfall: nil)
 }
 
 public enum EnergyModel {
-    public static let window = 28
+    public static let window = BodyWeight.lineDays
     public static let minimumLoggedDays = 14
-    public static let minimumWeighIns = 5
-    public static let minimumSpanDays = 14
+    public static let minimumWeighIns = BodyWeight.lineWeighIns
+    public static let minimumSpanDays = BodyWeight.lineSpanDays
     /// The energy a kilo of body weight change stands for. The familiar 7,700 kcal holds for people
     /// carrying a lot of fat and overstates it for leaner ones, who lose and gain more lean tissue with
     /// each kilo (Hall, Int J Obes, 2008), so a range is carried through instead of one figure.
@@ -114,35 +149,32 @@ public enum EnergyModel {
     public static func read(weights: [WeightEntry], fuel: [FuelEntry], days: [LDay], today: String,
                             calendar: Calendar = LDate.calendar) -> EnergyRead {
         let keys = LDate.range(ending: LDate.adding(-1, to: today, calendar: calendar), count: window, calendar: calendar)
-        guard let first = keys.first else { return .empty }
         let byDay = Dictionary(grouping: fuel, by: { $0.day })
         let logged = keys.filter { TrainingProgress.isUsable(byDay[$0] ?? []) }
-        var weighed: [String: [Double]] = [:]
-        for w in weights where w.day >= first && w.day <= today && w.kg >= 30 && w.kg <= 250 { weighed[w.day, default: []].append(w.kg) }
-        let weighDays = weighed.keys.sorted()
-        let span = weighDays.first.flatMap { a in weighDays.last.map { LDate.daysBetween(a, $0, calendar: calendar) } } ?? 0
+        // How the weight moved is asked in one place, so this and the change beside the trend agree.
+        let weighed = BodyWeight.line(weights, today: today, calendar: calendar)
+        let weighDays = weighed.weighDays, span = weighed.span
 
         var need: [String] = []
         if logged.count < minimumLoggedDays { need.append("\(minimumLoggedDays - logged.count) more day\(minimumLoggedDays - logged.count == 1 ? "" : "s") with a full food log") }
-        if weighDays.count < minimumWeighIns {
-            need.append("\(minimumWeighIns - weighDays.count) more weigh-in\(minimumWeighIns - weighDays.count == 1 ? "" : "s")")
+        if weighDays < minimumWeighIns {
+            need.append("\(minimumWeighIns - weighDays) more weigh-in\(minimumWeighIns - weighDays == 1 ? "" : "s")")
         } else if span < minimumSpanDays {
             need.append("weigh-ins at least \(minimumSpanDays) days apart")
         }
         let intake = LStat.mean(logged.map { FuelTotals.of(byDay[$0] ?? []).kcal })
         guard need.isEmpty, let intake else {
-            return EnergyRead(window: window, loggedDays: logged.count, weighIns: weighDays.count, intake: intake, kgPerWeek: nil, burn: nil,
-                              low: nil, high: nil, balance: nil, missing: need.isEmpty ? nil : "Needs " + need.joined(separator: " and ") + ".",
+            return EnergyRead(window: window, loggedDays: logged.count, weighIns: weighDays, intake: intake, kgPerWeek: nil, kgChange: nil,
+                              burn: nil, low: nil, high: nil, balance: nil,
+                              missing: need.isEmpty ? nil : "Needs " + need.joined(separator: " and ") + ".", shortfall: nil)
+        }
+        guard let line = weighed.line else {
+            return EnergyRead(window: window, loggedDays: logged.count, weighIns: weighDays, intake: intake, kgPerWeek: nil, kgChange: nil,
+                              burn: nil, low: nil, high: nil, balance: nil, missing: "Needs weigh-ins that differ from one another.",
                               shortfall: nil)
         }
-        let xs = weighDays.map { [Double(LDate.daysBetween(first, $0, calendar: calendar))] }
-        let ys = weighDays.map { LStat.mean(weighed[$0] ?? []) ?? 0 }
-        guard let fit = LStat.regress(y: ys, rows: xs) else {
-            return EnergyRead(window: window, loggedDays: logged.count, weighIns: weighDays.count, intake: intake, kgPerWeek: nil, burn: nil,
-                              low: nil, high: nil, balance: nil, missing: "Needs weigh-ins that differ from one another.", shortfall: nil)
-        }
-        let slope = fit.coefficients[1]
-        let range = fit.interval(1, level: 0.9)
+        let slope = line.kgPerDay
+        let range = (low: line.low, high: line.high)
         let middle = (kcalPerKg.lowerBound + kcalPerKg.upperBound) / 2
         let burn = intake - slope * middle
         var corners: [Double] = []
@@ -167,8 +199,9 @@ public enum EnergyModel {
                 notice = "You have eaten about \(Int(ten(burn - intake))) kcal a day under what you burn for \(span / 7) weeks, and \(signs.joined(separator: " and ")). A long shortfall can do this. Eating more around training is the usual first step; see a doctor if it does not lift."
             }
         }
-        return EnergyRead(window: window, loggedDays: logged.count, weighIns: weighDays.count, intake: ten(intake), kgPerWeek: slope * 7,
-                          burn: ten(burn), low: ten(low), high: ten(high), balance: ten(intake - burn), missing: nil, shortfall: notice)
+        return EnergyRead(window: window, loggedDays: logged.count, weighIns: weighDays, intake: ten(intake), kgPerWeek: slope * 7,
+                          kgChange: line.change, burn: ten(burn), low: ten(low), high: ten(high), balance: ten(intake - burn), missing: nil,
+                          shortfall: notice)
     }
 }
 

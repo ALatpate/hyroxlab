@@ -28,9 +28,12 @@ public struct EffectFinding: Equatable, Sendable, Identifiable {
     public var helps: Bool? { outcome.higherIsBetter.map { $0 == (delta > 0) } }
 
     public var sentence: String {
-        let dir = delta > 0 ? "higher" : "lower"
+        // The difference is worded as it reads from the two averages printed after it.
+        let shown = outcome.shownDifference(withMean, withoutMean)
+        let size = shown != 0 ? shown : delta
+        let dir = size > 0 ? "higher" : "lower"
         let certainty = reliable ? "" : " Early signal: too few nights to be sure."
-        return "After \(phrase), your \(outcome.phrase) runs \(outcome.show(abs(delta))) \(dir) (\(outcome.format(withMean)) vs \(outcome.format(withoutMean)), \(nWith) and \(nWithout) nights).\(certainty)"
+        return "After \(phrase), your \(outcome.phrase) runs \(outcome.gap(abs(size))) \(dir) (\(outcome.format(withMean)) vs \(outcome.format(withoutMean)), \(nWith) and \(nWithout) nights).\(certainty)"
     }
 }
 

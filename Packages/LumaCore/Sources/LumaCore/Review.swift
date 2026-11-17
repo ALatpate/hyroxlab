@@ -253,7 +253,7 @@ public enum ReminderPlanner {
         if kinds.contains(.caffeine) {
             if let cut = f.caffeineCutoff {
                 add(.caffeine, f.today, at(cut.hour * 60 - 20), "Last call for caffeine",
-                    "After \(cut.clock) it has gone with \(cut.outcome.show(abs(cut.delta))) \(cut.delta < 0 ? "less" : "more") \(cut.outcome.phrase) for you.")
+                    "After \(cut.clock) it has gone with \(cut.outcome.gap(abs(cut.delta))) \(cut.delta < 0 ? "less" : "more") \(cut.outcome.phrase) for you.")
             } else {
                 let minutes = 1440 + bed - caffeineHoursBeforeBed * 60
                 add(.caffeine, f.today, at(minutes - 20), "Last call for caffeine",

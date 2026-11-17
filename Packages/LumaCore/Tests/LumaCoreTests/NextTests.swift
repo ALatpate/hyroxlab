@@ -143,6 +143,23 @@ final class NextTests: XCTestCase {
         }
     }
 
+    func testAChangeBeginsAtItsOwnTimeNotTheNextHalfHour() {
+        // Bed and wake times are averages: 23:05 and 42 seconds, lights out at 21:49 and 36 seconds.
+        var f = facts()
+        f.waterMl = 2800
+        f.usualBedtime = -54.3; f.usualWake = 400.6; f.bedtimeTonight = -130.4
+        let moments = Buddy.schedule(f, from: at(10))
+        XCTAssertEqual(moments.map { $0.look.mood }, [.charged, .sleepy, .sleeping, .waiting])
+        let midnight = at(24)
+        // Winding down starts 45 minutes before lights out, asleep at the usual bedtime, awake at the usual wake.
+        XCTAssertEqual(moments[1].at.timeIntervalSince(midnight), (-130.4 - 45) * 60, accuracy: 2)
+        XCTAssertEqual(moments[2].at.timeIntervalSince(midnight), -54.3 * 60, accuracy: 2)
+        XCTAssertEqual(moments[3].at.timeIntervalSince(midnight), 400.6 * 60, accuracy: 2)
+        // And the line a moment carries names the time it begins by.
+        XCTAssertEqual(moments[1].look.line, "Lights out by 21:50 covers tonight's sleep.")
+        XCTAssertEqual(moments[2].look.line, "Usual night: 23:06 to 6:41.")
+    }
+
     func testTheBuildIsTheAthletesOwnLevels() {
         func session(_ ago: Int, _ name: String, _ kg: Double) -> LiftSession {
             LiftSession(start: LDate.date(key(ago))!, title: "Strength",
@@ -228,6 +245,17 @@ final class NextTests: XCTestCase {
         XCTAssertEqual(read.verdict, .tooEarly)
         XCTAssertNil(read.delta)
         XCTAssertFalse(read.finished)
+    }
+
+    func testADifferenceIsWordedAsItReadsFromTheTwoFiguresBesideIt() {
+        // 127.6 against 124.3 is printed as 128 and 124, so the difference said is 4, not 3.
+        XCTAssertEqual(LMetric.deepMin.shownDifference(127.6, 124.3), 4)
+        XCTAssertEqual(LMetric.sleepHours.shownDifference(7.44, 7.06), 0.3, accuracy: 1e-9)
+        // On a percent scale a difference is in points.
+        XCTAssertEqual(LMetric.recovery.gap(12), "12 points")
+        XCTAssertEqual(LMetric.recovery.gap(1), "1 point")
+        XCTAssertEqual(LMetric.recovery.gap(-3.2, signed: true), "−3 points")
+        XCTAssertEqual(LMetric.hrv.gap(5), "5 ms")
     }
 
     // MARK: How much and how late
@@ -339,6 +367,10 @@ final class NextTests: XCTestCase {
         XCTAssertNil(read.missing)
         XCTAssertEqual(read.intake, 2500)
         XCTAssertEqual(read.kgPerWeek ?? 0, -0.49, accuracy: 0.01)
+        // The change beside the weight trend is the same line, so the two cannot differ.
+        let trend = BodyWeight.read(weights, today: today)
+        XCTAssertEqual(trend.change28, read.kgChange)
+        XCTAssertEqual(trend.change28 ?? 0, -0.07 * 28, accuracy: 0.02)
         let burn = try! XCTUnwrap(read.burn), low = try! XCTUnwrap(read.low), high = try! XCTUnwrap(read.high)
         XCTAssertEqual(burn, 2500 + 0.07 * 6600, accuracy: 15)
         XCTAssertTrue(low <= burn && burn <= high)
@@ -354,6 +386,7 @@ final class NextTests: XCTestCase {
         let thin = EnergyModel.read(weights: Array(weights.prefix(2)), fuel: fuel, days: [], today: today)
         XCTAssertNil(thin.burn)
         XCTAssertEqual(thin.missing, "Needs 3 more weigh-ins.")
+        XCTAssertNil(BodyWeight.read(Array(weights.prefix(2)), today: today).change28, "and no change is claimed from two weigh-ins")
     }
 
     func testSweatRateIsWhatWasLostPlusWhatWasDrunk() {

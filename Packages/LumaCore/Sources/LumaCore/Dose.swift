@@ -188,7 +188,7 @@ public enum DoseModel {
                 text = "No pattern between this and your \(what) the next morning (\(r.xs.count) days)."
             } else {
                 let dir = per > 0 ? "more" : "less"
-                let size = r.outcome.show(abs(per))
+                let size = r.outcome.gap(abs(per))
                 let tail = strength == .clear ? "" : " Early signal: too few days to be sure."
                 text = "\(r.factor.stepLabel) goes with \(size) \(dir) \(what) the next morning (\(r.xs.count) days).\(tail)"
             }
@@ -225,7 +225,7 @@ public enum DoseModel {
             let earliest = rows.compactMap { $0.hour }.filter { $0 >= found.hour }.min() ?? found.hour
             let hour = (earliest * 2).rounded(.down) / 2
             let clock = LFormat.timeOfDay(minutes: hour * 60)
-            let text = "On days with caffeine from \(clock) on, your \(outcome.phrase) ran \(outcome.show(abs(found.test.delta))) \(dir) (\(found.test.nA) and \(found.test.nB) nights)." + (firm ? "" : " Early signal.")
+            let text = "On days with caffeine from \(clock) on, your \(outcome.phrase) ran \(outcome.gap(abs(found.test.delta))) \(dir) (\(found.test.nA) and \(found.test.nB) nights)." + (firm ? "" : " Early signal.")
             cutoffs.append(DoseCutoff(key: "caffeine", outcome: outcome, hour: hour, delta: found.test.delta, nLate: found.test.nA,
                                       nEarly: found.test.nB, p: found.test.p, firm: firm, sentence: text))
         }

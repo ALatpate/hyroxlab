@@ -110,7 +110,7 @@ struct StalledCard: View {
                 LumaGroup {
                     ForEach(stalled.prefix(4)) { s in
                         Button { router.push(.liftHistory(s.name)) } label: {
-                            LumaRow(symbol: "pause.fill", symbolColor: Luma.amber, title: s.name, subtitle: s.text, chevron: true)
+                            LumaRow(symbol: "pause.fill", symbolColor: Luma.amber, title: s.name, subtitle: s.detail, chevron: true)
                         }
                         .buttonStyle(.plain)
                     }

@@ -113,7 +113,9 @@ private struct EnergyCard: View {
                     Text("Most likely between \(LFormat.grouped(low)) and \(LFormat.grouped(high)).").font(LumaFont.body(13.5)).foregroundStyle(Luma.mist)
                     StatGrid {
                         StatCell(label: "Eaten", value: LFormat.grouped(intake), unit: "kcal", note: "average of \(read.loggedDays) logged days")
-                        StatCell(label: "Weight", value: String(format: "%+.2f", read.kgPerWeek ?? 0), unit: "kg / wk", note: "from \(read.weighIns) weigh-ins")
+                        // The same change, to the same decimal, as the badge beside the weight trend above.
+                        StatCell(label: "Weight", value: String(format: "%+.1f", read.kgChange ?? 0), unit: "kg in 4 wk",
+                                 note: "from \(read.weighIns) weigh-ins")
                     }
                     if let notice = read.shortfall {
                         HStack(alignment: .top, spacing: 10) {

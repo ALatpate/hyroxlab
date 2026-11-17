@@ -120,7 +120,9 @@ public struct LumaBuddyWidgetView<Figure: View>: View {
                 figure.frame(width: 54, height: 65)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(frame.title).font(LumaFont.heading(13.5)).lineLimit(1).minimumScaleFactor(0.8)
-                    Text(frame.line).font(.system(size: 11, weight: .medium)).opacity(0.8).lineLimit(2).minimumScaleFactor(0.85)
+                    // Three lines: the slot is narrow beside the figure, and a line cut short would drop the
+                    // figure it exists to give.
+                    Text(frame.line).font(.system(size: 11, weight: .medium)).opacity(0.8).lineLimit(3).minimumScaleFactor(0.85)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

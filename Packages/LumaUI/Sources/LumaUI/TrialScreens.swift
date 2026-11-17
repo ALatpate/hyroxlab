@@ -152,11 +152,12 @@ private struct TrialResult: View {
                     VStack(alignment: .leading, spacing: 6) {
                         RangeMeter(effect: delta, low: low, high: high, span: span, color: color)
                         HStack {
-                            Text(trial.outcome.show(low, signed: true)).font(LumaFont.body(11.5)).foregroundStyle(Luma.smoke)
+                            // The ends of the line itself, which is as long either side of no difference.
+                            Text(trial.outcome.gap(-span, signed: true)).font(LumaFont.body(11.5)).foregroundStyle(Luma.smoke)
                             Spacer()
                             Text("no difference").font(LumaFont.body(11.5)).foregroundStyle(Luma.smoke)
                             Spacer()
-                            Text(trial.outcome.show(high, signed: true)).font(LumaFont.body(11.5)).foregroundStyle(Luma.smoke)
+                            Text(trial.outcome.gap(span, signed: true)).font(LumaFont.body(11.5)).foregroundStyle(Luma.smoke)
                         }
                     }
                 }

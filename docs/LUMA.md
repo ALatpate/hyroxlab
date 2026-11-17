@@ -118,6 +118,9 @@ bridge implements them:
   into the glance (`Buddy.schedule`); a widget only looks up the moment that has begun
   (`BuddyTimeline`), so the Lock Screen cannot say something the app does not. On Today, where the
   recovery figure and the call already stand, a state that only repeats them is given by name alone.
+  A change that follows the clock begins at the time its own line names (winding down 45 minutes
+  before lights-out, asleep at the usual bedtime): the clock is read to the second, because those
+  times are averages and seldom fall on a whole minute.
 - **The companion's build is the athlete's strength levels, and an unmeasured part is plain.** Each of
   its six parts is the mean level of the muscles it stands for (`Buddy.build`), the same levels the
   body figure shows. A part no graded lift measures is drawn at the plain build, never smaller: "not
@@ -140,11 +143,15 @@ bridge implements them:
 - **A pattern in the athlete's days is not a cause, and is checked for chance.** Dose curves, the
   recovery model and the training-weeks read word everything as "goes with", give the days or nights
   each stands on, and call a pattern clear only when it survives a false-discovery check across
-  everything tested together (`PatternStrength`). The recovery model fits its inputs side by side
+  everything tested together (`PatternStrength`). A difference on a percent scale is worded in points
+  (`LMetric.gap`): "12% lower" can also be read as an eighth off. The recovery model fits its inputs side by side
   (`DriverModel`) and gives a forecast only when it predicts nights it was not fitted on.
 - **One weight.** The weight log is read as a trend (`BodyWeight.read`), and the trend is the weight:
   a weigh-in moves it and the profile follows, so energy, protein and strength ratios all read one
-  number. Real burn (`EnergyModel`) is given with its range and says that unlogged food makes it higher.
+  number. How fast it has moved is also asked in one place: a line through the last four weeks of
+  weigh-ins (`BodyWeight.line`) gives both the change shown beside the trend and the rate real burn is
+  built on, so the two are the same figure. Real burn (`EnergyModel`) is given with its range and says
+  that unlogged food makes it higher.
 - **The day's food and the day's targets name the day the same way.** `FuelMatch.read` is given the
   class the targets were built from, so the card and the targets beside it cannot disagree about what
   kind of day it was. A line is only marked short once the day is over.

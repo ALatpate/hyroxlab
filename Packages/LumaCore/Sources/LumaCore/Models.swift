@@ -210,6 +210,23 @@ public enum LMetric: String, CaseIterable, Codable, Sendable, Identifiable {
         return unit == "%" ? number + "%" : number + " " + unit
     }
 
+    /// The size of a difference between two values, ready for a sentence: "5 ms", "12 points". On a
+    /// percent scale a difference is given in points: "12% lower" can also be read as an eighth off.
+    public func gap(_ v: Double, signed: Bool = false) -> String {
+        guard unit == "%" else { return show(v, signed: signed) }
+        let size = format(abs(v))
+        let number = signed ? (v >= 0 ? "+" : "−") + size : format(v)
+        return number + (size == "1" ? " point" : " points")
+    }
+
+    /// The difference between two values as a reader works it out from the two as they are printed:
+    /// each is rounded first, the way `format` rounds it. A difference rounded on its own can be one
+    /// off from the pair beside it (127.6 against 124.3 prints as 128 and 124, and as 3).
+    public func shownDifference(_ a: Double, _ b: Double) -> Double {
+        let scale = pow(10, Double(decimals))
+        return ((a * scale).rounded(.toNearestOrEven) - (b * scale).rounded(.toNearestOrEven)) / scale
+    }
+
     public func format(_ v: Double) -> String {
         if self == .skinTempDev { return String(format: "%+.1f", v) }
         if self == .steps || self == .activeKcal { return LFormat.grouped(v) }
