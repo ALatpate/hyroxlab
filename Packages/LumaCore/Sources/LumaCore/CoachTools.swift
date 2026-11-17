@@ -20,6 +20,8 @@ public struct CoachWorld: Sendable {
     public var notes: [String]
     /// False when the athlete has not agreed to share health data: read tools then return nothing.
     public var shareHealth: Bool
+    /// The athlete's measured sweat rate, when they have one; the day's water target is built on it.
+    public var sweatMlPerHour: Double = SweatModel.standardMlPerHour
 
     public init(today: String, now: Date = Date(), profile: LProfile, days: [LDay], workouts: [LWorkout], analysis: LumaAnalysis,
                 planned: [PlannedSession], routine: [RoutineSlot], fuel: [FuelEntry], supplements: [SupplementPlan], checkIns: [CheckIn],
@@ -36,7 +38,7 @@ public struct CoachWorld: Sendable {
         let strain = days.last { $0.day == day }?.strain.map(LScale.strain21)
         let minutes = ps.filter { $0.status != .removed && $0.kind != .rest }.reduce(0.0) { $0 + Double($1.durationMin) }
         return FuelPlanner.targets(profile: profile, dayClass: FuelPlanner.dayClass(planned: ps, strain21: strain),
-                                   trainingMinutes: max(45, minutes), on: now)
+                                   trainingMinutes: max(45, minutes), sweatMlPerHour: sweatMlPerHour, on: now)
     }
 }
 

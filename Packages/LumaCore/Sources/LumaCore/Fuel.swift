@@ -188,8 +188,10 @@ public enum FuelPlanner {
 
     /// Daily targets for a hybrid athlete: energy from resting need × an activity factor for the day,
     /// protein at 2 g/kg, carbohydrate scaled to the day's work, fat as the remainder (never under
-    /// 0.8 g/kg), and fluid from body mass plus sweat allowance for training.
-    public static func targets(profile p: LProfile, dayClass: FuelDayClass, trainingMinutes: Double = 60, on date: Date = Date()) -> FuelTargets {
+    /// 0.8 g/kg), and fluid from body mass plus what training sweats out: the athlete's own measured
+    /// rate when they have one (`SweatModel.rate`), a standard allowance otherwise.
+    public static func targets(profile p: LProfile, dayClass: FuelDayClass, trainingMinutes: Double = 60,
+                               sweatMlPerHour: Double = SweatModel.standardMlPerHour, on date: Date = Date()) -> FuelTargets {
         let rest = restingEnergy(massKg: p.weightKg, heightCm: p.heightCm, age: p.age(on: date), sex: p.sex)
         let factor: Double, carbPerKg: Double
         switch dayClass {
@@ -207,7 +209,7 @@ public enum FuelPlanner {
             fat = minFat
             carbs = max(p.weightKg * 2.5, (kcal - protein * 4 - fat * 9) / 4).rounded()
         }
-        let water = p.weightKg * 35 + (dayClass == .rest ? 0 : trainingMinutes / 60 * 600)
+        let water = p.weightKg * 35 + (dayClass == .rest ? 0 : trainingMinutes / 60 * LStat.clamp(sweatMlPerHour, 300, 2000))
         let waterRounded = (water / 50).rounded() * 50
         return FuelTargets(dayClass: dayClass, kcal: kcal, proteinG: protein, carbsG: carbs, fatG: fat.rounded(),
                            waterMl: waterRounded, caffeineLimitMg: min(400, (p.weightKg * 6 / 10).rounded() * 10))
