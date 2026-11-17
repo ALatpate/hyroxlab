@@ -21,11 +21,11 @@
       "versions": [
         {
           "version": "12.1.0",
-          "buildVersion": "14",
+          "buildVersion": "16",
           "date": "2026-11-17",
-          "localizedDescription": "Build 14. Training log and progress. Train has a new button: Add from photos. Pick up to eight pictures of your workouts (the board, the class screen, your tracking app). Luma reads them, splits them into separate workouts, sorts each by type and lists every exercise with its sets. A weight shown in the picture is filled in for you. Where none is shown, the exercise has an empty box asking for the weight you used; one tap offers last time's. You can give each set its own weight, type in an exercise by hand, or enter a whole workout with no photo. Reading photos uses your coach key. Train also has a new Progress view. A body figure, front and back, shows each muscle's strength level, how it is moving, and how much work it got this week; tap a muscle for the numbers. Below it: strong and weak points, each lift's estimated max over time, sets by muscle, your food set against training days, how often you took each supplement, and what your habits do to the next morning. Strength levels are Luma's own scale and the maxes are estimates from your logged sets. A muscle with no loaded lift behind it shows as not measured, not as weak.",
-          "downloadURL": "https://github.com/ALatpate/hyroxlab/releases/download/build-14/Luma.ipa",
-          "size": 25043283,
+          "localizedDescription": "Build 16. A companion, a new look, and twelve new reads of your data. Glim: a small companion on Today and as a new Lock Screen and Home Screen widget (add \"Companion\"). It is charged, steady or drained with your recovery, asleep in your usual night, thirsty when water is behind, in session when you train, and it celebrates a new best. Its build follows your own strength levels, part by part. Tap it for a wave. Open it to see why it looks the way it does. New type: tall, narrow titles and figures, and text that follows your iPhone's text size. Motion: a tile opens into its screen, muscles fill in, rows shimmer while photos are read, a banner for a new best, ticks that draw themselves, and a heart that beats at your real rate (and is still when there is no live reading). New analysis: supplement trials (blocks on and off, a fair answer); how much and how late (caffeine, alcohol, last meal, bedtime against the next morning, with your own caffeine cut-off); food against the work, day by day; a weight log with what you really burn; a kept weekly review; what goes with your stronger weeks; one model of what moves your recovery, with tomorrow's likely score; each lift's history and stalled lifts; your own sweat rate; an offer to ease off after two low mornings. Log without opening Luma: a water button on the Fuel widget, and \"Log water in Luma\" for Siri. Reminders, all off until you switch them on: Settings, Reminders.",
+          "downloadURL": "https://github.com/ALatpate/hyroxlab/releases/download/build-16/Luma.ipa",
+          "size": 26566547,
           "minOSVersion": "17.0"
         }
       ],
