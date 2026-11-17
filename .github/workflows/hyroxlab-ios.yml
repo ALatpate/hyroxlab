@@ -25,6 +25,12 @@ on:
       attempt:
         description: 'How many times this build has been asked for already (set by the workflow itself)'
         default: '0'
+      runner:
+        description: 'Runner to build on: macos-26, or macos-15-intel when no arm64 runner is to be had'
+        default: 'macos-26'
+      avoid:
+        description: 'A runner whose build failed for a reason of its own, not to be gone back to (set by the workflow itself)'
+        default: ''
   push:
     branches: [main]
     paths:
@@ -46,10 +52,17 @@ concurrency:
 
 jobs:
   ios:
-    runs-on: macos-26
-    timeout-minutes: 45
+    # A push builds on the arm64 runner. When none is to be had, the job at the end of this file asks
+    # for the build again on the Intel runner, which is slower and needs the step below.
+    runs-on: ${{ inputs.runner || 'macos-26' }}
+    timeout-minutes: 110
     steps:
       - uses: actions/checkout@v5
+
+      # Changes nothing where Xcode 26 is the default. The Intel image defaults to an older Xcode and
+      # carries Xcode 26 beside it.
+      - name: Use Xcode 26 where it is not the default
+        run: Tools/luma_xcode.sh
 
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -146,9 +159,12 @@ jobs:
 
   # GitHub is at times short of macOS runners. A job no runner takes within fifteen minutes is
   # cancelled ("The job was not acquired by Runner of type hosted"), with nothing built or published.
-  # This asks for the build again, as a new run, up to eight times. Each asking is a new run number,
-  # so the build number moves on; a number that never built is simply skipped. A build cancelled for
-  # any other reason (by hand, or by a newer push taking its place) is left alone.
+  # This asks for the build again, as a new run, up to twelve times, on the other kind of runner each
+  # time (arm64, then Intel, then arm64). Each asking is a new run number, so the build number moves
+  # on; a number that never built is simply skipped. A build that failed on the Intel runner for a
+  # reason of its own is asked for once more on arm64, and Intel is not gone back to. A build that
+  # failed on arm64, or was cancelled for any other reason (by hand, or by a newer push taking its
+  # place), is left alone.
   again:
     needs: [ios]
     # After every run, whatever became of the build. The result this job is handed for the build does
@@ -164,6 +180,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           ATTEMPT: ${{ inputs.attempt || '0' }}
+          ASKED: ${{ inputs.runner || 'macos-26' }}
+          AVOID: ${{ inputs.avoid || '' }}
           NEEDS: ${{ toJSON(needs) }}
         run: |
           set -euo pipefail
@@ -171,22 +189,27 @@ jobs:
           line=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs" \
                    -q '[.jobs[] | select(.name=="ios")][0] | [(.conclusion // "-"), (.id|tostring)] | @tsv' || true)
           how=$(cut -f1 <<< "$line"); id=$(cut -f2 <<< "$line")
-          echo "the build in the list of jobs: ${how:-not found}"
-          if [ "$how" != "cancelled" ] || [ -z "$id" ]; then echo "nothing to ask for again"; exit 0; fi
-          # The note that says why the job was cancelled can arrive a little after the job ends.
-          unclaimed=no
-          for try in 1 2 3 4 5 6; do
+          echo "the build in the list of jobs: ${how:-not found}, asked for on $ASKED"
+          if [ "$ASKED" = "macos-26" ]; then other=macos-15-intel; else other=macos-26; fi
+          next=""; avoid="$AVOID"
+          if [ "$how" = "cancelled" ] && [ -n "$id" ]; then
+            # The note that says why the job was cancelled can arrive a little after the job ends.
             # Matched in the shell: with pipefail on, a reader that stops early can fail the pipe that
             # feeds it, and a match would then read as none.
-            notes=$(gh api "repos/${GITHUB_REPOSITORY}/check-runs/${id}/annotations" -q '.[].message' || true)
-            case "$notes" in *"not acquired by Runner"*) unclaimed=yes; break;; esac
-            sleep 10
-          done
-          if [ "$unclaimed" != "yes" ]; then
-            echo "the build was not cancelled for want of a runner; not asking again"
-            exit 0
+            for try in 1 2 3 4 5 6; do
+              notes=$(gh api "repos/${GITHUB_REPOSITORY}/check-runs/${id}/annotations" -q '.[].message' || true)
+              case "$notes" in *"not acquired by Runner"*) next="$other"; break;; esac
+              sleep 10
+            done
+            if [ -z "$next" ]; then echo "the build was not cancelled for want of a runner; not asking again"; exit 0; fi
+            if [ "$next" = "$avoid" ]; then next="$ASKED"; fi
+          elif [ "$how" = "failure" ] && [ "$ASKED" = "macos-15-intel" ]; then
+            echo "the build failed on the Intel runner; asking once more on arm64 and not going back"
+            next=macos-26; avoid=macos-15-intel
+          else
+            echo "nothing to ask for again"; exit 0
           fi
           n=$((ATTEMPT + 1))
-          if [ "$n" -gt 8 ]; then echo "::warning::no macOS runner after 8 attempts"; exit 0; fi
-          echo "attempt $n"
-          gh workflow run "HYROX Lab iOS" --repo "${GITHUB_REPOSITORY}" --ref main -f attempt="$n"
+          if [ "$n" -gt 12 ]; then echo "::warning::no build after 12 attempts"; exit 0; fi
+          echo "attempt $n, on $next"
+          gh workflow run "HYROX Lab iOS" --repo "${GITHUB_REPOSITORY}" --ref main -f attempt="$n" -f runner="$next" -f avoid="$avoid"

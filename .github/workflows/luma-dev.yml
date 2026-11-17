@@ -8,6 +8,9 @@
 #            main performs, publishing nothing. Runs with `app`.
 #   gallery-intel  The gallery on an Intel runner, for when no arm64 macOS runner is to be had. Runs
 #            when the commit message contains [intel]; pictures land on `screens-intel`.
+# `app` and `package` can also be built on the Intel runner: put [app-intel] in the commit message in
+# place of [app]. The Intel image's default Xcode is too old for the app, so they first select the
+# Xcode 26 it also carries (Tools/luma_xcode.sh).
 name: Luma dev
 
 on:
@@ -19,6 +22,9 @@ on:
       attempt:
         description: 'How many times this has been asked for already (set by the workflow itself)'
         default: '0'
+      runner:
+        description: 'Runner for app and package: macos-26 or macos-15-intel'
+        default: 'macos-26'
   push:
     branches: ['luma-*']
 
@@ -123,11 +129,13 @@ jobs:
           ls | head -100
 
   app:
-    if: contains(github.event.head_commit.message, '[app]') || (github.event_name == 'workflow_dispatch' && contains(inputs.jobs, 'app'))
-    runs-on: macos-26
-    timeout-minutes: 75
+    if: contains(github.event.head_commit.message, '[app]') || contains(github.event.head_commit.message, '[app-intel]') || (github.event_name == 'workflow_dispatch' && contains(inputs.jobs, 'app'))
+    runs-on: ${{ (contains(github.event.head_commit.message, '[app-intel]') || inputs.runner == 'macos-15-intel') && 'macos-15-intel' || 'macos-26' }}
+    timeout-minutes: 110
     steps:
       - uses: actions/checkout@v5
+      - name: Use Xcode 26 where it is not the default
+        run: Tools/luma_xcode.sh
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Generate Xcode project
@@ -135,8 +143,9 @@ jobs:
       - name: Build NOOPiOS (Debug, simulator)
         run: |
           set -o pipefail
+          xcodebuild -version
           if ! xcodebuild -scheme NOOPiOS -configuration Debug -destination 'generic/platform=iOS Simulator' \
-               -derivedDataPath build/dd ARCHS=arm64 ONLY_ACTIVE_ARCH=NO \
+               -derivedDataPath build/dd ARCHS="$(uname -m)" ONLY_ACTIVE_ARCH=NO \
                CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build > build.log 2>&1; then
             echo "=== COMPILE ERRORS ($(grep -cE ': error:' build.log)) ==="
             grep -E ": error:" build.log | sed -E 's#^.*/hyroxlab/hyroxlab/##' | awk '!seen[$0]++' | head -300
@@ -146,7 +155,14 @@ jobs:
           fi
           echo "build ok"
       - name: Capture screens
-        run: Tools/luma_screens.sh build/dd/Build/Products/Debug-iphonesimulator/NOOP.app shots Tools/luma_screens_app.txt --demo-seed
+        run: |
+          # Where another Xcode was selected for the build, the simulators are the ones that came with
+          # the runner's own default, so the pictures are taken with that one.
+          if [ -n "${LUMA_DEFAULT_XCODE:-}" ] && [ "$(xcode-select -p)" != "$LUMA_DEFAULT_XCODE" ]; then
+            sudo xcode-select -s "$LUMA_DEFAULT_XCODE"
+            echo "simulators from: $(xcodebuild -version | tr '\n' ' ')"
+          fi
+          Tools/luma_screens.sh build/dd/Build/Products/Debug-iphonesimulator/NOOP.app shots Tools/luma_screens_app.txt --demo-seed
       - name: Publish to the screens-app branch
         env:
           GH_TOKEN: ${{ github.token }}
@@ -162,11 +178,13 @@ jobs:
           ls | head -60
 
   package:
-    if: contains(github.event.head_commit.message, '[app]') || (github.event_name == 'workflow_dispatch' && contains(inputs.jobs, 'package'))
-    runs-on: macos-26
-    timeout-minutes: 60
+    if: contains(github.event.head_commit.message, '[app]') || contains(github.event.head_commit.message, '[app-intel]') || (github.event_name == 'workflow_dispatch' && contains(inputs.jobs, 'package'))
+    runs-on: ${{ (contains(github.event.head_commit.message, '[app-intel]') || inputs.runner == 'macos-15-intel') && 'macos-15-intel' || 'macos-26' }}
+    timeout-minutes: 110
     steps:
       - uses: actions/checkout@v5
+      - name: Use Xcode 26 where it is not the default
+        run: Tools/luma_xcode.sh
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Generate Xcode project
@@ -174,6 +192,7 @@ jobs:
       - name: Build NOOPiOS (device, unsigned, Release)
         run: |
           set -o pipefail
+          xcodebuild -version
           if ! xcodebuild -scheme NOOPiOS -configuration Release -destination 'generic/platform=iOS' \
                -derivedDataPath build/dd CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
                CURRENT_PROJECT_VERSION=1 build > build.log 2>&1; then
@@ -216,8 +235,9 @@ jobs:
 
   # GitHub is at times short of macOS runners. A job no runner takes within fifteen minutes is
   # cancelled ("The job was not acquired by Runner of type hosted"), with nothing built. This asks
-  # for those jobs again, as a new run of this workflow on the same branch, up to eight times. A job
-  # cancelled for any other reason (by hand, or by a newer push) is left alone.
+  # for those jobs again, as a new run of this workflow on the same branch, up to eight times, and
+  # asks for `app` and `package` on the other kind of runner each time (arm64, then Intel, then arm64).
+  # A job cancelled for any other reason (by hand, or by a newer push) is left alone.
   again:
     needs: [gallery, gallery-intel, app, package]
     # After every run, whatever became of its jobs. The results this job is handed for the jobs it
@@ -234,6 +254,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           ATTEMPT: ${{ inputs.attempt || '0' }}
           NEEDS: ${{ toJSON(needs) }}
+          ASKED: ${{ (contains(github.event.head_commit.message, '[app-intel]') || inputs.runner == 'macos-15-intel') && 'macos-15-intel' || 'macos-26' }}
         run: |
           set -euo pipefail
           echo "results as handed to this job: $(echo "$NEEDS" | tr -d ' \n' | cut -c1-600)"
@@ -267,5 +288,6 @@ jobs:
           if [ -z "$want" ]; then echo "nothing to ask for again"; exit 0; fi
           n=$((ATTEMPT + 1))
           if [ "$n" -gt 8 ]; then echo "::warning::no macOS runner after 8 attempts for: $want"; exit 0; fi
-          echo "attempt $n for: $want"
-          gh workflow run "Luma dev" --repo "${GITHUB_REPOSITORY}" --ref "${GITHUB_REF_NAME}" -f attempt="$n" -f jobs="$want"
+          if [ "$ASKED" = "macos-26" ]; then other=macos-15-intel; else other=macos-26; fi
+          echo "attempt $n for: $want (app and package on $other)"
+          gh workflow run "Luma dev" --repo "${GITHUB_REPOSITORY}" --ref "${GITHUB_REF_NAME}" -f attempt="$n" -f jobs="$want" -f runner="$other"
