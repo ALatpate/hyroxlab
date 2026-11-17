@@ -220,7 +220,10 @@ jobs:
   # cancelled for any other reason (by hand, or by a newer push) is left alone.
   again:
     needs: [gallery, gallery-intel, app, package]
-    if: always() && contains(join(needs.*.result, ' '), 'cancelled')
+    # A job no runner took shows as cancelled in the list of jobs, but its result here has been seen to
+    # be something else (the run itself ends as a failure), so this job runs after any job that did not
+    # succeed and decides from the cancelled job's own note whether to ask again.
+    if: always() && (contains(join(needs.*.result, ' '), 'cancelled') || contains(join(needs.*.result, ' '), 'failure'))
     runs-on: ubuntu-24.04
     permissions:
       actions: write

@@ -61,9 +61,11 @@ public enum BuddyTimeline {
         }
         var out: [BuddyFrame] = []
         if let poke, now.timeIntervalSince(poke) >= 0, now.timeIntervalSince(poke) < pokeWindow {
+            // A second or more apart. Nothing documents how close two pictures of a widget may be and
+            // still be shown one after the other, so the reaction does not depend on less.
             out.append(frame(buddy, at: now, beat: 10))
-            out.append(frame(buddy, at: now.addingTimeInterval(0.6), beat: 11))
-            out.append(frame(buddy, at: now.addingTimeInterval(1.4)))
+            out.append(frame(buddy, at: now.addingTimeInterval(1), beat: 11))
+            out.append(frame(buddy, at: now.addingTimeInterval(2.2)))
         } else {
             out.append(frame(buddy, at: now))
         }

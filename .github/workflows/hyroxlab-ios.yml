@@ -151,7 +151,10 @@ jobs:
   # any other reason (by hand, or by a newer push taking its place) is left alone.
   again:
     needs: [ios]
-    if: always() && needs.ios.result == 'cancelled'
+    # A job no runner took shows as cancelled in the list of jobs, but its result here has been seen to
+    # be something else (the run itself ends as a failure), so this job runs after any build that did
+    # not succeed and decides from the job's own note whether to ask again.
+    if: always() && needs.ios.result != 'success' && needs.ios.result != 'skipped'
     runs-on: ubuntu-24.04
     permissions:
       actions: write
