@@ -13,7 +13,8 @@ struct LiftHistoryScreen: View {
 
     var body: some View {
         let history = StrengthDepth.history(name, sessions: env.lifts, progress: env.progress, bodyKg: env.profile.weightKg, today: env.today)
-        let points = history.days.filter { $0.e1RM != nil }
+        // The history comes newest first; a chart reads left to right from the oldest.
+        let points = history.days.reversed().filter { $0.e1RM != nil }
         LumaDetailScreen(title: "Lift", tone: .strain) {
             Text(history.name).font(LumaFont.title(26)).foregroundStyle(Luma.frost).fixedSize(horizontal: false, vertical: true)
             if let p = history.progress {
@@ -65,7 +66,7 @@ struct LiftHistoryScreen: View {
             if !history.days.isEmpty {
                 LumaSection(title: "Sessions")
                 LumaGroup {
-                    ForEach(Array(history.days.reversed().prefix(14))) { d in
+                    ForEach(Array(history.days.prefix(14))) { d in
                         Button { router.push(.lift(d.sessionID)) } label: {
                             LumaRow(symbol: nil, title: LumaText.dayTitle(d.day, today: env.today),
                                     subtitle: "\(d.sets) set\(d.sets == 1 ? "" : "s") · top \(d.top)", chevron: true) {

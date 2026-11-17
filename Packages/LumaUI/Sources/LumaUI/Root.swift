@@ -78,6 +78,7 @@ public struct LumaRootView: View {
             env.reload()
             LumaRoute.apply(launch.screen, env: env)
             if launch.screen == nil, !env.profile.isSetUp { router.cover = .onboarding }
+            await signalReady()
         }
         // Coming back on screen reloads, so anything held back while the app was out of sight (the
         // search for unrecorded sessions) runs for the person now looking.
@@ -91,6 +92,16 @@ public struct LumaRootView: View {
 }
 
 extension LumaRootView {
+    /// Development only: when the app was launched straight onto a named screen, says when that screen
+    /// is ready to photograph, by writing an empty file the screenshot harness waits for. Ready means
+    /// the strap data has been read once and the screen has had time to draw and settle.
+    fileprivate func signalReady() async {
+        guard launch.screen != nil else { return }
+        for _ in 0..<600 where !env.loaded { try? await Task.sleep(nanoseconds: 100_000_000) }
+        try? await Task.sleep(nanoseconds: 1_800_000_000)
+        try? Data().write(to: FileManager.default.temporaryDirectory.appendingPathComponent("luma-ready"))
+    }
+
     /// A new best, shown once over whatever screen is up, then put away.
     @ViewBuilder
     fileprivate var celebration: some View {

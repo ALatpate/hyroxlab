@@ -6,6 +6,8 @@
 #
 # Each list line is  name|screen|scrollY|data|waitSeconds  (later fields optional). The app reads
 # -lumaScreen / -lumaScroll / -lumaData from the argument domain (LumaLaunch.fromArguments()).
+# waitSeconds is only used for a line with no screen name; a named screen is photographed when the
+# app says it is ready.
 set -uo pipefail
 APP="$1"; OUT="$2"; LIST="$3"; shift 3
 EXTRA=("$@")
@@ -44,13 +46,27 @@ xcrun simctl launch "$UDID" "$BID" ${EXTRA[@]+"${EXTRA[@]}"} -lumaScreen today >
 sleep 12
 xcrun simctl terminate "$UDID" "$BID" 2>/dev/null || true
 
+# The app says when a screen is ready to photograph: once its data is loaded and the screen it was
+# launched on has had time to draw, it writes a file into its temporary directory (LumaRootView, only
+# when launched on a named screen). Waiting for that file takes as long as the machine needs and no
+# longer, where a fixed wait is too short on a slow simulator and wasted on a fast one.
+DATA=$(xcrun simctl get_app_container "$UDID" "$BID" data 2>/dev/null || true)
+READY="$DATA/tmp/luma-ready"
+
 n=0
+late=0
 while IFS='|' read -r name screen scroll data wait || [ -n "${name:-}" ]; do
   case "${name:-}" in ''|\#*) continue;; esac
   xcrun simctl terminate "$UDID" "$BID" 2>/dev/null || true
+  [ -n "$DATA" ] && rm -f "$READY"
   xcrun simctl launch "$UDID" "$BID" ${EXTRA[@]+"${EXTRA[@]}"} -lumaScreen "$screen" -lumaScroll "${scroll:-0}" -lumaData "${data:-demo}" >/dev/null 2>&1 \
     || { echo "launch failed: $name"; continue; }
-  sleep "${wait:-4}"
+  if [ -n "$DATA" ] && [ -n "${screen:-}" ]; then
+    for _ in $(seq 1 180); do [ -f "$READY" ] && break; sleep 0.5; done
+    if [ -f "$READY" ]; then sleep 2; else late=$((late+1)); echo "not ready in time: $name"; fi
+  else
+    sleep "${wait:-4}"
+  fi
   if xcrun simctl io "$UDID" screenshot --type=png "$OUT/$name.png" >/dev/null 2>&1; then
     sips -s format jpeg -s formatOptions 80 -Z 1100 "$OUT/$name.png" --out "$OUT/$name.jpg" >/dev/null 2>&1 && rm -f "$OUT/$name.png"
     n=$((n+1))
@@ -60,6 +76,7 @@ while IFS='|' read -r name screen scroll data wait || [ -n "${name:-}" ]; do
 done < "$LIST"
 xcrun simctl terminate "$UDID" "$BID" 2>/dev/null || true
 echo "captured $n screens"
+[ "$late" -gt 0 ] && echo "$late of them were taken without the app saying it was ready"
 # A crash shows up as a home-screen capture; surface the newest crash report so the log explains it.
 for f in $(ls -t ~/Library/Logs/DiagnosticReports/*.ips 2>/dev/null | head -2); do
   echo "--- crash report: $f"; python3 - "$f" <<'PY' || head -40 "$f"
