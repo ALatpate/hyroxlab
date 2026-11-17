@@ -275,17 +275,20 @@ private struct BalanceRow: View {
     var body: some View {
         let left: String = ProgressText.count(read.leftSets)
         let right: String = ProgressText.count(read.rightSets)
+        let leftText: String = "\(read.left) \(left)"
+        let rightText: String = "\(right) \(read.right)"
+        let spoken: String = "\(read.left), \(left) sets. \(read.right), \(right) sets."
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
-                Text(read.left + " " + left).font(LumaFont.body(13.5, .medium)).foregroundStyle(Luma.frost)
+                Text(leftText).font(LumaFont.body(13.5, .medium)).foregroundStyle(Luma.frost)
                 Spacer(minLength: 8)
-                Text(right + " " + read.right).font(LumaFont.body(13.5, .medium)).foregroundStyle(Luma.frost)
+                Text(rightText).font(LumaFont.body(13.5, .medium)).foregroundStyle(Luma.frost)
             }
             LumaShareBar(shares: [LumaShareBar.Share(id: "left", value: read.leftSets, color: Luma.ember),
                                   LumaShareBar.Share(id: "right", value: read.rightSets, color: Luma.sky)], height: 10)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(read.left + ", " + left + " sets. " + read.right + ", " + right + " sets.")
+        .accessibilityLabel(spoken)
     }
 }
 
