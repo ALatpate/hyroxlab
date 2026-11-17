@@ -17,9 +17,9 @@ struct StrengthScreen: View {
                 Button { router.sheet = .workoutPhotos(env.today) } label: {
                     Label("From photos", systemImage: "photo.on.rectangle.angled").frame(maxWidth: .infinity)
                 }
-                .buttonStyle(LumaPrimaryButtonStyle(compact: false))
+                .buttonStyle(LumaPrimaryButtonStyle(compact: true))
                 Button { router.cover = .lift } label: { Label("Set by set", systemImage: "dumbbell.fill").frame(maxWidth: .infinity) }
-                    .buttonStyle(LumaSecondaryButtonStyle())
+                    .buttonStyle(LumaSecondaryButtonStyle(compact: true))
             }
             if sessions.isEmpty {
                 LumaCard {
@@ -27,7 +27,10 @@ struct StrengthScreen: View {
                               message: "Add sessions from photos of the board or your tracking app, or log a strength session set by set. Luma keeps your best lifts and offers your last loads next time.")
                 }
             } else {
-                if sessions.contains(where: { $0.volumeKg > 0 }) { volumeCard(sessions.filter { $0.volumeKg > 0 }) }
+                // Load lifted is reps times load, so it describes a strength session and nothing else.
+                if sessions.contains(where: { StrengthScreen.liftedLoad($0) != nil }) {
+                    volumeCard(sessions.filter { StrengthScreen.liftedLoad($0) != nil })
+                }
                 if !records.isEmpty {
                     LumaSection(title: "Best lifts")
                     LumaGroup {
@@ -46,10 +49,13 @@ struct StrengthScreen: View {
                     ForEach(sessions) { s in
                         Button { router.push(.lift(s.id)) } label: {
                             LumaRow(symbol: s.resolvedKind.sport.symbol, symbolColor: s.resolvedKind.sport.tone.color, title: s.title,
-                                    subtitle: "\(LumaText.shortDay(s.day)) · \(LoggedSessionCard.line(s))", chevron: true) {
-                                if s.volumeKg > 0 {
-                                    Text(LFormat.grouped(s.volumeKg)).font(LumaFont.numeral(18, .semibold)).foregroundStyle(Luma.frost)
+                                    subtitle: StrengthScreen.rowLine(s), chevron: true) {
+                                if let load = StrengthScreen.liftedLoad(s) {
+                                    Text(LFormat.grouped(load)).font(LumaFont.numeral(18, .semibold)).foregroundStyle(Luma.frost)
                                     Text("kg").font(LumaFont.body(11)).foregroundStyle(Luma.smoke)
+                                } else {
+                                    Text("\(s.doneSets)").font(LumaFont.numeral(18, .semibold)).foregroundStyle(Luma.frost)
+                                    Text("sets").font(LumaFont.body(11)).foregroundStyle(Luma.smoke)
                                 }
                             }
                         }
@@ -58,6 +64,19 @@ struct StrengthScreen: View {
                 }
             }
         }
+    }
+
+    /// The load lifted in a strength session; nil for any other kind, where it would count only the
+    /// few sets that happen to be reps at a load.
+    static func liftedLoad(_ s: LiftSession) -> Double? {
+        s.resolvedKind == .strength && s.volumeKg > 0 ? s.volumeKg : nil
+    }
+
+    /// "Nov 16 · 4 movements · from a photo"
+    static func rowLine(_ s: LiftSession) -> String {
+        var parts: [String] = [LumaText.shortDay(s.day), s.exercises.count == 1 ? "1 movement" : "\(s.exercises.count) movements"]
+        if s.source == "photo" { parts.append("from a photo") }
+        return parts.joined(separator: " · ")
     }
 
     private func volumeCard(_ sessions: [LiftSession]) -> some View {
@@ -101,7 +120,7 @@ struct LiftDetailScreen: View {
                 StatGrid {
                     StatCell(label: "Movements", value: "\(s.exercises.count)")
                     StatCell(label: "Sets", value: "\(s.doneSets)")
-                    if s.volumeKg > 0 { StatCell(label: "Load lifted", value: LFormat.grouped(s.volumeKg), unit: "kg") }
+                    if let load = StrengthScreen.liftedLoad(s) { StatCell(label: "Load lifted", value: LFormat.grouped(load), unit: "kg") }
                     if let m = s.minutes { StatCell(label: "Length", value: "\(Int(m.rounded()))", unit: "min") }
                 }
                 ForEach(s.exercises) { e in

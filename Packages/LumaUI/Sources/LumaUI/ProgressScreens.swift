@@ -104,7 +104,7 @@ struct LiftProgressList: View {
                 LumaGroup {
                     ForEach(lifts.prefix(8)) { LiftProgressRow(lift: $0) }
                 }
-                LumaNote("Estimated max, worked out from your sets of 12 reps or fewer. Pull-ups, chin-ups and dips count your bodyweight plus any load added. The level is Luma's own scale of bodyweight multiples for each lift, not a ranking against other people.")
+                LumaNote("Each figure is the lift's estimated max now: the best of its last six weeks, worked out from your sets of 12 reps or fewer. Pull-ups, chin-ups and dips count your bodyweight plus any load added. The level is Luma's own scale of bodyweight multiples for each lift, not a ranking against other people.")
             }
         }
     }
@@ -253,7 +253,7 @@ struct FuelTrainingCard: View {
                 ProgressHeader(title: "Food against training", symbol: "fork.knife", color: Luma.mint)
                 if let r = read {
                     HStack(alignment: .top, spacing: 12) {
-                        figure(r.proteinPerKg.map { String(format: "%.1f", $0) } ?? "–", "g protein per kg",
+                        figure(r.proteinPerKg.map { FuelTrainingCard.short($0) } ?? "–", "g protein per kg",
                                String(format: "target %.1f", r.proteinTargetPerKg))
                         figure("\(r.proteinDaysMet)/\(r.loggedDays)", "days at target", "of the days logged")
                         figure("\(r.loggedDays)/\(r.window)", "days logged", "with a full log")
@@ -270,6 +270,9 @@ struct FuelTrainingCard: View {
             }
         }
     }
+
+    /// One decimal, cut and not rounded: an average just under the target must not read as the target.
+    static func short(_ v: Double) -> String { String(format: "%.1f", (v * 10).rounded(.down) / 10) }
 
     private func figure(_ value: String, _ label: String, _ note: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {

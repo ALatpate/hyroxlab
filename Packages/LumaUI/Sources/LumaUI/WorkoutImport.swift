@@ -142,6 +142,8 @@ struct WorkoutDraftCard: View {
     let onRemove: () -> Void
     @EnvironmentObject private var env: LumaEnv
     @State private var showWritten = false
+    /// The kind the session was read as, fixed when the card appears so the row does not reshuffle under a tap.
+    @State private var sorted: SessionKind = .strength
 
     var body: some View {
         LumaCard(padding: 16) {
@@ -160,7 +162,8 @@ struct WorkoutDraftCard: View {
                 LumaField(title: "Name", text: $draft.session.title)
                 ScrollView(.horizontal) {
                     HStack(spacing: 8) {
-                        ForEach(SessionKind.logged) { k in
+                        // The kind it was sorted into leads the row, so it is in view without scrolling.
+                        ForEach([sorted] + SessionKind.logged.filter { $0 != sorted }) { k in
                             LumaChip(title: k.title, symbol: k.sport.symbol, isOn: draft.session.resolvedKind == k) { draft.session.kind = k }
                         }
                     }
@@ -192,6 +195,7 @@ struct WorkoutDraftCard: View {
                 }
             }
         }
+        .onAppear { sorted = draft.session.resolvedKind }
     }
 }
 

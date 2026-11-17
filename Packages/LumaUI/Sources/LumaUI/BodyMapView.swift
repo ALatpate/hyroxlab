@@ -41,13 +41,12 @@ struct BodyFigure: View {
                 region.outlines.map { Area(muscle: region.muscle, path: Path(outline: $0, scale: scale, dx: dx, dy: dy)) }
             }
             Canvas { context, _ in
-                for p in base { context.fill(p, with: .color(Luma.raised)) }
+                for p in base { context.fill(p, with: .color(Luma.smoke.opacity(0.32))) }
                 for a in areas {
                     if let color = tint(a.muscle) {
                         context.fill(a.path, with: .color(color))
                     } else {
-                        context.fill(a.path, with: .color(Color.white.opacity(0.03)))
-                        context.stroke(a.path, with: .color(Luma.smoke), style: StrokeStyle(lineWidth: 0.8, dash: [2, 2]))
+                        context.stroke(a.path, with: .color(Luma.mist.opacity(0.7)), style: StrokeStyle(lineWidth: 0.8, dash: [2, 2]))
                     }
                 }
                 for a in areas where a.muscle == selected {
@@ -235,7 +234,7 @@ struct BodyMapCard: View {
     var body: some View {
         LumaCard {
             VStack(alignment: .leading, spacing: 14) {
-                LumaSegmented(selection: $mode, options: BodyMode.allCases.map { (value: $0, title: $0.title) }, tint: Luma.volt)
+                LumaSegmented(selection: $mode, options: BodyMode.allCases.map { (value: $0, title: $0.title) }, tint: Luma.frost)
                 HStack(alignment: .top, spacing: 6) {
                     figure(.front)
                     figure(.back)
