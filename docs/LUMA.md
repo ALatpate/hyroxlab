@@ -224,8 +224,8 @@ SideStore pointing at that release.
 - **The Intel runner is the way round a shortage of arm64 ones.** Its image defaults to an Xcode too
   old for the app and carries Xcode 26 beside it; `Tools/luma_xcode.sh` selects that, and changes
   nothing on a runner that already defaults to Xcode 26. A build for the phone is the same arm64
-  product whichever machine compiles it. Each time no runner took the app, the package or the release,
-  `again` asks for it on the other kind of runner (arm64, then Intel, then arm64). A release build
+  product whichever machine compiles it. Each time no runner took a gallery, the app, the package or
+  the release, `again` asks for it on the other kind of runner (arm64, then Intel, then arm64). A release build
   that fails on the Intel runner for a reason of its own is asked for once more on arm64, and Intel is
   not gone back to. The Intel runner is several times slower (about half an hour for the Release
   build against ten minutes), so it is never where a push starts.
