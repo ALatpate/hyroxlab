@@ -21,11 +21,11 @@
       "versions": [
         {
           "version": "12.1.0",
-          "buildVersion": "13",
-          "date": "2026-11-15",
-          "localizedDescription": "Build 13. Accuracy update. Luma now asks the strap to send heart rate all the time, not only while the Heart screen is open, so every screen and the Lock Screen card can show it live and whole nights can be recorded. This uses more strap battery; switch it off under Settings, Recording. Keep Luma open in the background overnight: swiping it away stops the recording. Luma no longer shows a figure it did not measure. When part of a night, a session or the day never reached the phone it says so, with the times, marks the numbers, and leaves that night out of sleep debt and averages. A missing recovery score comes with its real reason, such as how many recorded nights it still needs. New under Settings: Data check shows, hour by hour, where heart rate reached the phone, and sends a report.",
-          "downloadURL": "https://github.com/ALatpate/hyroxlab/releases/download/build-13/Luma.ipa",
-          "size": 24634723,
+          "buildVersion": "14",
+          "date": "2026-11-17",
+          "localizedDescription": "Build 14. Training log and progress. Train has a new button: Add from photos. Pick up to eight pictures of your workouts (the board, the class screen, your tracking app). Luma reads them, splits them into separate workouts, sorts each by type and lists every exercise with its sets. A weight shown in the picture is filled in for you. Where none is shown, the exercise has an empty box asking for the weight you used; one tap offers last time's. You can give each set its own weight, type in an exercise by hand, or enter a whole workout with no photo. Reading photos uses your coach key. Train also has a new Progress view. A body figure, front and back, shows each muscle's strength level, how it is moving, and how much work it got this week; tap a muscle for the numbers. Below it: strong and weak points, each lift's estimated max over time, sets by muscle, your food set against training days, how often you took each supplement, and what your habits do to the next morning. Strength levels are Luma's own scale and the maxes are estimates from your logged sets. A muscle with no loaded lift behind it shows as not measured, not as weak.",
+          "downloadURL": "https://github.com/ALatpate/hyroxlab/releases/download/build-14/Luma.ipa",
+          "size": 25043283,
           "minOSVersion": "17.0"
         }
       ],
