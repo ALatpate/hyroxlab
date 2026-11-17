@@ -85,7 +85,8 @@ public enum Buddy {
 
     /// The companion's state at `now`, from the facts. The order is the rule: what is happening now
     /// comes before how the body is, and how the body is comes before what the logs are missing.
-    public static func look(_ f: BuddyFacts, at now: Date, calendar: Calendar = LDate.calendar) -> BuddyLook {
+    public static func look(_ facts: BuddyFacts, at now: Date, calendar: Calendar = LDate.calendar) -> BuddyLook {
+        let f = onTheMinute(facts)
         let energy = f.recovery.map { LStat.clamp($0 / 100, 0, 1) }
         // The usual night, when `now` is inside it. It runs on past the turn of the day at 04:00, and the
         // companion sleeps through that, so the look is the same on both sides of it.
@@ -143,7 +144,8 @@ public enum Buddy {
 
     /// The companion's states from `now` until the morning after the day turns, each from the moment
     /// it begins. A widget shows the last moment that has begun, so it needs no rules of its own.
-    public static func schedule(_ f: BuddyFacts, from now: Date, calendar: Calendar = LDate.calendar) -> [BuddyMoment] {
+    public static func schedule(_ facts: BuddyFacts, from now: Date, calendar: Calendar = LDate.calendar) -> [BuddyMoment] {
+        let f = onTheMinute(facts)
         var times: [Date] = [now]
         let midnight = LDate.startOfDay(LDate.adding(1, to: f.day, calendar: calendar), calendar: calendar)
         var horizon = now.addingTimeInterval(20 * 3600)
@@ -178,6 +180,17 @@ public enum Buddy {
         (moments.last { $0.at <= date } ?? moments.first)?.look
     }
 
+    /// The facts with their bed and wake times on whole minutes, as the lines print them. Those times
+    /// are averages and seldom fall on a minute; the rule and the schedule both read them through this,
+    /// so a change begins on the minute its own line names ("Usual night: 23:06" starts at 23:06).
+    static func onTheMinute(_ f: BuddyFacts) -> BuddyFacts {
+        var g = f
+        g.usualBedtime = f.usualBedtime.map { $0.rounded() }
+        g.usualWake = f.usualWake.map { $0.rounded() }
+        g.bedtimeTonight = f.bedtimeTonight.map { $0.rounded() }
+        return g
+    }
+
     /// Whether `now` falls inside the athlete's usual night.
     static func isUsualNight(_ f: BuddyFacts, at now: Date, calendar: Calendar) -> Bool {
         guard let bed = f.usualBedtime, let wake = f.usualWake, wake > 0, wake < 15 * 60, wake - bed >= 180 else { return false }
@@ -191,9 +204,8 @@ public enum Buddy {
         return m >= 240 ? m - 1440 : m
     }
 
-    /// The time of day in minutes, to the second. Bed and wake times are averages and seldom fall on a
-    /// whole minute; read to the minute only, the clock would still be short of such a time at the very
-    /// moment the schedule sets for it, and the change would wait for the next half-hour mark.
+    /// The time of day in minutes, to the second, so that a moment the schedule sets just after a time
+    /// is already past it when the rule is asked.
     static func clockMinutes(_ now: Date, calendar: Calendar) -> Double {
         let c = calendar.dateComponents([.hour, .minute, .second], from: now)
         return Double((c.hour ?? 0) * 60 + (c.minute ?? 0)) + Double(c.second ?? 0) / 60

@@ -118,9 +118,10 @@ bridge implements them:
   into the glance (`Buddy.schedule`); a widget only looks up the moment that has begun
   (`BuddyTimeline`), so the Lock Screen cannot say something the app does not. On Today, where the
   recovery figure and the call already stand, a state that only repeats them is given by name alone.
-  A change that follows the clock begins at the time its own line names (winding down 45 minutes
-  before lights-out, asleep at the usual bedtime): the clock is read to the second, because those
-  times are averages and seldom fall on a whole minute.
+  A change that follows the clock begins on the minute its own line names (winding down 45 minutes
+  before lights-out, asleep at the usual bedtime). Bed and wake times are averages and seldom fall on
+  a whole minute, so the rule and the schedule both read them rounded as the lines print them
+  (`Buddy.onTheMinute`), and the clock is read to the second.
 - **The companion's build is the athlete's strength levels, and an unmeasured part is plain.** Each of
   its six parts is the mean level of the muscles it stands for (`Buddy.build`), the same levels the
   body figure shows. A part no graded lift measures is drawn at the plain build, never smaller: "not

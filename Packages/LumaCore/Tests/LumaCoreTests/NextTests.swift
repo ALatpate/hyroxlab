@@ -143,21 +143,29 @@ final class NextTests: XCTestCase {
         }
     }
 
-    func testAChangeBeginsAtItsOwnTimeNotTheNextHalfHour() {
+    func testAChangeBeginsOnTheMinuteItsLineNames() {
         // Bed and wake times are averages: 23:05 and 42 seconds, lights out at 21:49 and 36 seconds.
+        // Their lines print them to the minute, and each change begins on that minute, not at the next
+        // half-hour mark and not a minute to either side.
         var f = facts()
         f.waterMl = 2800
         f.usualBedtime = -54.3; f.usualWake = 400.6; f.bedtimeTonight = -130.4
         let moments = Buddy.schedule(f, from: at(10))
         XCTAssertEqual(moments.map { $0.look.mood }, [.charged, .sleepy, .sleeping, .waiting])
-        let midnight = at(24)
-        // Winding down starts 45 minutes before lights out, asleep at the usual bedtime, awake at the usual wake.
-        XCTAssertEqual(moments[1].at.timeIntervalSince(midnight), (-130.4 - 45) * 60, accuracy: 2)
-        XCTAssertEqual(moments[2].at.timeIntervalSince(midnight), -54.3 * 60, accuracy: 2)
-        XCTAssertEqual(moments[3].at.timeIntervalSince(midnight), 400.6 * 60, accuracy: 2)
-        // And the line a moment carries names the time it begins by.
+        func clock(_ m: BuddyMoment) -> String {
+            let c = LDate.calendar.dateComponents([.hour, .minute], from: m.at)
+            return String(format: "%d:%02d", c.hour ?? 0, c.minute ?? 0)
+        }
         XCTAssertEqual(moments[1].look.line, "Lights out by 21:50 covers tonight's sleep.")
+        XCTAssertEqual(clock(moments[1]), "21:05", "45 minutes before the lights-out the line names")
         XCTAssertEqual(moments[2].look.line, "Usual night: 23:06 to 6:41.")
+        XCTAssertEqual(clock(moments[2]), "23:06")
+        XCTAssertEqual(clock(moments[3]), "6:41")
+        // Asking the rule directly gives the same answer either side of each minute.
+        XCTAssertEqual(Buddy.look(f, at: at(23.0 + 5.9 / 60)).mood, .sleepy)
+        XCTAssertEqual(Buddy.look(f, at: at(23.0 + 6.1 / 60)).mood, .sleeping)
+        XCTAssertEqual(Buddy.look(f, at: at(24 + 6 + 40.9 / 60)).mood, .sleeping)
+        XCTAssertEqual(Buddy.look(f, at: at(24 + 6 + 41.1 / 60)).mood, .waiting)
     }
 
     func testTheBuildIsTheAthletesOwnLevels() {
