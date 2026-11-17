@@ -6,6 +6,8 @@
 #            [app]. Its screenshots land on `screens-app`.
 #   package  A dry run of the release: the same Release device build and sideload packaging a push to
 #            main performs, publishing nothing. Runs with `app`.
+#   gallery-intel  The gallery on an Intel runner, for when no arm64 macOS runner is to be had. Runs
+#            when the commit message contains [intel]; pictures land on `screens-intel`.
 name: Luma dev
 
 on:
@@ -66,6 +68,50 @@ jobs:
           git add -A
           git -c user.name=luma-ci -c user.email=luma-ci@users.noreply.github.com commit -qm "screens for ${GITHUB_SHA:0:7}"
           git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" screens
+          ls | head -100
+
+  # The gallery again, on an Intel runner with the previous Xcode: for the days GitHub has no arm64
+  # macOS runner to give (a queued job is then cancelled after fifteen minutes). LumaUI uses nothing
+  # newer than iOS 18, so it builds there too; the simulator is an iOS 18 one, so system chrome can
+  # look a little different. Runs only when the commit message contains [intel]; its pictures land on
+  # the `screens-intel` branch and never replace the `screens` ones.
+  gallery-intel:
+    if: contains(github.event.head_commit.message, '[intel]')
+    runs-on: macos-15-intel
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Build LumaGallery (Debug, simulator, x86_64)
+        run: |
+          set -o pipefail
+          xcodebuild -version
+          (cd LumaGallery && xcodegen generate)
+          if ! xcodebuild -project LumaGallery/LumaGallery.xcodeproj -scheme LumaGallery -configuration Debug \
+               -destination 'generic/platform=iOS Simulator' -derivedDataPath build/gallery \
+               ARCHS=x86_64 ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO build > build.log 2>&1; then
+            echo "=== COMPILE ERRORS ($(grep -cE ': error:' build.log)) ==="
+            grep -E ": error:" build.log | sed -E 's#^.*/Packages/##; s#^.*/LumaGallery/##' | awk '!seen[$0]++' | head -300
+            echo "=== LAST LINES ==="
+            tail -25 build.log
+            exit 1
+          fi
+          echo "build ok"
+      - name: Capture screens
+        run: Tools/luma_screens.sh build/gallery/Build/Products/Debug-iphonesimulator/LumaGallery.app shots Tools/luma_screens.txt
+      - name: Publish to the screens-intel branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd shots
+          echo "${GITHUB_SHA}" > COMMIT
+          git init -q
+          git checkout -q -b screens-intel
+          git add -A
+          git -c user.name=luma-ci -c user.email=luma-ci@users.noreply.github.com commit -qm "screens (intel) for ${GITHUB_SHA:0:7}"
+          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" screens-intel
           ls | head -100
 
   app:

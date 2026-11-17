@@ -186,6 +186,7 @@ There is no local Apple toolchain in the usual working environment; CI is the co
 |---|---|
 | `core` | `swift test` for `LumaCore` on Linux. |
 | `gallery` | `LumaUI` compiles; every screen in `Tools/luma_screens.txt` is photographed to the `screens` branch. |
+| `gallery-intel` | The same on an Intel runner with the previous Xcode, for days with no arm64 macOS runner to be had. Runs when the commit message contains `[intel]`; pictures land on `screens-intel`. |
 | `app` | The whole app compiles (Debug, simulator) and runs over seeded strap-layer data; screens in `Tools/luma_screens_app.txt` land on `screens-app`. Runs when the commit message contains `[app]`. |
 | `package` | A dry run of the release: Release device build and sideload packaging, nothing published. Runs with `app`. |
 
@@ -206,7 +207,8 @@ SideStore pointing at that release.
   no runner takes within fifteen minutes is cancelled ("The job was not acquired by Runner of type
   hosted"), and the run reads as failed although nothing was compiled. Read the job's annotation
   before reading its log, and push or dispatch again. The fewer macOS jobs a push asks for, the
-  sooner one gets a runner: leave `[app]` off until the gallery is green.
+  sooner one gets a runner: leave `[app]` off until the gallery is green. `[intel]` asks an Intel
+  runner for the gallery as well, from a pool that is often less busy.
 
 None of this exercises a strap. Pairing, sync, buzzes, the double tap, live recording and the Lock
 Screen card's real cadence have to be checked on a phone with a strap, as do Health access under a
