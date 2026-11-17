@@ -202,6 +202,11 @@ SideStore pointing at that release.
 - **`docs/luma-whats-new.txt` is the next build's What's New**, shown in AltStore. Rewrite it with
   each change that ships. It is not in the release's path filter, so editing it alone publishes nothing.
 - **The release workflow keeps its name and file name.** Its run number is the build number.
+- **A cancelled macOS job is not a failed build.** When GitHub is short of macOS runners, a job that
+  no runner takes within fifteen minutes is cancelled ("The job was not acquired by Runner of type
+  hosted"), and the run reads as failed although nothing was compiled. Read the job's annotation
+  before reading its log, and push or dispatch again. The fewer macOS jobs a push asks for, the
+  sooner one gets a runner: leave `[app]` off until the gallery is green.
 
 None of this exercises a strap. Pairing, sync, buzzes, the double tap, live recording and the Lock
 Screen card's real cadence have to be checked on a phone with a strap, as do Health access under a
