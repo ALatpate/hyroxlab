@@ -170,7 +170,7 @@ struct BuddyScreen: View {
                         lockPreview(.circular).frame(width: 76, height: 76)
                         lockPreview(.rectangular).frame(height: 76).frame(maxWidth: .infinity)
                     }
-                    LumaNote("Touch and hold the Lock Screen, tap Customise, then the widget row, and pick Luma, then \(env.extras.name). It changes through the day as your numbers do and shifts a little every few minutes. With the phone unlocked, tap it for a wave.")
+                    LumaNote("Touch and hold the Lock Screen, tap Customise, then the widget row, and pick Luma, then Companion. It changes through the day as your numbers do and shifts a little every few minutes. With the phone unlocked, tap it for a wave.")
                 }
             }
 

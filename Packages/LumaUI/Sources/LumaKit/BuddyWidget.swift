@@ -105,11 +105,14 @@ public struct LumaBuddyWidgetView<Figure: View>: View {
         switch family {
         case .circular:
             // Drawn a little over-size and set low, so the face fills the circle and the feet meet its edge.
-            figure
-                .frame(width: 70, height: 84)
-                .offset(y: 5)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .clipShape(Circle())
+            GeometryReader { geo in
+                let side = min(geo.size.width, geo.size.height)
+                figure
+                    .frame(width: side * 0.97, height: side * 1.16)
+                    .offset(y: side * 0.07)
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    .clipShape(Circle())
+            }
         case .rectangular:
             HStack(spacing: 8) {
                 figure.frame(width: 54, height: 65)

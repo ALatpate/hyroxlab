@@ -175,7 +175,7 @@ public enum LumaGlanceStore {
         comparable.updated = previous?.updated ?? glance.updated
         // The companion's schedule is written from "now" each time; what counts is what is still ahead.
         comparable.buddy = comparable.buddy?.ahead(of: glance.updated)
-        previous?.buddy = previous?.buddy?.ahead(of: glance.updated)
+        if let before = previous?.buddy { previous?.buddy = before.ahead(of: glance.updated) }
         guard previous != comparable else { return false }
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .secondsSince1970

@@ -186,8 +186,10 @@ extension LumaEnv {
         let nowS = now.timeIntervalSince1970
         if let last = workouts.filter({ $0.end <= nowS && nowS - $0.end < 3 * 3600 }).max(by: { $0.end < $1.end }) {
             f.lastSessionEnd = Date(timeIntervalSince1970: last.end)
-            let name = last.kind == .other ? last.sport : last.kind.title
-            f.lastSession = name + " done" + (last.strain.map { ", strain " + LScale.text($0, on21: profile.strainOn21) } ?? "") + "."
+            let name: String = last.kind == .other ? last.sport : last.kind.title
+            var line: String = name + " done"
+            if let strain = last.strain { line += ", strain " + LScale.text(strain, on21: profile.strainOn21) }
+            f.lastSession = line + "."
         }
         f.best = extras.best
         if a.watch.level >= .watch, a.lastNight?.day == today { f.unwell = a.watch.title }

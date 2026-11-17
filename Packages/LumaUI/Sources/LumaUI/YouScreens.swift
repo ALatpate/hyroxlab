@@ -156,7 +156,18 @@ struct ProfileFields: View {
                 stepper("Born", "\(env.profile.birthYear)", { env.profile.birthYear = max(1930, env.profile.birthYear - 1) }, { env.profile.birthYear = min(2015, env.profile.birthYear + 1) })
                 stepper("Height", "\(Int(env.profile.heightCm)) cm", { env.profile.heightCm = max(120, env.profile.heightCm - 1) }, { env.profile.heightCm = min(230, env.profile.heightCm + 1) })
             }
-            stepper("Body mass", String(format: "%.1f kg", env.profile.weightKg), { env.profile.weightKg = max(35, env.profile.weightKg - 0.5) }, { env.profile.weightKg = min(250, env.profile.weightKg + 0.5) })
+            if let trend = env.next.weight.current {
+                // With a weight log, the trend is the weight: it is shown here and changed by weighing in.
+                VStack(spacing: 1) {
+                    Text(String(format: "%.1f kg", trend)).font(LumaFont.numeral(24)).foregroundStyle(Luma.frost)
+                    LumaLabel("Body mass, from your weigh-ins")
+                }
+                .frame(maxWidth: .infinity, minHeight: 56)
+                .background(LumaPanel(radius: 18))
+                LumaNote("This is the trend of your weigh-ins. Add a weigh-in on the Fuel tab to move it.")
+            } else {
+                stepper("Body mass", String(format: "%.1f kg", env.profile.weightKg), { env.profile.weightKg = max(35, env.profile.weightKg - 0.5) }, { env.profile.weightKg = min(250, env.profile.weightKg + 0.5) })
+            }
             LumaNote("Sex and body size are used for energy targets, training load weighting and official HYROX loads.")
         }
     }
