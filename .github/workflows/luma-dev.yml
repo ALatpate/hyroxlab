@@ -12,6 +12,13 @@ name: Luma dev
 
 on:
   workflow_dispatch:
+    inputs:
+      jobs:
+        description: 'macOS jobs to run: any of gallery, intel, app, package'
+        default: 'gallery app package'
+      attempt:
+        description: 'How many times this has been asked for already (set by the workflow itself)'
+        default: '0'
   push:
     branches: ['luma-*']
 
@@ -33,6 +40,7 @@ jobs:
           swift test 2>&1 | grep -vE "^Test Case .* (started|passed)|^Test Suite .* (started|passed)|Compiling|Build complete|^\[" | tail -80
 
   gallery:
+    if: github.event_name == 'push' || contains(inputs.jobs, 'gallery')
     runs-on: macos-26
     timeout-minutes: 40
     steps:
@@ -76,7 +84,7 @@ jobs:
   # look a little different. Runs only when the commit message contains [intel]; its pictures land on
   # the `screens-intel` branch and never replace the `screens` ones.
   gallery-intel:
-    if: contains(github.event.head_commit.message, '[intel]')
+    if: contains(github.event.head_commit.message, '[intel]') || (github.event_name == 'workflow_dispatch' && contains(inputs.jobs, 'intel'))
     runs-on: macos-15-intel
     timeout-minutes: 60
     steps:
@@ -115,7 +123,7 @@ jobs:
           ls | head -100
 
   app:
-    if: contains(github.event.head_commit.message, '[app]') || github.event_name == 'workflow_dispatch'
+    if: contains(github.event.head_commit.message, '[app]') || (github.event_name == 'workflow_dispatch' && contains(inputs.jobs, 'app'))
     runs-on: macos-26
     timeout-minutes: 75
     steps:
@@ -154,7 +162,7 @@ jobs:
           ls | head -60
 
   package:
-    if: contains(github.event.head_commit.message, '[app]') || github.event_name == 'workflow_dispatch'
+    if: contains(github.event.head_commit.message, '[app]') || (github.event_name == 'workflow_dispatch' && contains(inputs.jobs, 'package'))
     runs-on: macos-26
     timeout-minutes: 60
     steps:
@@ -206,3 +214,48 @@ jobs:
           zip -qr dry-run.ipa Payload
           echo "ipa size: $(stat -f%z dry-run.ipa) bytes"
 
+  # GitHub is at times short of macOS runners. A job no runner takes within fifteen minutes is
+  # cancelled ("The job was not acquired by Runner of type hosted"), with nothing built. This asks
+  # for those jobs again, as a new run of this workflow on the same branch, up to eight times. A job
+  # cancelled for any other reason (by hand, or by a newer push) is left alone.
+  again:
+    needs: [gallery, gallery-intel, app, package]
+    if: always() && contains(join(needs.*.result, ' '), 'cancelled')
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+      checks: read
+    steps:
+      - name: Ask again for the jobs no runner took
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ATTEMPT: ${{ inputs.attempt || '0' }}
+          GALLERY: ${{ needs.gallery.result }}
+          INTEL: ${{ needs.gallery-intel.result }}
+        run: |
+          set -euo pipefail
+          # The note that says why a job was cancelled can arrive a little after the job ends.
+          unclaimed() {
+            for try in 1 2 3 4 5 6; do
+              if gh api "repos/${GITHUB_REPOSITORY}/check-runs/$1/annotations" -q '.[].message' | grep -q "not acquired by Runner"; then return 0; fi
+              sleep 10
+            done
+            return 1
+          }
+          want=""
+          for pair in gallery:gallery gallery-intel:intel app:app package:package; do
+            job=${pair%%:*}; token=${pair##*:}
+            id=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?per_page=50" \
+                   -q ".jobs[] | select(.name==\"$job\" and .conclusion==\"cancelled\") | .id" | head -1)
+            [ -n "$id" ] || continue
+            if unclaimed "$id"; then want="$want $token"; fi
+          done
+          # One set of pictures is enough: when either gallery made it, the other is not asked for again.
+          if [ "$GALLERY" = "success" ]; then want=$(echo " $want " | sed 's/ intel / /'); fi
+          if [ "$INTEL" = "success" ]; then want=$(echo " $want " | sed 's/ gallery / /'); fi
+          want=$(echo $want)
+          if [ -z "$want" ]; then echo "nothing to ask for again"; exit 0; fi
+          n=$((ATTEMPT + 1))
+          if [ "$n" -gt 8 ]; then echo "::warning::no macOS runner after 8 attempts for: $want"; exit 0; fi
+          echo "attempt $n for: $want"
+          gh workflow run "Luma dev" --repo "${GITHUB_REPOSITORY}" --ref "${GITHUB_REF_NAME}" -f attempt="$n" -f jobs="$want"

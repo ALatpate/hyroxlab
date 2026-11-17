@@ -21,6 +21,10 @@ name: HYROX Lab iOS
 
 on:
   workflow_dispatch:
+    inputs:
+      attempt:
+        description: 'How many times this build has been asked for already (set by the workflow itself)'
+        default: '0'
   push:
     branches: [main]
     paths:
@@ -139,3 +143,40 @@ jobs:
             echo "removing $tag"
             gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes || true
           done
+
+  # GitHub is at times short of macOS runners. A job no runner takes within fifteen minutes is
+  # cancelled ("The job was not acquired by Runner of type hosted"), with nothing built or published.
+  # This asks for the build again, as a new run, up to eight times. Each asking is a new run number,
+  # so the build number moves on; a number that never built is simply skipped. A build cancelled for
+  # any other reason (by hand, or by a newer push taking its place) is left alone.
+  again:
+    needs: [ios]
+    if: always() && needs.ios.result == 'cancelled'
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+      checks: read
+    steps:
+      - name: Ask for the build again when no runner took it
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ATTEMPT: ${{ inputs.attempt || '0' }}
+        run: |
+          set -euo pipefail
+          id=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs" -q '.jobs[] | select(.name=="ios") | .id' | head -1)
+          # The note that says why the job was cancelled can arrive a little after the job ends.
+          unclaimed=no
+          if [ -n "$id" ]; then
+            for try in 1 2 3 4 5 6; do
+              if gh api "repos/${GITHUB_REPOSITORY}/check-runs/${id}/annotations" -q '.[].message' | grep -q "not acquired by Runner"; then unclaimed=yes; break; fi
+              sleep 10
+            done
+          fi
+          if [ "$unclaimed" != "yes" ]; then
+            echo "the build was not cancelled for want of a runner; not asking again"
+            exit 0
+          fi
+          n=$((ATTEMPT + 1))
+          if [ "$n" -gt 8 ]; then echo "::warning::no macOS runner after 8 attempts"; exit 0; fi
+          echo "attempt $n"
+          gh workflow run "HYROX Lab iOS" --repo "${GITHUB_REPOSITORY}" --ref main -f attempt="$n"

@@ -206,9 +206,12 @@ SideStore pointing at that release.
 - **A cancelled macOS job is not a failed build.** When GitHub is short of macOS runners, a job that
   no runner takes within fifteen minutes is cancelled ("The job was not acquired by Runner of type
   hosted"), and the run reads as failed although nothing was compiled. Read the job's annotation
-  before reading its log, and push or dispatch again. The fewer macOS jobs a push asks for, the
-  sooner one gets a runner: leave `[app]` off until the gallery is green. `[intel]` asks an Intel
-  runner for the gallery as well, from a pool that is often less busy.
+  before reading its log. Both workflows ask again by themselves: their last job (`again`) finds the
+  jobs cancelled with that annotation and starts the workflow once more for just those, up to eight
+  times. For the release each asking is a new run, so its build number moves on and a number that
+  never built is skipped. A job cancelled for any other reason is left alone. The fewer macOS jobs a
+  push asks for, the sooner one gets a runner: leave `[app]` off until the gallery is green.
+  `[intel]` asks an Intel runner for the gallery as well.
 
 None of this exercises a strap. Pairing, sync, buzzes, the double tap, live recording and the Lock
 Screen card's real cadence have to be checked on a phone with a strap, as do Health access under a
