@@ -1,7 +1,10 @@
 Training log and progress.
 Train has a new button: Add from photos. Pick up to eight pictures of your workouts (the board, the
-class screen, your tracking app). Luma reads them, splits them into sessions, sorts each one by type
-and lists the movements and sets. You check it, add the loads you used, and save. This uses your coach key.
+class screen, your tracking app). Luma reads them, splits them into separate workouts, sorts each by
+type and lists every exercise with its sets. A weight shown in the picture is filled in for you. Where
+none is shown, the exercise has an empty box asking for the weight you used; one tap offers last
+time's. You can give each set its own weight, type in an exercise by hand, or enter a whole workout
+with no photo. Reading photos uses your coach key.
 Train also has a new Progress view. A body figure, front and back, shows each muscle's strength level,
 how it is moving, and how much work it got this week; tap a muscle for the numbers. Below it: strong
 and weak points, each lift's estimated max over time, sets by muscle, your food set against training

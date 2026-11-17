@@ -435,8 +435,29 @@ public struct LiftSet: Codable, Equatable, Sendable, Identifiable {
         return parts.joined(separator: " · ")
     }
 
+    /// What the set counted, leaving its load aside: "5 reps", "25 m".
+    public var amountText: String {
+        var bare = self
+        bare.kg = 0
+        return bare.text
+    }
+
     static func number(_ v: Double) -> String {
         v == v.rounded() ? String(Int(v)) : String(format: "%.1f", v)
+    }
+}
+
+/// What a set counts.
+public enum SetMeasure: String, CaseIterable, Sendable {
+    case reps, meters, seconds, calories
+
+    public var title: String {
+        switch self {
+        case .reps: return "reps"
+        case .meters: return "m"
+        case .seconds: return "sec"
+        case .calories: return "cal"
+        }
     }
 }
 
@@ -454,6 +475,35 @@ public struct LiftExercise: Codable, Equatable, Sendable, Identifiable {
     }
 
     public var volumeKg: Double { sets.filter { $0.done }.reduce(0) { $0 + Double($1.reps) * $1.kg } }
+
+    /// A set of this movement is normally done with a load, and none of its sets has one: the log is
+    /// missing what was on the bar. False for a movement done with the body alone, and for one Luma
+    /// does not know, where it cannot tell.
+    public var needsLoad: Bool {
+        guard sets.contains(where: { $0.hasContent }), sets.allSatisfy({ $0.kg <= 0 }) else { return false }
+        return ExerciseLibrary.match(name)?.expectsLoad ?? false
+    }
+
+    /// An exercise typed in by hand: `count` sets alike, each of `amount` reps, metres, seconds or
+    /// calories, at `kg` (0 for none). Nil when there is no name or nothing was counted.
+    public static func typed(name: String, sets count: Int, amount: Double, measure: SetMeasure, kg: Double) -> LiftExercise? {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, count >= 1, amount > 0, amount.isFinite else { return nil }
+        let load = min(1000, max(0, kg.isFinite ? kg : 0))
+        var set = LiftSet(reps: 0, kg: load, done: true)
+        switch measure {
+        case .reps: set.reps = min(1000, max(1, Int(amount.rounded())))
+        case .meters: set.meters = min(100_000, amount)
+        case .seconds: set.seconds = min(36_000, amount)
+        case .calories: set.calories = min(5000, amount)
+        }
+        let sets: [LiftSet] = (0..<min(30, count)).map { _ in
+            var copy = set
+            copy.id = UUID()
+            return copy
+        }
+        return LiftExercise(name: ExerciseLibrary.filedName(trimmed), sets: sets)
+    }
 
     /// The done sets in a line: "4 × 5 × 100 kg" when they are all alike, each one listed otherwise.
     public var setsText: String {

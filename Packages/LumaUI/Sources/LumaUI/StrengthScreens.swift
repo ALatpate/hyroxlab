@@ -99,6 +99,7 @@ struct LiftDetailScreen: View {
     @Environment(\.dismiss) private var dismiss
     /// Adding or correcting the loads after the session was saved.
     @State private var editing = false
+    @State private var adding = false
 
     var body: some View {
         LumaDetailScreen(title: env.lifts.first(where: { $0.id == id })?.resolvedKind.title ?? "Session", tone: .strain) {
@@ -109,13 +110,11 @@ struct LiftDetailScreen: View {
                         Text(heading(s)).font(LumaFont.body(13.5)).foregroundStyle(Luma.mist)
                     }
                     Spacer(minLength: 6)
-                    if !s.exercises.isEmpty {
-                        Button(editing ? "Done" : "Edit loads") { withAnimation(.easeOut(duration: 0.2)) { editing.toggle() } }
-                            .buttonStyle(LumaSecondaryButtonStyle(compact: true))
-                    }
+                    Button(editing ? "Done" : "Edit") { withAnimation(.easeOut(duration: 0.2)) { editing.toggle(); adding = false } }
+                        .buttonStyle(LumaSecondaryButtonStyle(compact: true))
                 }
                 if editing {
-                    LumaNote("Type the load you used for a movement and it is set for all its sets. Loads are what Luma works your estimated max and strength level from.")
+                    LumaNote("Type the weight you used for an exercise and it is set for all its sets, or give each set its own. Weights are what Luma works your estimated max and strength level from.")
                 }
                 StatGrid {
                     StatCell(label: "Movements", value: "\(s.exercises.count)")
@@ -136,6 +135,7 @@ struct LiftDetailScreen: View {
                         }
                     }
                 }
+                if editing { addExercise(s) }
                 if let written = s.asWritten, !written.isEmpty {
                     LumaSection(title: "As it was written")
                     LumaCard(padding: 16) {
@@ -150,6 +150,24 @@ struct LiftDetailScreen: View {
                 }
                 .font(LumaFont.body(15, .semibold)).foregroundStyle(Luma.coral).buttonStyle(.plain).frame(maxWidth: .infinity)
             }
+        }
+    }
+
+    /// Type in an exercise the session is missing.
+    @ViewBuilder
+    private func addExercise(_ s: LiftSession) -> some View {
+        if adding {
+            LumaCard(padding: 16) {
+                ExerciseAddForm(history: env.lifts) { new in
+                    var changed = s
+                    changed.exercises.append(new)
+                    env.save(changed)
+                    adding = false
+                } onCancel: { adding = false }
+            }
+        } else {
+            Button { adding = true } label: { Label("Add an exercise", systemImage: "plus").frame(maxWidth: .infinity) }
+                .buttonStyle(LumaSecondaryButtonStyle(compact: true))
         }
     }
 

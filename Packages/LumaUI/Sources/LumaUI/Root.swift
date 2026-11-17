@@ -250,6 +250,7 @@ enum LumaRoute {
         case "train.progress": r.tab = .train; r.trainView = .progress
         case "sheet.workouts": r.tab = .train; r.sheet = .workoutPhotos(today)
         case "sheet.workouts.review": r.tab = .train; LumaLaunch.page = 1; r.sheet = .workoutPhotos(today)
+        case "sheet.workouts.hand": r.tab = .train; LumaLaunch.page = 2; r.sheet = .workoutPhotos(today)
         case "train.history": r.open(.train, .history)
         case "fuel": r.tab = .fuel
         case "fuel.supplements": r.open(.fuel, .supplements)

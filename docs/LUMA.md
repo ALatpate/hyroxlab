@@ -72,9 +72,12 @@ bridge implements them:
   calories. A load is only what was written for the athlete, said by them or typed in: reading a board
   never fills one in (`CoachPrompt.workoutExtraction`), and a set without a load counts as work and
   gives no estimated max. Photos are read in one go into separate sessions, each sorted into its kind,
-  and nothing is saved until the athlete has checked it (`WorkoutPhotoSheet`). A logged session of a
-  fitting kind marks that day's plan entry done through `Schedule.days`, which the calendar and the
-  coach both read.
+  and nothing is saved until the athlete has checked it (`WorkoutPhotoSheet`). The checking step shows
+  every exercise with a box for its weight: filled where the photo or the note gave one, and asking
+  ("kg?") where an exercise that normally carries a load came without one (`LiftExercise.needsLoad`).
+  Last time's weight is offered as a tap, never filled in. An exercise the reading missed, or a whole
+  workout, can be typed in by hand (`LiftExercise.typed`). A logged session of a fitting kind marks
+  that day's plan entry done through `Schedule.days`, which the calendar and the coach both read.
 - **A movement has one name.** `ExerciseLibrary.match` files a movement under Luma's own name when it
   knows it by that wording, so its history lines up whether it came from a photo, the coach or the
   picker. A variation ("paused back squat") keeps the name it was given, takes the muscles of the lift
@@ -150,7 +153,8 @@ SideStore pointing at that release.
 None of this exercises a strap. Pairing, sync, buzzes, the double tap, live recording and the Lock
 Screen card's real cadence have to be checked on a phone with a strap, as do Health access under a
 sideload signature and a real coach request. Reading workouts from photos is a coach request: the
-gallery has no coach, so it opens the checking step on a read made up for it (`sheet.workouts.review`),
+gallery has no coach, so it opens the checking step on a read made up for it (`sheet.workouts.review`,
+and `sheet.workouts.hand` for a workout typed in by hand),
 and how well real boards and screens are read is only known from a phone. A change is not verified on hardware until someone says
 what they tried.
 

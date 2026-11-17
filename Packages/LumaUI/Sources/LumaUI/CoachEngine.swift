@@ -474,7 +474,7 @@ public final class CoachEngine: ObservableObject {
     func readWorkouts(text: String, photos: [Data], day: String) async throws -> [(session: LiftSession, photos: [Int])] {
         let w = world()
         let nothing = "No workout could be read. Try a clearer photo, or type what you did."
-        let acc = try await extract(system: CoachPrompt.workoutExtraction(today: w.today, sex: w.profile.sex),
+        let acc = try await askOnce(system: CoachPrompt.workoutExtraction(today: w.today, sex: w.profile.sex),
                                     tool: CoachTools.workoutsTool(name: "submit_workouts"),
                                     text: text.isEmpty ? "Log the training sessions these photos show." : text, photos: photos, maxTokens: 8192)
         // An answer cut off at the length limit holds half a session; better none than that.
@@ -488,10 +488,11 @@ public final class CoachEngine: ObservableObject {
     }
 
     private func extract(kind: String, tool: AITool, text: String, photos: [Data]) async throws -> AIStreamAccumulator {
-        try await extract(system: CoachPrompt.extraction(kind: kind), tool: tool, text: text, photos: photos, maxTokens: 4096)
+        try await askOnce(system: CoachPrompt.extraction(kind: kind), tool: tool, text: text, photos: photos, maxTokens: 4096)
     }
 
-    private func extract(system: String, tool: AITool, text: String, photos: [Data], maxTokens: Int) async throws -> AIStreamAccumulator {
+    /// One request with one tool and no conversation: the photos and the note go in, the tool call comes back.
+    private func askOnce(system: String, tool: AITool, text: String, photos: [Data], maxTokens: Int) async throws -> AIStreamAccumulator {
         guard let key = env.secrets.coachKey(), !key.isEmpty else { throw CoachError.noKey }
         let model = try await resolveModel(key: key)
         let images = photos.prefix(CoachEngine.maxPhotos).compactMap { CoachEngine.prepare($0) }.map { (base64: $0.base64EncodedString(), mediaType: "image/jpeg") }

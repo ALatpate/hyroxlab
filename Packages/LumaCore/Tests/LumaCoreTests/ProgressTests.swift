@@ -69,6 +69,37 @@ final class ProgressTests: XCTestCase {
         XCTAssertNil(LiftMath.best(LiftExercise(name: "Sled push", sets: [LiftSet(reps: 0, kg: 152, done: true, meters: 25)]), bodyKg: 75))
     }
 
+    func testAMissingLoadIsNoticedOnlyWhereOneIsExpected() {
+        // A board gives the sets of a squat and not what was on the bar: the log is missing that.
+        XCTAssertTrue(LiftExercise(name: "Back squat", sets: sets(0, 5, 4)).needsLoad)
+        XCTAssertFalse(LiftExercise(name: "Back squat", sets: sets(100, 5, 4)).needsLoad)
+        XCTAssertTrue(LiftExercise(name: "Sled push", sets: [LiftSet(reps: 0, kg: 0, done: true, meters: 25)]).needsLoad)
+        // A push-up, a pull-up, a run and a movement Luma does not know are not missing anything.
+        XCTAssertFalse(LiftExercise(name: "Push-up", sets: sets(0, 12, 3)).needsLoad)
+        XCTAssertFalse(LiftExercise(name: "Pull-up", sets: sets(0, 8, 3)).needsLoad)
+        XCTAssertFalse(LiftExercise(name: "Run", sets: [LiftSet(reps: 0, kg: 0, done: true, meters: 400)]).needsLoad)
+        XCTAssertFalse(LiftExercise(name: "Zottman thing", sets: sets(0, 10, 3)).needsLoad)
+        XCTAssertFalse(LiftExercise(name: "Back squat", sets: []).needsLoad)
+        XCTAssertEqual(LiftSet(reps: 5, kg: 100).amountText, "5 reps")
+        XCTAssertEqual(LiftSet(reps: 0, kg: 152, meters: 25).amountText, "25 m")
+    }
+
+    func testAnExerciseTypedInByHand() throws {
+        let squat = try XCTUnwrap(LiftExercise.typed(name: " back squats ", sets: 5, amount: 5, measure: .reps, kg: 102.5))
+        XCTAssertEqual(squat.name, "Back squat")
+        XCTAssertEqual(squat.setsText, "5 × 5 × 102.5 kg")
+        XCTAssertEqual(Set(squat.sets.map { $0.id }).count, 5)
+        XCTAssertTrue(squat.sets.allSatisfy { $0.done })
+        let sled = try XCTUnwrap(LiftExercise.typed(name: "Sled push", sets: 4, amount: 25, measure: .meters, kg: 150))
+        XCTAssertEqual(sled.setsText, "4 × 25 m · 150 kg")
+        let hold = try XCTUnwrap(LiftExercise.typed(name: "Copenhagen plank", sets: 3, amount: 30, measure: .seconds, kg: 0))
+        XCTAssertEqual(hold.name, "Copenhagen plank")
+        XCTAssertEqual(hold.setsText, "3 × 30 s")
+        XCTAssertNil(LiftExercise.typed(name: "  ", sets: 3, amount: 10, measure: .reps, kg: 0))
+        XCTAssertNil(LiftExercise.typed(name: "Row", sets: 0, amount: 500, measure: .meters, kg: 0))
+        XCTAssertNil(LiftExercise.typed(name: "Row", sets: 3, amount: 0, measure: .meters, kg: 0))
+    }
+
     // MARK: Names and muscles
 
     func testEveryNameInThePickerIsKnownUnderThatName() {

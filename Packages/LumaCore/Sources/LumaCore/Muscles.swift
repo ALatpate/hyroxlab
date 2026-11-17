@@ -100,6 +100,9 @@ public struct ExerciseInfo: Equatable, Sendable {
     /// Work against a load or the body's weight. A run, an erg or a bike is not: it trains the engine,
     /// and its efforts are not counted as sets for a muscle.
     public let resistance: Bool
+    /// The movement is normally done with a bar, a bell, a ball or a sled, so a set of it with no
+    /// load written down is missing something. A push-up or a plank is not.
+    public let expectsLoad: Bool
 }
 
 public enum ExerciseLibrary {
@@ -110,10 +113,10 @@ public enum ExerciseLibrary {
 
     private static func entry(_ name: String, _ primary: [Muscle], _ secondary: [Muscle] = [], also: [String] = [],
                               marks: [Double]? = nil, measures: [Muscle] = [], upper: Bool = false, bodyweight: Bool = false,
-                              resistance: Bool = true) -> Entry {
+                              resistance: Bool = true, load: Bool = true) -> Entry {
         let scale = marks.map { StrengthScale(marks: $0, measures: measures, upperBody: upper) }
         let info = ExerciseInfo(name: name, primary: primary, secondary: secondary, scale: scale, bodyweight: bodyweight,
-                                resistance: resistance)
+                                resistance: resistance, expectsLoad: load && resistance && !bodyweight)
         return Entry(info: info, keys: ([name] + also).map { key($0) })
     }
 
@@ -122,21 +125,21 @@ public enum ExerciseLibrary {
     private static let legs: [Entry] = [
         entry("Back squat", [.quads, .glutes], [.adductors, .lowerBack, .abs], also: ["barbell squat", "high bar squat", "low bar squat"],
               marks: [0.75, 1.1, 1.5, 2.0, 2.5], measures: [.quads, .glutes]),
-        entry("Air squat", [.quads, .glutes], also: ["squat", "bodyweight squat", "bw squat"]),
+        entry("Air squat", [.quads, .glutes], also: ["squat", "bodyweight squat", "bw squat"], load: false),
         entry("Front squat", [.quads], [.glutes, .abs, .upperBack], marks: [0.6, 0.9, 1.25, 1.65, 2.1], measures: [.quads]),
         entry("Goblet squat", [.quads], [.glutes, .abs], also: ["kb goblet squat", "db goblet squat"]),
         entry("Leg press", [.quads], [.glutes]),
         entry("Leg extension", [.quads]),
         entry("Bulgarian split squat", [.quads, .glutes], [.hamstrings, .adductors],
               also: ["split squat", "rear foot elevated split squat", "rfess"]),
-        entry("Walking lunge", [.quads, .glutes], [.hamstrings, .adductors], also: ["db walking lunge", "kb walking lunge"]),
+        entry("Walking lunge", [.quads, .glutes], [.hamstrings, .adductors], also: ["db walking lunge", "kb walking lunge"], load: false),
         entry("Lunge", [.quads, .glutes], [.hamstrings, .adductors],
-              also: ["reverse lunge", "forward lunge", "db lunge", "dumbbell lunge", "kb lunge", "lateral lunge", "overhead lunge"]),
+              also: ["reverse lunge", "forward lunge", "db lunge", "dumbbell lunge", "kb lunge", "lateral lunge", "overhead lunge"], load: false),
         entry("Sandbag lunge", [.quads, .glutes], [.hamstrings, .abs], also: ["sandbag walking lunge"]),
-        entry("Step-up", [.quads, .glutes], [.hamstrings], also: ["box step up", "db step up", "step over"]),
-        entry("Box jump", [.quads, .glutes], [.calves], also: ["jump squat", "squat jump", "broad jump", "box jump over"]),
-        entry("Wall sit", [.quads], [.glutes]),
-        entry("Calf raise", [.calves], also: ["standing calf raise", "seated calf raise"]),
+        entry("Step-up", [.quads, .glutes], [.hamstrings], also: ["box step up", "db step up", "step over"], load: false),
+        entry("Box jump", [.quads, .glutes], [.calves], also: ["jump squat", "squat jump", "broad jump", "box jump over"], load: false),
+        entry("Wall sit", [.quads], [.glutes], load: false),
+        entry("Calf raise", [.calves], also: ["standing calf raise", "seated calf raise"], load: false),
     ]
 
     private static let hinge: [Entry] = [
@@ -151,7 +154,7 @@ public enum ExerciseLibrary {
               marks: [1.0, 1.5, 2.0, 2.5, 3.0], measures: [.glutes]),
         entry("Hamstring curl", [.hamstrings], [.calves], also: ["leg curl", "nordic curl", "nordic", "lying leg curl", "seated leg curl"]),
         entry("Good morning", [.hamstrings, .lowerBack], [.glutes]),
-        entry("Back extension", [.lowerBack, .glutes], [.hamstrings], also: ["hyperextension", "reverse hyper", "superman"]),
+        entry("Back extension", [.lowerBack, .glutes], [.hamstrings], also: ["hyperextension", "reverse hyper", "superman"], load: false),
         entry("Kettlebell swing", [.glutes, .hamstrings], [.lowerBack, .forearms, .shoulders],
               also: ["kb swing", "russian swing", "american swing", "swing"]),
         entry("Clean", [.glutes, .hamstrings, .quads, .traps], [.lowerBack, .forearms, .shoulders],
@@ -168,7 +171,7 @@ public enum ExerciseLibrary {
               also: ["incline press", "incline db press", "incline dumbbell press", "incline db bench press", "incline bench"]),
         entry("Chest press", [.chest], [.triceps, .shoulders], also: ["machine chest press", "floor press"]),
         entry("Chest fly", [.chest], also: ["pec fly", "cable fly", "db fly", "pec deck"]),
-        entry("Push-up", [.chest], [.triceps, .shoulders, .abs], also: ["press up", "pushup", "hand release push up", "hrpu"]),
+        entry("Push-up", [.chest], [.triceps, .shoulders, .abs], also: ["press up", "pushup", "hand release push up", "hrpu"], load: false),
         entry("Dip", [.triceps, .chest], [.shoulders], also: ["ring dip", "bar dip", "bench dip"],
               marks: [1.0, 1.2, 1.45, 1.75, 2.1], measures: [.triceps], upper: true, bodyweight: true),
         entry("Overhead press", [.shoulders], [.triceps, .abs],
@@ -178,7 +181,7 @@ public enum ExerciseLibrary {
                                                                               "db overhead press", "kb press", "z press"]),
         entry("Push press", [.shoulders], [.triceps, .quads, .abs], also: ["barbell push press", "push jerk", "jerk"],
               marks: [0.45, 0.65, 0.9, 1.2, 1.5], measures: [.shoulders], upper: true),
-        entry("Handstand push-up", [.shoulders, .triceps], also: ["hspu", "pike push up"]),
+        entry("Handstand push-up", [.shoulders, .triceps], also: ["hspu", "pike push up"], load: false),
         entry("Lateral raise", [.shoulders], also: ["side raise", "front raise", "db lateral raise"]),
         entry("Triceps extension", [.triceps], also: ["tricep pushdown", "pushdown", "skull crusher", "overhead tricep extension",
                                                         "tricep extension", "tricep dip"]),
@@ -196,21 +199,21 @@ public enum ExerciseLibrary {
         entry("Dumbbell row", [.lats, .upperBack], [.biceps, .forearms],
               also: ["db row", "single arm row", "single arm db row", "kb row", "renegade row", "gorilla row"]),
         entry("Seated row", [.upperBack, .lats], [.biceps], also: ["cable row", "machine row", "seated cable row"]),
-        entry("Ring row", [.upperBack, .lats], [.biceps], also: ["trx row", "inverted row", "body row"]),
+        entry("Ring row", [.upperBack, .lats], [.biceps], also: ["trx row", "inverted row", "body row"], load: false),
         entry("Face pull", [.shoulders, .upperBack], [.traps], also: ["rear delt fly", "reverse fly", "band pull apart"]),
         entry("Upright row", [.shoulders, .traps], [.biceps], also: ["high pull"]),
         entry("Biceps curl", [.biceps], [.forearms], also: ["curl", "barbell curl", "db curl", "hammer curl", "bicep curl", "dumbbell curl"]),
         entry("Shrug", [.traps], [.forearms]),
-        entry("Rope climb", [.lats, .biceps, .forearms]),
-        entry("Dead hang", [.forearms], [.lats]),
+        entry("Rope climb", [.lats, .biceps, .forearms], load: false),
+        entry("Dead hang", [.forearms], [.lats], load: false),
     ]
 
     private static let trunk: [Entry] = [
-        entry("Plank", [.abs], [.obliques], also: ["hollow hold", "dead bug", "front plank", "plank hold"]),
-        entry("Side plank", [.obliques], [.abs], also: ["pallof press", "russian twist", "woodchop", "side bend"]),
-        entry("Hanging leg raise", [.abs], [.obliques, .forearms], also: ["toe to bar", "knee raise", "leg raise", "hanging knee raise"]),
-        entry("Sit-up", [.abs], also: ["situp", "crunch", "v up", "ab wheel", "ab rollout", "ghd sit up", "butterfly sit up"]),
-        entry("Mountain climber", [.abs], [.shoulders, .quads]),
+        entry("Plank", [.abs], [.obliques], also: ["hollow hold", "dead bug", "front plank", "plank hold"], load: false),
+        entry("Side plank", [.obliques], [.abs], also: ["pallof press", "russian twist", "woodchop", "side bend"], load: false),
+        entry("Hanging leg raise", [.abs], [.obliques, .forearms], also: ["toe to bar", "knee raise", "leg raise", "hanging knee raise"], load: false),
+        entry("Sit-up", [.abs], also: ["situp", "crunch", "v up", "ab wheel", "ab rollout", "ghd sit up", "butterfly sit up"], load: false),
+        entry("Mountain climber", [.abs], [.shoulders, .quads], load: false),
     ]
 
     private static let stations: [Entry] = [
@@ -218,8 +221,8 @@ public enum ExerciseLibrary {
         entry("Sled pull", [.lats, .upperBack, .biceps], [.quads, .glutes, .forearms, .lowerBack], also: ["rope pull", "sled drag"]),
         entry("Farmers carry", [.forearms, .traps], [.abs, .obliques, .calves],
               also: ["farmer carry", "farmer walk", "farmers walk", "kb carry", "suitcase carry", "carry"]),
-        entry("Burpee broad jump", [.quads, .glutes, .chest], [.shoulders, .triceps, .abs, .calves], also: ["bbj", "broad jump burpee"]),
-        entry("Burpee", [.chest, .quads], [.shoulders, .triceps, .abs, .glutes], also: ["bar facing burpee", "burpee over bar", "devil press"]),
+        entry("Burpee broad jump", [.quads, .glutes, .chest], [.shoulders, .triceps, .abs, .calves], also: ["bbj", "broad jump burpee"], load: false),
+        entry("Burpee", [.chest, .quads], [.shoulders, .triceps, .abs, .glutes], also: ["bar facing burpee", "burpee over bar", "devil press"], load: false),
         entry("Wall ball", [.quads, .glutes, .shoulders], [.triceps, .abs, .calves], also: ["wall ball shot", "wallball"]),
         entry("Thruster", [.quads, .glutes, .shoulders], [.triceps, .abs], also: ["db thruster", "barbell thruster", "kb thruster"]),
         entry("Ball slam", [.lats, .abs], [.shoulders, .triceps], also: ["med ball slam", "medicine ball slam", "slam ball", "slam"]),
@@ -293,7 +296,7 @@ public enum ExerciseLibrary {
         }
         if let best {
             return ExerciseInfo(name: shown, primary: best.info.primary, secondary: best.info.secondary, scale: nil,
-                                bodyweight: best.info.bodyweight, resistance: best.info.resistance)
+                                bodyweight: best.info.bodyweight, resistance: best.info.resistance, expectsLoad: best.info.expectsLoad)
         }
         return guess(words: Set(words), name: shown)
     }
@@ -313,7 +316,8 @@ public enum ExerciseLibrary {
     /// A last resort for names Luma does not know: the word that names the kind of movement.
     private static func guess(words w: Set<String>, name: String) -> ExerciseInfo? {
         func info(_ primary: [Muscle], _ secondary: [Muscle] = [], resistance: Bool = true) -> ExerciseInfo {
-            ExerciseInfo(name: name, primary: primary, secondary: secondary, scale: nil, bodyweight: false, resistance: resistance)
+            ExerciseInfo(name: name, primary: primary, secondary: secondary, scale: nil, bodyweight: false, resistance: resistance,
+                         expectsLoad: false)
         }
         if !w.isDisjoint(with: ["run", "running", "jog", "sprint", "ski", "bike", "erg", "rower", "rowing", "skip", "swim"]) {
             return info([], resistance: false)
