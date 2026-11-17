@@ -7,6 +7,8 @@ public struct LumaRootView: View {
     @ObservedObject private var env: LumaEnv
     @ObservedObject private var router: LumaRouter
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dynamicTypeSize) private var textSize
+    @Namespace private var zoom
     private let launch: LumaLaunch
 
     public init(env: LumaEnv, launch: LumaLaunch = LumaLaunch()) {
@@ -45,7 +47,12 @@ public struct LumaRootView: View {
             LumaTabBar(router: router)
                 .ignoresSafeArea(.keyboard, edges: .bottom)
         }
+        .overlay(alignment: .top) { celebration }
         .background(Luma.night.ignoresSafeArea())
+        // Text sized from the system setting is measured again when that setting changes.
+        .id(textSize)
+        .onChange(of: textSize) { _, _ in LumaType.textSizeChanged() }
+        .environment(\.lumaZoom, zoom)
         .environmentObject(env)
         .environmentObject(env.live)
         .environmentObject(router)
@@ -80,6 +87,29 @@ public struct LumaRootView: View {
             env.isInFront = front
             if front { env.reload() }
         }
+    }
+}
+
+extension LumaRootView {
+    /// A new best, shown once over whatever screen is up, then put away.
+    @ViewBuilder
+    fileprivate var celebration: some View {
+        ZStack(alignment: .top) {
+            if let best = env.celebration {
+                NewBestBanner(best: best)
+                    .padding(.horizontal, 14)
+                    .padding(.top, 6)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .onTapGesture { withAnimation(LumaMotion.snap) { env.celebration = nil } }
+                    .task(id: best.id) {
+                        // The gallery leaves it up, so it can be photographed.
+                        guard !env.isDemo else { return }
+                        try? await Task.sleep(nanoseconds: 4_200_000_000)
+                        if env.celebration?.id == best.id { withAnimation(LumaMotion.snap) { env.celebration = nil } }
+                    }
+            }
+        }
+        .animation(LumaMotion.snap, value: env.celebration)
     }
 }
 
@@ -155,6 +185,12 @@ struct LumaDestinationView: View {
     let dest: LumaDest
 
     var body: some View {
+        // Opens out of the tile that was tapped, when it named itself.
+        screen.modifier(LumaZoomTarget())
+    }
+
+    @ViewBuilder
+    private var screen: some View {
         switch dest {
         case .sleep: SleepScreen()
         case .recovery: RecoveryScreen()
@@ -178,6 +214,15 @@ struct LumaDestinationView: View {
         case .profile: ProfileScreen()
         case .about: AboutScreen()
         case .dataCheck: DataCheckScreen()
+        case .buddy: BuddyScreen()
+        case .trials: TrialsScreen()
+        case .trial(let id): TrialScreen(id: id)
+        case .dose: DoseScreen()
+        case .drivers: DriversScreen()
+        case .body: BodyScreen()
+        case .reviews: ReviewsScreen()
+        case .liftHistory(let name): LiftHistoryScreen(name: name)
+        case .reminders: RemindersScreen()
         case .dev(let page): DevWidgetsScreen(page: page)
         }
     }
@@ -197,6 +242,9 @@ struct LumaSheetView: View {
         case .coachSetup: CoachSetupSheet()
         case .manualWorkout: ManualWorkoutSheet()
         case .workoutPhotos(let day): WorkoutPhotoSheet(day: day)
+        case .weighIn: WeighInSheet()
+        case .sweatTest: SweatTestSheet()
+        case .trialSetup(let name): TrialSetupSheet(supplement: name)
         }
     }
 }
@@ -254,6 +302,7 @@ enum LumaRoute {
         case "sheet.workouts": r.tab = .train; r.sheet = .workoutPhotos(today)
         case "sheet.workouts.review": r.tab = .train; LumaLaunch.page = 1; r.sheet = .workoutPhotos(today)
         case "sheet.workouts.hand": r.tab = .train; LumaLaunch.page = 2; r.sheet = .workoutPhotos(today)
+        case "sheet.workouts.reading": r.tab = .train; LumaLaunch.page = 3; r.sheet = .workoutPhotos(today)
         case "train.history": r.open(.train, .history)
         case "fuel": r.tab = .fuel
         case "fuel.supplements": r.open(.fuel, .supplements)
@@ -283,6 +332,23 @@ enum LumaRoute {
         case "dev.lock": r.open(.today, .dev(0))
         case "dev.home": r.open(.today, .dev(1))
         case "dev.home2": r.open(.today, .dev(2))
+        case "dev.buddy": r.open(.today, .dev(3))
+        case "dev.buddy.builds": r.open(.today, .dev(4))
+        case "today.buddy": r.open(.today, .buddy)
+        case "today.drivers": r.open(.today, .drivers)
+        case "today.dose": r.open(.today, .dose)
+        case "today.reviews": r.open(.today, .reviews)
+        case "you.reminders": r.open(.today, .reminders)
+        case "fuel.body": r.open(.fuel, .body)
+        case "fuel.trials": r.open(.fuel, .trials)
+        case "fuel.trial":
+            if let first = env.trials.first { r.open(.fuel, .trial(first.id)) } else { r.open(.fuel, .trials) }
+        case "train.lifthistory": r.open(.train, .liftHistory("Back squat"))
+        case "sheet.weighin": r.tab = .fuel; r.sheet = .weighIn
+        case "sheet.sweat": r.tab = .fuel; r.sheet = .sweatTest
+        case "sheet.trial": r.tab = .fuel; r.sheet = .trialSetup("Creatine monohydrate")
+        case "today.best":
+            env.celebration = LumaBest(lift: "Back squat", kg: 133, previous: 130)
         case "sheet.water": r.sheet = .fuelAdd(.water)
         default: break
         }

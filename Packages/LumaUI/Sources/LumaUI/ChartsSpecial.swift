@@ -92,7 +92,7 @@ struct LumaHypnogram: View {
         }
         .frame(height: height)
         .onAppear {
-            if reduceMotion { progress = 1 } else { withAnimation(.easeOut(duration: 1.1).delay(0.1)) { progress = 1 } }
+            if reduceMotion { progress = 1 } else { withAnimation(LumaMotion.reveal) { progress = 1 } }
         }
     }
 }
@@ -178,7 +178,7 @@ struct LumaScatter: View {
                         .frame(width: 7, height: 7)
                         .position(x: plot.minX + xs.unit(pt.x) * plot.width, y: ys.y(pt.y, in: plot))
                         .scaleEffect(shown ? 1 : 0.01)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(Double(i) * 0.008), value: shown)
+                        .animation(LumaMotion.reduced ? nil : .spring(response: 0.5, dampingFraction: 0.7).delay(Double(i) * 0.008), value: shown)
                 }
                 Text(xLabel).font(LumaFont.label(9.5)).foregroundStyle(Luma.smoke).fixedSize()
                     .position(x: plot.midX, y: plot.maxY + 14)
@@ -187,7 +187,7 @@ struct LumaScatter: View {
             }
         }
         .frame(height: height)
-        .onAppear { withAnimation(.easeOut(duration: 0.9).delay(0.15)) { shown = true } }
+        .onAppear { withAnimation(LumaMotion.reveal) { shown = true } }
     }
 }
 
@@ -250,7 +250,7 @@ struct LumaRadar: View {
                 }
             }
         }
-        .onAppear { withAnimation(.spring(response: 0.9, dampingFraction: 0.72).delay(0.1)) { grow = 1 } }
+        .onAppear { withAnimation(LumaMotion.settle) { grow = 1 } }
     }
 }
 
@@ -299,6 +299,6 @@ struct LumaRouteTrace: View {
             .frame(width: side, height: side)
             .position(x: geo.size.width / 2, y: geo.size.height / 2)
         }
-        .onAppear { withAnimation(.easeInOut(duration: 1.6).delay(0.15)) { progress = 1 } }
+        .onAppear { withAnimation(LumaMotion.reduced ? nil : .easeInOut(duration: 1.6).delay(0.15)) { progress = 1 } }
     }
 }

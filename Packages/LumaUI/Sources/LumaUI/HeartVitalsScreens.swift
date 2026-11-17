@@ -82,7 +82,6 @@ struct LiveHeartHero: View {
     let strap: LumaStrap
     let zones: HXZones
     let maxHR: Double
-    @State private var pulse = false
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 5)) { context in
@@ -91,13 +90,8 @@ struct LiveHeartHero: View {
             let zone = shown.map { zones.zone(for: Double($0)) }
             let color = zone.map { Luma.zone($0) } ?? Luma.coral
             HStack(alignment: .center, spacing: 16) {
-                ZStack {
-                    Circle().fill(Luma.coral.opacity(0.16)).frame(width: 112, height: 112).scaleEffect(pulse && liveHR != nil ? 1.14 : 0.94)
-                    Circle().fill(Luma.coral.opacity(0.24)).frame(width: 78, height: 78)
-                    Image(systemName: "heart.fill").font(.system(size: 34, weight: .bold)).foregroundStyle(Luma.coral)
-                        .scaleEffect(pulse && liveHR != nil ? 1.08 : 1)
-                }
-                .frame(width: 120, height: 120)
+                // Swells once a beat, at the rate being read; still when there is no live reading.
+                PulsingHeart(bpm: liveHR)
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
                         Circle().fill(liveHR != nil ? Luma.volt : Luma.smoke).frame(width: 7, height: 7)
@@ -117,7 +111,6 @@ struct LiveHeartHero: View {
                 Spacer(minLength: 0)
             }
         }
-        .onAppear { withAnimation(.easeInOut(duration: 0.55).repeatForever(autoreverses: true)) { pulse = true } }
     }
 }
 

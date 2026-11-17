@@ -68,7 +68,7 @@ public struct LumaOrb: View {
             .frame(width: geo.size.width, height: geo.size.height)
         }
         .onAppear {
-            guard breathing else { return }
+            guard breathing, !LumaMotion.reduced else { return }
             withAnimation(.easeInOut(duration: 3.2).repeatForever(autoreverses: true)) { pulse = true }
         }
     }

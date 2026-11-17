@@ -202,7 +202,7 @@ private struct CoachBody: View {
                     .scrollIndicators(.hidden)
                     .scrollDismissesKeyboard(.interactively)
                     .onChange(of: coach.messages.last?.text) { _, _ in proxy.scrollTo("bottom", anchor: .bottom) }
-                    .onChange(of: coach.messages.count) { _, _ in withAnimation { proxy.scrollTo("bottom", anchor: .bottom) } }
+                    .onChange(of: coach.messages.count) { _, _ in withAnimation(LumaMotion.snap) { proxy.scrollTo("bottom", anchor: .bottom) } }
                     .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }
                 }
                 composer

@@ -18,13 +18,22 @@ extension Path {
 
 /// One side of the body, each muscle area filled with the colour it is given. An area given no
 /// colour has nothing to show: it is drawn as a dashed outline, so "not measured" never reads as "low".
-struct BodyFigure: View {
+struct BodyFigure: View, Animatable {
     let side: BodySide
     let tint: (Muscle) -> Color?
     /// What the figure shows for a muscle, in words, for someone who cannot see its colours.
     let describe: (Muscle) -> String
     var selected: Muscle? = nil
     var onSelect: ((Muscle) -> Void)? = nil
+    /// How far the colours have come in, 0…1: the areas fill one after another from the top down.
+    var fill: Double = 1
+    /// How bright the outline of the picked muscle is, 0…1.
+    var glow: Double = 1
+
+    var animatableData: AnimatablePair<Double, Double> {
+        get { AnimatablePair(fill, glow) }
+        set { fill = newValue.first; glow = newValue.second }
+    }
 
     private struct Area {
         let muscle: Muscle
@@ -40,17 +49,20 @@ struct BodyFigure: View {
             let areas: [Area] = BodyMap.regions(side).flatMap { region in
                 region.outlines.map { Area(muscle: region.muscle, path: Path(outline: $0, scale: scale, dx: dx, dy: dy)) }
             }
+            let count = Double(max(1, areas.count))
             Canvas { context, _ in
                 for p in base { context.fill(p, with: .color(Luma.smoke.opacity(0.32))) }
-                for a in areas {
+                for (i, a) in areas.enumerated() {
                     if let color = tint(a.muscle) {
-                        context.fill(a.path, with: .color(color))
+                        // Each area comes in over a short stretch of the whole, a little after the one before it.
+                        let shown = min(1, max(0, fill * (count + 6) - Double(i)) / 6)
+                        context.fill(a.path, with: .color(color.opacity(shown)))
                     } else {
                         context.stroke(a.path, with: .color(Luma.mist.opacity(0.7)), style: StrokeStyle(lineWidth: 0.8, dash: [2, 2]))
                     }
                 }
                 for a in areas where a.muscle == selected {
-                    context.stroke(a.path, with: .color(Luma.frost), lineWidth: 1.8)
+                    context.stroke(a.path, with: .color(Luma.frost.opacity(0.35 + 0.65 * glow)), lineWidth: 1.8 + 0.8 * (1 - glow))
                 }
             }
             .contentShape(Rectangle())
@@ -231,6 +243,8 @@ struct BodyMapCard: View {
     // The screenshot harness can open the card on another view of the figure, or with a muscle picked.
     @State private var mode: BodyMode = LumaLaunch.page == 1 ? .progress : (LumaLaunch.page == 2 ? .work : .strength)
     @State private var selected: Muscle? = LumaLaunch.page == 3 ? .quads : nil
+    @State private var fill: Double = LumaMotion.reduced ? 1 : 0
+    @State private var glow: Double = 1
 
     var body: some View {
         LumaCard {
@@ -242,6 +256,9 @@ struct BodyMapCard: View {
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 340)
+                .onAppear { fillIn() }
+                .onChange(of: mode) { _, _ in fillIn() }
+                .onChange(of: selected) { _, picked in pulse(picked != nil) }
                 BodyLegend(mode: mode)
                 if let m = selected {
                     MuscleFacts(state: progress.state(m), today: today) { selected = nil }
@@ -252,13 +269,30 @@ struct BodyMapCard: View {
         }
     }
 
+    /// The colours come in area by area, each time the figure appears or is asked to show something else.
+    private func fillIn() {
+        guard !LumaMotion.reduced else { fill = 1; return }
+        fill = 0
+        // On the next turn: emptied and filled in one go, the figure would not be seen to change.
+        DispatchQueue.main.async {
+            withAnimation(.easeOut(duration: 0.9)) { fill = 1 }
+        }
+    }
+
+    /// The picked muscle's outline breathes, so it can be found on the figure.
+    private func pulse(_ on: Bool) {
+        glow = 1
+        guard on, !LumaMotion.reduced else { return }
+        withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) { glow = 0 }
+    }
+
     private func figure(_ side: BodySide) -> some View {
         VStack(spacing: 6) {
             BodyFigure(side: side, tint: { BodyColors.tint(progress.state($0), mode: mode) },
-                       describe: { BodyColors.words(progress.state($0), mode: mode) }, selected: selected) { m in
+                       describe: { BodyColors.words(progress.state($0), mode: mode) }, selected: selected, onSelect: { m in
                 LumaHaptics.tap()
                 selected = selected == m ? nil : m
-            }
+            }, fill: fill, glow: glow)
             LumaLabel(side.title)
         }
         .frame(maxWidth: .infinity)

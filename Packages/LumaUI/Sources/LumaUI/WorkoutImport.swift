@@ -38,6 +38,7 @@ struct WorkoutPhotoSheet: View {
             // The gallery has no coach to read photos, so it opens on a read made up for it.
             if env.isDemo, LumaLaunch.page == 1, drafts.isEmpty { drafts = WorkoutPhotoSheet.demoDrafts() }
             if env.isDemo, LumaLaunch.page == 2, drafts.isEmpty { drafts = [WorkoutPhotoSheet.blank(day: day)] }
+            if env.isDemo, LumaLaunch.page == 3 { busy = true }
         }
     }
 
@@ -58,6 +59,8 @@ struct WorkoutPhotoSheet: View {
         }
         .buttonStyle(LumaPrimaryButtonStyle())
         .disabled(busy || (photos.isEmpty && text.trimmingCharacters(in: .whitespaces).isEmpty))
+        // While the photos are read: the shape of what is coming.
+        if busy { ReadingRows(caption: photos.count > 1 ? "Reading \(photos.count) photos" : "Reading your workout") }
         if !env.coach.hasKey {
             LumaNote("Reading workouts uses the coach. Connect your key in the Coach tab, or enter the workout by hand below.")
         }
@@ -239,7 +242,7 @@ struct WorkoutDraftCard: View {
                     .buttonStyle(.plain)
                 }
                 if let written = draft.session.asWritten, !written.isEmpty {
-                    Button { withAnimation(.easeOut(duration: 0.2)) { showWritten.toggle() } } label: {
+                    Button { withAnimation(LumaMotion.quick) { showWritten.toggle() } } label: {
                         Label(showWritten ? "Hide what was written" : "Show what was written", systemImage: showWritten ? "chevron.up" : "chevron.down")
                             .font(LumaFont.body(12.5, .semibold)).foregroundStyle(Luma.mist)
                     }

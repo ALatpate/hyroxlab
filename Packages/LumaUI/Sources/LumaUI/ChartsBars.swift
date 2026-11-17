@@ -182,7 +182,7 @@ struct LumaShareBar: View {
             .mask(alignment: .leading) { Rectangle().frame(width: grown ? geo.size.width : 0) }
         }
         .frame(height: height)
-        .onAppear { withAnimation(.easeOut(duration: 0.9).delay(0.1)) { grown = true } }
+        .onAppear { withAnimation(LumaMotion.reveal) { grown = true } }
     }
 }
 
@@ -254,7 +254,7 @@ struct LumaGauge: View {
             .frame(width: d - lineWidth, height: d - lineWidth)
             .position(x: geo.size.width / 2, y: d / 2)
         }
-        .onAppear { withAnimation(.spring(response: 0.9, dampingFraction: 0.75).delay(0.15)) { shown = value ?? range.lowerBound } }
-        .onChange(of: value) { _, new in withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) { shown = new ?? range.lowerBound } }
+        .onAppear { withAnimation(LumaMotion.settle) { shown = value ?? range.lowerBound } }
+        .onChange(of: value) { _, new in withAnimation(LumaMotion.resettle) { shown = new ?? range.lowerBound } }
     }
 }

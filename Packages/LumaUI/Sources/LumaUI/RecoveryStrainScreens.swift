@@ -6,6 +6,7 @@ import LumaKit
 
 struct RecoveryScreen: View {
     @EnvironmentObject private var env: LumaEnv
+    @EnvironmentObject private var router: LumaRouter
 
     var body: some View {
         let a = env.analysis
@@ -38,10 +39,14 @@ struct RecoveryScreen: View {
             MetricHistoryCard(metric: .recovery, style: .bars, barColor: { Luma.recovery($0) })
             WeekdayCard(metric: .recovery)
             let habits = a.effects.filter { $0.outcome == .recovery }.prefix(3)
-            if !habits.isEmpty {
-                LumaSection(title: "What moves your recovery")
-                ForEach(Array(habits)) { EffectCard(finding: $0) }
+            LumaSection(title: "What moves your recovery")
+            ForEach(Array(habits)) { EffectCard(finding: $0) }
+            Button { router.push(.drivers) } label: {
+                LumaRow(symbol: "function", symbolColor: Luma.volt, title: "All of it, fitted together",
+                        subtitle: "Strain, sleep, bedtime and your log side by side, with tomorrow's likely score", chevron: true)
+                    .background(LumaPanel(radius: 22))
             }
+            .buttonStyle(.plain)
         }
     }
 }
@@ -76,7 +81,7 @@ struct RecoveryHero: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity)
-        .onAppear { withAnimation(.easeOut(duration: 1.1).delay(0.1)) { shown = read.score ?? 0 } }
+        .onAppear { withAnimation(LumaMotion.reveal) { shown = read.score ?? 0 } }
     }
 }
 
@@ -125,7 +130,7 @@ struct EffectMeter: View {
                 .offset(x: CGFloat(clamped) / 2.5 * 14)
         }
         .frame(width: 56, height: 14)
-        .onAppear { withAnimation(.spring(response: 0.8, dampingFraction: 0.75).delay(0.2)) { shown = effect } }
+        .onAppear { withAnimation(LumaMotion.settle) { shown = effect } }
     }
 }
 
@@ -323,8 +328,8 @@ struct StrainHero: View {
             }
         }
         .padding(.vertical, 6)
-        .onAppear { withAnimation(.easeOut(duration: 1.0).delay(0.1)) { shown = strain ?? 0 } }
-        .onChange(of: strain) { _, new in withAnimation(.easeOut(duration: 0.8)) { shown = new ?? 0 } }
+        .onAppear { withAnimation(LumaMotion.reveal) { shown = strain ?? 0 } }
+        .onChange(of: strain) { _, new in withAnimation(LumaMotion.update) { shown = new ?? 0 } }
     }
 
     private var band: String {

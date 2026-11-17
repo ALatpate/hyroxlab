@@ -5,6 +5,7 @@ import LumaKit
 /// One night in detail, with the schedule, debt and history around it.
 struct SleepScreen: View {
     @EnvironmentObject private var env: LumaEnv
+    @EnvironmentObject private var router: LumaRouter
     @State private var day: String = ""
     @State private var nightHR: [LHRPoint] = []
 
@@ -93,6 +94,12 @@ struct SleepScreen: View {
                 MetricHistoryCard(metric: .sleepHours, style: .bars, title: "Time asleep", goal: summary.tonightNeedMin / 60)
                 MetricHistoryCard(metric: .deepMin, style: .bars, title: "Deep sleep", color: LStageKind.deep.color)
                 MetricHistoryCard(metric: .remMin, style: .bars, title: "REM sleep", color: LStageKind.rem.color)
+                Button { router.push(.dose) } label: {
+                    LumaRow(symbol: "clock.badge.questionmark", symbolColor: Luma.dusk, title: "How much and how late",
+                            subtitle: "Caffeine, alcohol, your last meal and bedtime against the morning after", chevron: true)
+                        .background(LumaPanel(radius: 22))
+                }
+                .buttonStyle(.plain)
             }
         }
         .onAppear { if day.isEmpty { day = summary.last?.day ?? env.today } }
@@ -137,10 +144,10 @@ struct SleepHero: View {
             }
         }
         .padding(.vertical, 6)
-        .onAppear { withAnimation(.easeOut(duration: 1.0).delay(0.1)) { shown = night.score ?? 0 } }
+        .onAppear { withAnimation(LumaMotion.reveal) { shown = night.score ?? 0 } }
         .onChange(of: night.day) { _, _ in
             shown = 0
-            withAnimation(.easeOut(duration: 0.8)) { shown = night.score ?? 0 }
+            withAnimation(LumaMotion.update) { shown = night.score ?? 0 }
         }
     }
 }

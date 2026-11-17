@@ -9,6 +9,7 @@ struct GalleryApp: App {
     @StateObject private var env = GalleryApp.makeEnv()
 
     private static func makeEnv() -> LumaEnv {
+        LumaType.followsTextSize = true
         let data = UserDefaults.standard.string(forKey: "lumaData")
         return LumaEnv.demo(sparse: data == "sparse", scenario: data == "partial" ? "partial" : nil)
     }

@@ -42,6 +42,9 @@ public struct LumaGlance: Codable, Equatable, Sendable {
     public var brief: String?
     /// Recovery for the seven days ending on `day`, oldest first; nil where a day has no score.
     public var week: [Int?]
+    /// The companion: its name, its build and how it looks from now until the morning after next.
+    /// Absent in a glance written by an earlier build.
+    public var buddy: Buddy?
     public var updated: Date
 
     public init(day: String, recovery: Int? = nil, strain: Double? = nil, strainMax: Double = 21, sleepScore: Int? = nil,
@@ -54,6 +57,51 @@ public struct LumaGlance: Codable, Equatable, Sendable {
         self.sessions = sessions; self.tomorrow = tomorrow; self.kcal = kcal; self.kcalTarget = kcalTarget; self.protein = protein
         self.proteinTarget = proteinTarget; self.waterMl = waterMl; self.waterTargetMl = waterTargetMl; self.brief = brief
         self.week = week; self.updated = updated
+    }
+
+    /// The companion as the widgets draw it. The app works out every state ahead of time with its one
+    /// set of rules; a widget only looks up the moment that has begun.
+    public struct Buddy: Codable, Equatable, Sendable {
+        public struct Moment: Codable, Equatable, Sendable {
+            public var at: Date
+            /// A `BuddyKind` raw value.
+            public var kind: String
+            public var title: String
+            public var line: String
+            /// 0…1 from the recovery score; negative when there is no score.
+            public var energy: Double
+
+            public init(at: Date, kind: String, title: String, line: String, energy: Double) {
+                self.at = at; self.kind = kind; self.title = title; self.line = line; self.energy = energy
+            }
+        }
+
+        public var name: String
+        /// Strength levels 0…5 for shoulders, chest, back, arms, core and legs; negative where no lift
+        /// measures the part, which is then drawn at the plain build.
+        public var levels: [Double]
+        public var moments: [Moment]
+
+        public init(name: String, levels: [Double], moments: [Moment]) {
+            self.name = name; self.levels = levels; self.moments = moments
+        }
+
+        /// The moment that has begun at `date`.
+        public func moment(at date: Date) -> Moment? { moments.last { $0.at <= date } ?? moments.first }
+
+        /// What is still to be shown from `date` on: the moment under way, with the time it began taken
+        /// out, and those after it. Two schedules that agree on this draw the same widget.
+        func ahead(of date: Date) -> Buddy {
+            var copy = self
+            var rest = moments.filter { $0.at > date }
+            if var now = moment(at: date) {
+                now.at = .distantPast
+                rest.removeAll { $0 == now }
+                rest.insert(now, at: 0)
+            }
+            copy.moments = rest
+            return copy
+        }
     }
 
     /// The training-day key for a moment in time: the local date, with the day rolling over at 04:00.
@@ -123,13 +171,80 @@ public enum LumaGlanceStore {
     @discardableResult
     public static func save(_ glance: LumaGlance) -> Bool {
         var comparable = glance
-        let previous = load()
+        var previous = load()
         comparable.updated = previous?.updated ?? glance.updated
+        // The companion's schedule is written from "now" each time; what counts is what is still ahead.
+        comparable.buddy = comparable.buddy?.ahead(of: glance.updated)
+        previous?.buddy = previous?.buddy?.ahead(of: glance.updated)
         guard previous != comparable else { return false }
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .secondsSince1970
         guard let data = try? encoder.encode(glance) else { return false }
         defaults.set(data, forKey: key)
         return true
+    }
+}
+
+/// Things logged from outside the app: a widget button, a shortcut, Siri. The widget extension cannot
+/// reach the app's records, so each is queued in the shared container and the app files it the next
+/// time it runs. The glance is adjusted at once, so the widget that was tapped shows the new figure.
+public enum LumaQuickLog {
+    public struct Item: Codable, Equatable, Sendable {
+        public enum Kind: String, Codable, Sendable { case water, supplements, weight }
+        public var id: UUID
+        public var at: Date
+        public var kind: Kind
+        /// Millilitres of water, or kilograms of body weight.
+        public var amount: Double
+
+        public init(id: UUID = UUID(), at: Date = Date(), kind: Kind, amount: Double = 0) {
+            self.id = id; self.at = at; self.kind = kind; self.amount = amount
+        }
+    }
+
+    static let key = "luma.quicklog"
+    static let pokeKey = "luma.buddy.poke"
+
+    private static var defaults: UserDefaults {
+        LumaGlanceStore.suiteName.flatMap { UserDefaults(suiteName: $0) } ?? .standard
+    }
+
+    private static func stored() -> [Item] {
+        guard let data = defaults.data(forKey: key) else { return [] }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .secondsSince1970
+        return (try? decoder.decode([Item].self, from: data)) ?? []
+    }
+
+    private static func store(_ items: [Item]) {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .secondsSince1970
+        if let data = try? encoder.encode(items) { defaults.set(data, forKey: key) }
+    }
+
+    /// Queues an entry and moves the stored glance to match, when it is for the current day.
+    public static func add(_ item: Item) {
+        // A queue that nothing has drained for a long time is not allowed to grow without end.
+        store(Array((stored() + [item]).suffix(200)))
+        guard item.kind == .water, var glance = LumaGlanceStore.load(), glance.isCurrent(at: item.at) else { return }
+        glance.waterMl += Int(item.amount.rounded())
+        LumaGlanceStore.save(glance)
+    }
+
+    /// Everything queued, oldest first. The queue is emptied.
+    public static func drain() -> [Item] {
+        let items = stored()
+        if !items.isEmpty { defaults.removeObject(forKey: key) }
+        return items.sorted { $0.at < $1.at }
+    }
+
+    public static var isEmpty: Bool { defaults.data(forKey: key) == nil }
+
+    /// A tap on the companion in a widget: when it happened.
+    public static func poke(at date: Date = Date()) { defaults.set(date.timeIntervalSince1970, forKey: pokeKey) }
+
+    public static var lastPoke: Date? {
+        let t = defaults.double(forKey: pokeKey)
+        return t > 0 ? Date(timeIntervalSince1970: t) : nil
     }
 }

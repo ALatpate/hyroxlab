@@ -23,6 +23,9 @@ struct YouSheet: View {
             LumaGroup {
                 row("person.fill", Luma.frost, "Profile", "Body, heart-rate zones, race goal", .profile)
                 row("dot.radiowaves.left.and.right", live.strap.connected ? Luma.volt : Luma.amber, "Strap", live.strap.name.map { "\($0) · \(live.strap.statusText)" } ?? live.strap.statusText, .devices)
+                row("face.smiling.inverse", Luma.volt, env.extras.name, "Your companion, on the Lock Screen and here", .buddy)
+                row("calendar.badge.checkmark", Luma.aqua, "Weekly review", "The week written up, and the ones before", .reviews)
+                row("bell.fill", Luma.amber, "Reminders", "Worked out from your own numbers", .reminders)
                 row("gearshape.fill", Luma.frost, "Settings", "Cues, Lock Screen, data", .settings)
                 row("info.circle.fill", Luma.frost, "About Luma", "Privacy, licences, what the numbers mean", .about)
             }
@@ -351,6 +354,16 @@ struct SettingsScreen: View {
                 toggle("Heart rate on the Lock Screen", "A card with your heart rate and today's numbers. iOS starts it when you open Luma and keeps it for up to eight hours.", $env.profile.lockScreenHeartRate)
                 toggle("Strap battery alerts", "A notification when the strap needs charging.",
                        Binding(get: { live.batteryAlerts }, set: { env.device?.setBatteryAlerts($0) }))
+                Button { router.push(.reminders) } label: {
+                    LumaRow(symbol: "bell.fill", symbolColor: Luma.amber, title: "Reminders",
+                            subtitle: "Caffeine cut-off, supplements, protein, bedtime and more", chevron: true)
+                }
+                .buttonStyle(.plain)
+                Button { router.push(.buddy) } label: {
+                    LumaRow(symbol: "face.smiling.inverse", symbolColor: Luma.volt, title: env.extras.name,
+                            subtitle: "Your companion: its name, and whether it shows on Today", chevron: true)
+                }
+                .buttonStyle(.plain)
             }
             LumaSection(title: "Recording")
             LumaGroup {
@@ -408,7 +421,7 @@ struct AboutScreen: View {
             section("What the numbers are", "Recovery, strain and sleep are computed on this phone from the strap's heart rate, heart-rate variability, skin temperature and movement. Baselines are your own: Luma compares you with you. Estimates such as VO₂max, sleep need and race predictions are labelled as estimates wherever they appear.")
             section("Not a medical device", "Luma is for training and general wellbeing. It does not diagnose, treat or monitor any condition, and its warning signs are prompts to pay attention, not medical findings. If something feels wrong, see a doctor.")
             section("Privacy", "Everything Luma records stays on this phone. Nothing is uploaded to any Luma server, because there is none. The only data that leaves the phone is what you send to the coach: your messages, photos you attach and, if you turn it on, the health data a question needs, sent to Anthropic with your own API key.")
-            section("Open-source licences", "Luma's strap connection, on-device storage and its recovery, strain and sleep scoring are built on the open-source NOOP project (github.com/ryanbr/noop), used under the PolyForm Noncommercial License 1.0.0. This is a personal, non-commercial build. Luma is not affiliated with WHOOP or HYROX.")
+            section("Open-source licences", "Luma's strap connection, on-device storage and its recovery, strain and sleep scoring are built on the open-source NOOP project (github.com/ryanbr/noop), used under the PolyForm Noncommercial License 1.0.0. This is a personal, non-commercial build. Luma is not affiliated with WHOOP or HYROX. Titles and figures are set in Barlow Condensed by the Barlow Project Authors, used under the SIL Open Font License 1.1.")
         }
     }
 
@@ -462,7 +475,7 @@ struct OnboardingScreen: View {
                 }
                 .scrollIndicators(.hidden)
                 HStack(spacing: 12) {
-                    if page > 0 { Button("Back") { withAnimation { page -= 1 } }.buttonStyle(LumaSecondaryButtonStyle()).frame(width: 110) }
+                    if page > 0 { Button("Back") { withAnimation(LumaMotion.snap) { page -= 1 } }.buttonStyle(LumaSecondaryButtonStyle()).frame(width: 110) }
                     Button(page == 4 ? "Open Luma" : "Continue") { next() }.buttonStyle(LumaPrimaryButtonStyle())
                         .disabled(page == 4 && !understood)
                 }
@@ -472,7 +485,7 @@ struct OnboardingScreen: View {
     }
 
     private func next() {
-        if page < 4 { withAnimation { page += 1 }; return }
+        if page < 4 { withAnimation(LumaMotion.snap) { page += 1 }; return }
         if !classDays.isEmpty || !runDays.isEmpty, env.routine.isEmpty {
             let c = Calendar.current.dateComponents([.hour, .minute], from: classTime)
             let minutes = (c.hour ?? 6) * 60 + (c.minute ?? 30)

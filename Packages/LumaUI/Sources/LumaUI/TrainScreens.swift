@@ -130,10 +130,10 @@ private struct SuggestedSessionCard: View {
                 .scrollIndicators(.hidden)
                 Button("Keep as \(sport)") {
                     LumaHaptics.success()
-                    withAnimation(.easeOut(duration: 0.2)) { env.keep(stretch, sport: sport) }
+                    withAnimation(LumaMotion.quick) { env.keep(stretch, sport: sport) }
                 }
                 .buttonStyle(LumaPrimaryButtonStyle())
-                Button("Not a session") { withAnimation(.easeOut(duration: 0.2)) { env.dismiss(stretch) } }
+                Button("Not a session") { withAnimation(LumaMotion.quick) { env.dismiss(stretch) } }
                     .font(LumaFont.body(14, .semibold)).foregroundStyle(Luma.mist).buttonStyle(.plain)
                     .frame(maxWidth: .infinity)
             }

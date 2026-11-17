@@ -15,7 +15,8 @@ let package = Package(
     ],
     dependencies: [.package(path: "../LumaCore")],
     targets: [
-        .target(name: "LumaKit"),
+        // The fonts are Barlow Condensed (SIL Open Font License 1.1; the licence sits beside them).
+        .target(name: "LumaKit", resources: [.process("Fonts")]),
         .target(name: "LumaUI", dependencies: ["LumaKit", .product(name: "LumaCore", package: "LumaCore")]),
     ]
 )

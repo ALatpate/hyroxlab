@@ -56,6 +56,16 @@ enum CoachError: LocalizedError {
     }
 }
 
+private extension CoachWorld {
+    /// The athlete's own sweat rate, when they have measured it, so the coach's water target is Luma's.
+    func withSweatRate(_ rate: Double?) -> CoachWorld {
+        guard let rate else { return self }
+        var copy = self
+        copy.sweatMlPerHour = rate
+        return copy
+    }
+}
+
 /// Luma's coach: a streaming, tool-using conversation with the athlete's AI provider, plus the
 /// one-shot reads that turn photos and text into log entries. All data access goes through the tools
 /// in LumaCore; nothing is sent unless the athlete has added a key, and health data only with consent.
@@ -122,6 +132,7 @@ public final class CoachEngine: ObservableObject {
                    planned: env.planned, routine: env.routine, fuel: env.fuel, supplements: env.supplements, checkIns: env.checkIns,
                    lifts: env.lifts, sessions: env.sessions, benchmarks: env.benchmarks, personalBests: env.runPBs, notes: notes,
                    shareHealth: env.profile.shareHealthWithCoach)
+        .withSweatRate(env.next.sweatRate)
     }
 
     // MARK: Conversation
@@ -492,7 +503,7 @@ public final class CoachEngine: ObservableObject {
     }
 
     /// One request with one tool and no conversation: the photos and the note go in, the tool call comes back.
-    private func askOnce(system: String, tool: AITool, text: String, photos: [Data], maxTokens: Int) async throws -> AIStreamAccumulator {
+    func askOnce(system: String, tool: AITool, text: String, photos: [Data], maxTokens: Int) async throws -> AIStreamAccumulator {
         guard let key = env.secrets.coachKey(), !key.isEmpty else { throw CoachError.noKey }
         let model = try await resolveModel(key: key)
         let images = photos.prefix(CoachEngine.maxPhotos).compactMap { CoachEngine.prepare($0) }.map { (base64: $0.base64EncodedString(), mediaType: "image/jpeg") }

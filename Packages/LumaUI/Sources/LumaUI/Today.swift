@@ -23,11 +23,16 @@ struct TodayScreen: View {
             SwitchedOffNote()
             if a.watch.level >= .watch, a.lastNight?.day == a.today { WatchBanner(watch: a.watch) }
             TodayHero(analysis: a, strainOn21: env.profile.strainOn21)
+            BuddyStrip()
             Group {
                 DataNoticeCard()
                 CallCard(call: a.call, strain21: a.day?.strain.map(LScale.strain21), on21: env.profile.strainOn21)
+                EaseOfferCard()
             }
-            CoachBriefCard()
+            Group {
+                ReviewPrompt()
+                CoachBriefCard()
+            }
             Group {
                 SuggestedSessionPrompt()
                 PlanCard()
@@ -99,7 +104,7 @@ struct TodayHero: View {
         let score = tonight?.recovery
         let color = Luma.recovery(score)
         VStack(spacing: 6) {
-            Button { router.push(.recovery) } label: {
+            Button { router.push(.recovery, from: "hero.recovery") } label: {
                 ZStack {
                     LumaOrb(progress: shown / 100, color: color, partner: score == nil ? Luma.smoke : (score ?? 0) >= 67 ? Luma.mint : color)
                     VStack(spacing: -4) {
@@ -119,6 +124,7 @@ struct TodayHero: View {
                 .frame(height: 268)
             }
             .buttonStyle(.plain)
+            .lumaZoomSource("hero.recovery")
 
             if score == nil {
                 VStack(spacing: 2) {
@@ -146,15 +152,15 @@ struct TodayHero: View {
             }
             .padding(.top, 4)
         }
-        .onAppear { withAnimation(.easeOut(duration: 1.2).delay(0.15)) { shown = score ?? 0 } }
-        .onChange(of: score) { _, new in withAnimation(.easeOut(duration: 0.8)) { shown = new ?? 0 } }
+        .onAppear { withAnimation(LumaMotion.reveal) { shown = score ?? 0 } }
+        .onChange(of: score) { _, new in withAnimation(LumaMotion.update) { shown = new ?? 0 } }
     }
 
     /// `note` qualifies a figure the record does not fully back ("to 02:00"). `reserve` keeps the three
     /// tiles the same height when only some of them carry one.
     private func heroStat(_ label: String, value: Double?, decimals: Int, unit: String, tone: LumaTone, dest: LumaDest,
                           note: String?, reserve: Bool) -> some View {
-        Button { router.push(dest) } label: {
+        Button { router.push(dest, from: "hero." + label) } label: {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 5) {
                     Circle().fill(tone.color).frame(width: 6, height: 6).shadow(color: tone.color, radius: 3)
@@ -171,6 +177,7 @@ struct TodayHero: View {
             .background(LumaPanel(radius: 20))
         }
         .buttonStyle(.plain)
+        .lumaZoomSource("hero." + label)
     }
 }
 
@@ -191,7 +198,7 @@ struct SwitchedOffNote: View {
                         .font(LumaFont.body(13.5)).foregroundStyle(Luma.mist).fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
-                Button { withAnimation(.easeOut(duration: 0.2)) { live.switchedOff = [] } } label: {
+                Button { withAnimation(LumaMotion.quick) { live.switchedOff = [] } } label: {
                     Image(systemName: "xmark").font(.system(size: 12, weight: .bold)).foregroundStyle(Luma.mist)
                         .frame(width: 30, height: 30).contentShape(Rectangle())
                 }
@@ -323,8 +330,8 @@ struct StrainTrack: View {
             .frame(height: 14)
         }
         .frame(height: 14)
-        .onAppear { withAnimation(.spring(response: 0.9, dampingFraction: 0.8).delay(0.3)) { shown = current ?? 0 } }
-        .onChange(of: current) { _, new in withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) { shown = new ?? 0 } }
+        .onAppear { withAnimation(LumaMotion.settle) { shown = current ?? 0 } }
+        .onChange(of: current) { _, new in withAnimation(LumaMotion.resettle) { shown = new ?? 0 } }
     }
 }
 
@@ -412,7 +419,6 @@ struct HeartStrip: View {
     var dayStart: Double? = nil
     @EnvironmentObject private var live: LumaLive
     @EnvironmentObject private var router: LumaRouter
-    @State private var beat = false
 
     /// Ten-minute slots from the start of the day to the newest reading, nil where there is none.
     private var slots: [Double?] {
@@ -423,12 +429,12 @@ struct HeartStrip: View {
     var body: some View {
         let liveHR = live.strap.liveHeartRate()
         let trace = slots
-        Button { router.push(.heart) } label: {
+        Button { router.push(.heart, from: "today.heart") } label: {
             HStack(spacing: 14) {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
-                        Image(systemName: "heart.fill").font(.system(size: 11, weight: .bold)).foregroundStyle(Luma.coral)
-                            .scaleEffect(beat ? 1.25 : 1)
+                        // Beats at the rate being read. With no live reading it is still.
+                        BeatingHeart(bpm: liveHR)
                         LumaLabel(liveHR == nil ? "Heart rate" : "Live heart rate")
                     }
                     LumaFigure(value: (liveHR ?? live.strap.heartRate).map(Double.init), unit: "bpm", size: 40)
@@ -446,9 +452,7 @@ struct HeartStrip: View {
             .background(LumaPanel())
         }
         .buttonStyle(.plain)
-        .onAppear {
-            withAnimation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true)) { beat = true }
-        }
+        .lumaZoomSource("today.heart")
     }
 }
 
@@ -543,7 +547,7 @@ struct TodayVitals: View {
     private func tileBody(_ label: String, _ value: Double?, _ decimals: Int, _ unit: String, _ tone: LumaTone, _ symbol: String,
                           baseline: LBaseline?, better: Bool?, dest: LumaDest, signed: Bool, grouped: Bool, caption: String,
                           warn: Bool) -> some View {
-        Button { router.push(dest) } label: {
+        Button { router.push(dest, from: "body." + label) } label: {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 6) {
                     Image(systemName: symbol).font(.system(size: 11, weight: .bold)).foregroundStyle(tone.color)
@@ -562,10 +566,11 @@ struct TodayVitals: View {
             .background(LumaPanel(radius: 22))
         }
         .buttonStyle(.plain)
+        .lumaZoomSource("body." + label)
     }
 
     private var stressTile: some View {
-        Button { router.push(.stress) } label: {
+        Button { router.push(.stress, from: "body.stress") } label: {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 6) {
                     Image(systemName: "waveform.path.ecg").font(.system(size: 11, weight: .bold)).foregroundStyle(Luma.amber)
@@ -585,6 +590,7 @@ struct TodayVitals: View {
             .background(LumaPanel(radius: 22))
         }
         .buttonStyle(.plain)
+        .lumaZoomSource("body.stress")
     }
 }
 

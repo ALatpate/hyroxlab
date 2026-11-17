@@ -17,6 +17,8 @@ struct DevWidgetsScreen: View {
                     switch page {
                     case 0: lockScreen
                     case 1: homeA
+                    case 3: buddySheet
+                    case 4: buddyBuilds
                     default: homeB
                     }
                 }
@@ -104,6 +106,78 @@ struct DevWidgetsScreen: View {
         (6..<20).map { (h: Int) -> (hour: Int, level: Double?) in
             let level: Double? = h < 18 ? 0.4 + 1.3 * abs(sin(Double(h) / 2.3)) : nil
             return (hour: h, level: level)
+        }
+    }
+
+    // MARK: The companion
+
+    private static let mid = BuddyShape(levels: [2.6, 2.4, 2.8, 2.2, 2.5, 3.2])
+    private static let big = BuddyShape(levels: [4.6, 4.4, 4.5, 4.7, 4.2, 4.8])
+
+    private func frame(_ kind: BuddyKind, _ title: String, _ line: String, beat: Int = 0) -> BuddyFrame {
+        BuddyFrame(date: Date(), kind: kind, beat: beat, title: title, line: line, energy: 0.72)
+    }
+
+    private func lockBuddy(_ kind: BuddyKind, _ title: String, _ line: String = "", wide: Bool = false, beat: Int = 0,
+                           shape: BuddyShape = DevWidgetsScreen.mid) -> some View {
+        accessory(wide ? 160 : 72, 72) {
+            LumaBuddyWidgetView(frame: frame(kind, title, line, beat: beat), name: "Glim", family: wide ? .rectangular : .circular, shape: shape)
+        }
+    }
+
+    /// The companion as the Lock Screen and Home Screen widgets draw it.
+    @ViewBuilder
+    private var buddySheet: some View {
+        HStack(spacing: 12) {
+            lockBuddy(.charged, "Charged")
+            lockBuddy(.steady, "Steady")
+            lockBuddy(.drained, "Drained")
+            lockBuddy(.sleeping, "Asleep")
+        }
+        HStack(spacing: 12) {
+            lockBuddy(.training, "In session")
+            lockBuddy(.celebrating, "New best")
+            lockBuddy(.thirsty, "Thirsty")
+            lockBuddy(.waiting, "No score yet")
+        }
+        HStack(spacing: 12) {
+            lockBuddy(.charged, "Charged", "Recovery 72%. Good to push today.", wide: true)
+            lockBuddy(.sleepy, "Winding down", "Lights out by 22:40 covers tonight's sleep.", wide: true)
+        }
+        HStack(spacing: 12) {
+            lockBuddy(.thirsty, "Thirsty", "1.0 of 2.9 L so far.", wide: true)
+            lockBuddy(.unwell, "Run down", "Several signals are off together.", wide: true)
+        }
+        // A tap: the two steps of its answer, then back.
+        HStack(spacing: 12) {
+            lockBuddy(.steady, "Steady", beat: 0)
+            lockBuddy(.steady, "Steady", beat: 10)
+            lockBuddy(.steady, "Steady", beat: 11)
+            lockBuddy(.steady, "Steady", beat: 2)
+        }
+        HStack(spacing: 22) {
+            widget(158, 158) {
+                LumaBuddyWidgetView(frame: frame(.charged, "Charged", "Recovery 72%. Good to push today."), name: "Glim", family: .small,
+                                    shape: DevWidgetsScreen.mid)
+            }
+            widget(158, 158, tint: Luma.coral) {
+                LumaBuddyWidgetView(frame: frame(.drained, "Drained", "Recovery 28%. Keep it easy."), name: "Glim", family: .small,
+                                    shape: DevWidgetsScreen.big, spark: Luma.coral)
+            }
+        }
+        widget(338, 158) {
+            LumaBuddyWidgetView(frame: frame(.celebrating, "New best", "Back squat: est. max 133 kg."), name: "Glim", family: .medium,
+                                shape: DevWidgetsScreen.big)
+        }
+    }
+
+    /// Every state at three builds: the plain one, a middling one and a strong one.
+    @ViewBuilder
+    private var buddyBuilds: some View {
+        ForEach([BuddyShape.plain, DevWidgetsScreen.mid, DevWidgetsScreen.big].indices, id: \.self) { i in
+            let shape = [BuddyShape.plain, DevWidgetsScreen.mid, DevWidgetsScreen.big][i]
+            Text(["Plain build", "Middling levels", "Strong all round"][i]).font(LumaFont.heading(15)).foregroundStyle(Luma.frost)
+            BuddyMoodGrid(shape: shape).padding(.horizontal, 16)
         }
     }
 

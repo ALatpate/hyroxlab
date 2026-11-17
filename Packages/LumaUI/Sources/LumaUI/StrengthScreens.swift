@@ -110,7 +110,7 @@ struct LiftDetailScreen: View {
                         Text(heading(s)).font(LumaFont.body(13.5)).foregroundStyle(Luma.mist)
                     }
                     Spacer(minLength: 6)
-                    Button(editing ? "Done" : "Edit") { withAnimation(.easeOut(duration: 0.2)) { editing.toggle(); adding = false } }
+                    Button(editing ? "Done" : "Edit") { withAnimation(LumaMotion.quick) { editing.toggle(); adding = false } }
                         .buttonStyle(LumaSecondaryButtonStyle(compact: true))
                 }
                 if editing {
@@ -424,8 +424,8 @@ struct ExerciseCard: View {
                             set.done.toggle()
                             if set.done { onSetDone() }
                         } label: {
-                            Image(systemName: set.done ? "checkmark.circle.fill" : "circle").font(.system(size: 26, weight: .medium))
-                                .foregroundStyle(set.done ? Luma.volt : Luma.smoke)
+                            // The tick is drawn as the set is ticked off.
+                            LumaTick(on: set.done, size: 28, color: Luma.volt)
                         }
                         .buttonStyle(.plain)
                         stepper(value: Binding(get: { Double(set.reps) }, set: { set.reps = max(1, Int($0)) }), step: 1, unit: "reps", decimals: 0)

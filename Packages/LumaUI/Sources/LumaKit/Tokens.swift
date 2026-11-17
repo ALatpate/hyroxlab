@@ -93,22 +93,22 @@ public enum LumaTone: String, CaseIterable, Sendable {
     }
 }
 
-/// Type roles. One family (San Francisco) used at three widths: compressed for numerals, which read
-/// like a race clock; expanded for titles and labels; standard for running text.
+/// Type roles. Titles and figures are set in Barlow Condensed, tall and narrow like a timing board;
+/// labels and running text stay in the system face.
 public enum LumaFont {
     public static func numeral(_ size: CGFloat, _ weight: Font.Weight = .bold) -> Font {
-        Font.system(size: size, weight: weight).width(.compressed).monospacedDigit()
+        LumaType.condensed(size * 1.06, weight).monospacedDigit()
     }
     public static func title(_ size: CGFloat = 30) -> Font {
-        Font.system(size: size, weight: .bold).width(.expanded)
+        LumaType.condensed(size * 1.36 * LumaType.headingScale, .semibold)
     }
     public static func heading(_ size: CGFloat = 16) -> Font {
-        Font.system(size: size, weight: .semibold).width(.expanded)
+        LumaType.condensed(size * 1.3 * LumaType.headingScale, .semibold)
     }
     public static func label(_ size: CGFloat = 11) -> Font {
-        Font.system(size: size, weight: .medium).width(.expanded)
+        Font.system(size: size * LumaType.textScale, weight: .medium)
     }
     public static func body(_ size: CGFloat = 15, _ weight: Font.Weight = .regular) -> Font {
-        Font.system(size: size, weight: weight)
+        Font.system(size: size * LumaType.textScale, weight: weight)
     }
 }

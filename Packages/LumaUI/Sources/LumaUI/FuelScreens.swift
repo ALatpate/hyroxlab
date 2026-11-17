@@ -60,6 +60,7 @@ struct FuelScreen: View {
             }
             WaterCard(totals: totals, target: target, day: active)
             SupplementChecklist(day: active)
+            BodyTeaser()
 
             LumaSection(title: "Eaten", action: food.isEmpty ? nil : "\(food.count) logged", onAction: {})
             if food.isEmpty {
@@ -72,7 +73,7 @@ struct FuelScreen: View {
                 VStack(spacing: 10) {
                     ForEach(food) { e in
                         FuelEntryCard(entry: e, expanded: expanded == e.id) {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { expanded = expanded == e.id ? nil : e.id }
+                            withAnimation(LumaMotion.snap) { expanded = expanded == e.id ? nil : e.id }
                         }
                     }
                 }
@@ -85,7 +86,14 @@ struct FuelScreen: View {
                              note: totals.alcoholG > 0 ? "About \(String(format: "%.1f", totals.alcoholG / 10)) units" : nil)
                 }
             }
+            FuelMatchCard(day: active)
             FuelCuesCard(day: active)
+            Button { router.push(.dose) } label: {
+                LumaRow(symbol: "clock.badge.questionmark", symbolColor: Luma.dusk, title: "How much and how late",
+                        subtitle: "Caffeine, alcohol, your last meal and bedtime against the morning after", chevron: true)
+                    .background(LumaPanel(radius: 22))
+            }
+            .buttonStyle(.plain)
             Button {
                 router.askCoach("Look at my food log for the last 7 days against my targets and training. What should I change?")
             } label: {
@@ -119,8 +127,8 @@ struct EnergyHero: View {
             }
         }
         .padding(.vertical, 4)
-        .onAppear { withAnimation(.easeOut(duration: 0.9).delay(0.1)) { shown = totals.kcal } }
-        .onChange(of: totals.kcal) { _, new in withAnimation(.easeOut(duration: 0.5)) { shown = new } }
+        .onAppear { withAnimation(LumaMotion.reveal) { shown = totals.kcal } }
+        .onChange(of: totals.kcal) { _, new in withAnimation(LumaMotion.update) { shown = new } }
     }
 
     private func macro(_ label: String, _ value: Double, _ goal: Double, _ color: Color) -> some View {
@@ -194,16 +202,20 @@ struct SupplementChecklist: View {
                 LumaGroup {
                     ForEach(stack) { s in
                         let taken = env.supplementTaken(s, on: day)
+                        let trial = env.trialNote(for: s.dose.name, on: day)
                         Button {
-                            LumaHaptics.select()
+                            if taken == nil { LumaHaptics.success() } else { LumaHaptics.select() }
                             if let t = taken { env.delete(t) } else { env.logSupplement(s.dose, at: day == env.today ? Date() : (LDate.date(day) ?? Date())) }
                         } label: {
                             HStack(spacing: 13) {
-                                Image(systemName: taken != nil ? "checkmark.circle.fill" : "circle")
-                                    .font(.system(size: 22, weight: .medium)).foregroundStyle(taken != nil ? Luma.mint : Luma.smoke)
+                                LumaTick(on: taken != nil, size: 24)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(s.dose.name).font(LumaFont.body(15, .medium)).foregroundStyle(Luma.frost)
                                     Text("\(s.dose.text) · \(s.timing.title)").font(LumaFont.body(12.5)).foregroundStyle(Luma.mist)
+                                    if let trial {
+                                        Text(trial.text).font(LumaFont.body(12.5, .medium)).foregroundStyle(trial.on ? Luma.mint : Luma.amber)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
                                 }
                                 Spacer()
                                 if let t = taken { Text(LumaText.time(t.at.timeIntervalSince1970)).font(LumaFont.body(12)).foregroundStyle(Luma.smoke) }
@@ -217,6 +229,11 @@ struct SupplementChecklist: View {
                             Button { env.delete(e) } label: { Image(systemName: "trash").font(.system(size: 13)).foregroundStyle(Luma.smoke) }.buttonStyle(.plain)
                         }
                     }
+                    Button { router.push(.trials) } label: {
+                        LumaRow(symbol: "testtube.2", symbolColor: Luma.mint, title: "Supplement trials",
+                                subtitle: env.openTrial.map { "\($0.supplement) is on trial" } ?? "Find out whether one does anything for you", chevron: true)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -390,6 +407,7 @@ struct FuelAddSheet: View {
             }
             .buttonStyle(LumaPrimaryButtonStyle(color: Luma.mint))
             .disabled(busy || (photos.isEmpty && text.trimmingCharacters(in: .whitespaces).isEmpty))
+            if busy { ReadingRows(caption: photos.isEmpty ? "Working out the numbers" : "Reading your photo", rows: 3) }
             Button("Enter the numbers myself") {
                 draft = FuelEntry(at: at, kind: kind, title: text.isEmpty ? "Meal" : text, items: [FuelItem(name: text.isEmpty ? "Item" : text)], source: .typed)
             }
@@ -467,6 +485,7 @@ struct FuelAddSheet: View {
             }
             .buttonStyle(LumaPrimaryButtonStyle(color: Luma.mint))
             .disabled(busy || (photos.isEmpty && text.trimmingCharacters(in: .whitespaces).isEmpty))
+            if busy { ReadingRows(caption: "Reading the label", rows: 2) }
             if !env.coach.hasKey {
                 LumaNote("Reading labels uses the coach. Without a key, add supplements to your stack by hand from Supplements, then tick them here.")
             }
@@ -662,6 +681,8 @@ struct SupplementsScreen: View {
             .buttonStyle(LumaPrimaryButtonStyle(color: Luma.mint))
             .disabled(name.trimmingCharacters(in: .whitespaces).count < 2 || amount <= 0)
             Button { router.sheet = .fuelAdd(.supplement) } label: { Label("Add from a photo of the label", systemImage: "camera.fill").frame(maxWidth: .infinity) }
+                .buttonStyle(LumaSecondaryButtonStyle())
+            Button { router.push(.trials) } label: { Label("Run a trial of one", systemImage: "testtube.2").frame(maxWidth: .infinity) }
                 .buttonStyle(LumaSecondaryButtonStyle())
             LumaNote("Luma records what you take; it does not judge doses. Check anything new against the label and, if you take medication, with a pharmacist or doctor.")
         }

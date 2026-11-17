@@ -57,13 +57,16 @@ public enum FuelMatch {
     }
 
     /// `entries` are the day's food entries, `workouts` its recorded sessions. `closed` is false for a
-    /// day still in progress, whose totals are "so far" and are not held against it.
+    /// day still in progress, whose totals are "so far" and are not held against it. `dayClass` is the
+    /// class the day's targets were built from, when the caller shows those beside this read: the two
+    /// then name the day the same way. Left out, the day is classed from what it held.
     public static func read(day: String, entries: [FuelEntry], workouts: [LWorkout], strain21: Double?, raced: Bool = false,
-                            profile: LProfile, closed: Bool, calendar: Calendar = LDate.calendar) -> FuelDayRead {
+                            dayClass given: FuelDayClass? = nil, profile: LProfile, closed: Bool,
+                            calendar: Calendar = LDate.calendar) -> FuelDayRead {
         let food = entries.filter { $0.kind != .water && $0.kind != .supplement }
         let body = max(30, profile.weightKg)
         let sessions = workouts.filter { $0.durationS >= 20 * 60 }.sorted { $0.start < $1.start }
-        let kind = dayClass(strain21: strain21, sessions: sessions.count, raced: raced)
+        let kind = given ?? dayClass(strain21: strain21, sessions: sessions.count, raced: raced)
         let usable = TrainingProgress.isUsable(food)
         guard usable || !closed else { return FuelDayRead(day: day, dayClass: kind, usable: false, checks: []) }
         let totals = FuelTotals.of(food)

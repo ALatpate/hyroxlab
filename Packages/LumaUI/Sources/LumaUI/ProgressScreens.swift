@@ -21,12 +21,15 @@ struct TrainProgressView: View {
                 ProgressNotes(title: "Weak points", symbol: "exclamationmark.triangle.fill", color: Luma.amber, notes: p.weakPoints,
                               empty: "Nothing stands out. Luma looks for a lift graded well below your others, a lift that is slipping, and muscle groups no session has reached in two weeks.")
                 LiftProgressList(lifts: p.lifts)
+                StalledCard()
                 MuscleWorkCard(muscles: p.muscles)
+                WeeklySetsCard()
                 BalanceCard(balance: p.balance)
                 LoggedMixCard(mix: p.mix, weeks: p.weeks)
             }
             FuelTrainingCard(read: p.fuel)
             SupplementCard(reads: p.supplements)
+            TrainingHelpCard()
             HabitEffectsCard(effects: env.analysis.effects)
             LumaQuickAction(symbol: "sparkles", title: "Ask the coach about my progress", tint: Luma.volt) {
                 router.askCoach("Look at my progress: lifts, muscles, weak points, how my food and supplements line up with my training. What should I change in the next four weeks?")
@@ -103,7 +106,12 @@ struct LiftProgressList: View {
             VStack(alignment: .leading, spacing: 12) {
                 LumaSection(title: "Lifts", action: "Training log") { router.push(.strength) }
                 LumaGroup {
-                    ForEach(lifts.prefix(8)) { LiftProgressRow(lift: $0) }
+                    ForEach(lifts.prefix(8)) { lift in
+                        Button { router.push(.liftHistory(lift.name)) } label: {
+                            LiftProgressRow(lift: lift).contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
                 LumaNote("Each figure is the lift's estimated max now: the best of its last six weeks, worked out from your sets of 12 reps or fewer. Pull-ups, chin-ups and dips count your bodyweight plus any load added. The level is Luma's own scale of bodyweight multiples for each lift, not a ranking against other people.")
             }

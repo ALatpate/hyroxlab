@@ -227,8 +227,8 @@ struct LumaFigure: View {
                 }
                 .font(LumaFont.numeral(size))
                 .foregroundStyle(color)
-                .onAppear { withAnimation(.easeOut(duration: 0.9)) { shown = value } }
-                .onChange(of: value) { _, new in withAnimation(.easeOut(duration: 0.5)) { shown = new } }
+                .onAppear { withAnimation(LumaMotion.reveal) { shown = value } }
+                .onChange(of: value) { _, new in withAnimation(LumaMotion.update) { shown = new } }
             } else {
                 Text("–").font(LumaFont.numeral(size)).foregroundStyle(Luma.smoke)
             }
@@ -300,7 +300,7 @@ struct LumaPrimaryButtonStyle: ButtonStyle {
             .background(RoundedRectangle(cornerRadius: compact ? 14 : 18, style: .continuous).fill(color))
             .shadow(color: color.opacity(configuration.isPressed ? 0.1 : 0.35), radius: 14, y: 4)
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
+            .animation(LumaMotion.press, value: configuration.isPressed)
     }
 }
 
@@ -317,7 +317,7 @@ struct LumaSecondaryButtonStyle: ButtonStyle {
             .background(RoundedRectangle(cornerRadius: compact ? 14 : 18, style: .continuous).fill(Luma.raised))
             .overlay(RoundedRectangle(cornerRadius: compact ? 14 : 18, style: .continuous).strokeBorder(Luma.line, lineWidth: 1))
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
+            .animation(LumaMotion.press, value: configuration.isPressed)
     }
 }
 
@@ -379,7 +379,7 @@ struct LumaSegmented<Value: Hashable>: View {
                 let isOn = option.value == selection
                 Button {
                     LumaHaptics.select()
-                    withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) { selection = option.value }
+                    withAnimation(LumaMotion.snap) { selection = option.value }
                 } label: {
                     Text(option.title)
                         .font(LumaFont.body(13, .semibold))
@@ -547,8 +547,8 @@ struct LumaBar: View {
             }
         }
         .frame(height: height)
-        .onAppear { withAnimation(.easeOut(duration: 0.8)) { shown = value } }
-        .onChange(of: value) { _, new in withAnimation(.easeOut(duration: 0.4)) { shown = new } }
+        .onAppear { withAnimation(LumaMotion.reveal) { shown = value } }
+        .onChange(of: value) { _, new in withAnimation(LumaMotion.update) { shown = new } }
     }
 }
 

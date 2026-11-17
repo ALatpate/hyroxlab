@@ -211,6 +211,22 @@ public enum LumaDest: Hashable {
     case devices, settings, profile, about
     /// Where heart rate reached the phone and what is stored, hour by hour.
     case dataCheck
+    /// The companion: why it looks the way it does, its build, and its day ahead.
+    case buddy
+    /// Supplement trials, and one trial.
+    case trials
+    case trial(UUID)
+    /// How much and how late: caffeine, alcohol, the last meal and bedtime against the next morning.
+    case dose
+    /// What goes with a better or worse recovery, fitted together.
+    case drivers
+    /// The weight log, real burn and sweat rate.
+    case body
+    /// Weekly reviews.
+    case reviews
+    /// One lift over time.
+    case liftHistory(String)
+    case reminders
     /// Development only: the widget design sheets.
     case dev(Int)
 }
@@ -226,6 +242,10 @@ enum LumaSheetDest: Identifiable {
     case manualWorkout
     /// Add sessions to the training log from photos; the day they are filed under when no photo says.
     case workoutPhotos(String)
+    case weighIn
+    case sweatTest
+    /// Set up a trial of one supplement.
+    case trialSetup(String)
 
     var id: String {
         switch self {
@@ -238,6 +258,9 @@ enum LumaSheetDest: Identifiable {
         case .coachSetup: return "coach-setup"
         case .manualWorkout: return "manual-workout"
         case .workoutPhotos(let d): return "workout-photos-\(d)"
+        case .weighIn: return "weigh-in"
+        case .sweatTest: return "sweat-test"
+        case .trialSetup(let name): return "trial-setup-\(name)"
         }
     }
 }
@@ -292,7 +315,9 @@ public final class LumaRouter: ObservableObject {
 
     public init() {}
 
-    func push(_ dest: LumaDest) {
+    /// `source` names the tile that was tapped, so the screen can open out of it (`lumaZoomSource`).
+    func push(_ dest: LumaDest, from source: String? = nil) {
+        LumaZoom.pending = source
         switch tab {
         case .today: todayPath.append(dest)
         case .train: trainPath.append(dest)
@@ -322,6 +347,9 @@ public final class LumaRouter: ObservableObject {
         case "heart": show(.heart)
         case "stress": show(.stress)
         case "strap": show(.devices)
+        case "buddy": show(.buddy)
+        case "body": show(.body)
+        case "reviews": show(.reviews)
         case "go":
             tab = .today
             sheet = .go
@@ -333,6 +361,7 @@ public final class LumaRouter: ObservableObject {
     }
 
     private func show(_ dest: LumaDest) {
+        LumaZoom.pending = nil
         tab = .today
         if todayPath.last != dest { todayPath = [dest] }
     }
@@ -451,10 +480,27 @@ public final class LumaEnv: ObservableObject {
     @Published private(set) var benchmarks = Benchmarks()
     @Published var runPBs: [PersonalBest] { didSet { disk.save(runPBs, "runpbs.json") } }
 
+    // The newer records: supplement trials, weigh-ins, sweat tests, weekly reviews, and small settings.
+    @Published var trials: [SupplementTrial] { didSet { disk.save(trials, "trials.json"); refreshNext() } }
+    @Published var weights: [WeightEntry] { didSet { disk.save(weights, "weights.json"); weightsChanged() } }
+    @Published var sweatTests: [SweatTest] { didSet { disk.save(sweatTests, "sweat-tests.json"); refreshNext() } }
+    @Published var reviews: [WeeklyReview] { didSet { disk.save(reviews, "reviews.json") } }
+    @Published var extras: LumaExtras { didSet { if extras != oldValue { disk.save(extras, "extras.json"); refreshNext(); onGlanceChange?() } } }
+    /// What those records and the logs add up to. Rebuilt with `progress`, so every screen that shows a
+    /// figure from it shows the same one.
+    @Published var next = LumaNext()
+    /// A new best to show once, over whatever screen is up.
+    @Published var celebration: LumaBest?
+    /// The weekly review being written, or why it could not be.
+    @Published var reviewWriting = false
+    @Published var reviewError: String?
+
     /// Called when the profile changes so the app can mirror age, mass and max HR to the strap layer.
     public var onProfileChange: ((LProfile) -> Void)?
     /// Called after anything the widgets show has changed.
     public var onGlanceChange: (() -> Void)?
+    /// Asks iOS for leave to show notifications; true when it is given. Set by the app.
+    public var requestNotifications: (() async -> Bool)?
 
     private var reloadTask: Task<Void, Never>?
     private(set) lazy var coach = CoachEngine(env: self)
@@ -474,6 +520,11 @@ public final class LumaEnv: ObservableObject {
         checkIns = disk.load([CheckIn].self, "checkins.json") ?? []
         lifts = disk.load([LiftSession].self, "lifts.json") ?? []
         runPBs = disk.load([PersonalBest].self, "runpbs.json") ?? []
+        trials = disk.load([SupplementTrial].self, "trials.json") ?? []
+        weights = disk.load([WeightEntry].self, "weights.json") ?? []
+        sweatTests = disk.load([SweatTest].self, "sweat-tests.json") ?? []
+        reviews = disk.load([WeeklyReview].self, "reviews.json") ?? []
+        extras = disk.load(LumaExtras.self, "extras.json") ?? LumaExtras()
         benchmarks = disk.load(Benchmarks.self, "benchmarks.json") ?? Benchmarks()
         dismissedStretches = SessionSuggestions.prune(Set(disk.load([String].self, "stretches-dismissed.json") ?? []),
                                                       now: Date().timeIntervalSince1970)
@@ -513,6 +564,7 @@ public final class LumaEnv: ObservableObject {
                           PersonalBest(distanceM: 5000, seconds: 1480), PersonalBest(distanceM: 10000, seconds: 3105)]
             env.upsert(LumaDemoContent.simulation(daysAgo: 37, runPace: 334, stationFactor: 1.09))
             env.upsert(LumaDemoContent.simulation(daysAgo: 9, runPace: 319))
+            LumaDemoNext.stage(env, source: source)
         }
         return env
     }
@@ -585,6 +637,7 @@ public final class LumaEnv: ObservableObject {
     func refreshProgress() {
         progress = TrainingProgress.build(lifts: lifts, workouts: workouts, fuel: fuel, supplements: supplements, profile: profile,
                                           today: LumaAnalysis.todayKey())
+        refreshNext()
     }
 
     /// Records today's verdict: a night found cut off is marked, one found whole is unmarked.
@@ -722,7 +775,8 @@ public final class LumaEnv: ObservableObject {
         let ps = planned.filter { $0.day == day }
         let strain = self.day(day)?.strain.map(LScale.strain21)
         let minutes = ps.filter { $0.status != .removed && $0.kind != .rest }.reduce(0.0) { $0 + Double($1.durationMin) }
-        return FuelPlanner.targets(profile: profile, dayClass: FuelPlanner.dayClass(planned: ps, strain21: strain), trainingMinutes: max(45, minutes))
+        return FuelPlanner.targets(profile: profile, dayClass: FuelPlanner.dayClass(planned: ps, strain21: strain), trainingMinutes: max(45, minutes),
+                                   sweatMlPerHour: next.sweatRate ?? SweatModel.standardMlPerHour)
     }
 
     func log(_ entry: FuelEntry) {
@@ -768,7 +822,9 @@ public final class LumaEnv: ObservableObject {
     // MARK: Strength
 
     func save(_ s: LiftSession) {
+        let before = progress.lifts
         if let i = lifts.firstIndex(where: { $0.id == s.id }) { lifts[i] = s } else { lifts.append(s) }
+        noteBests(since: before, in: s)
     }
 
     func delete(_ s: LiftSession) { lifts.removeAll { $0.id == s.id } }
@@ -845,7 +901,7 @@ public final class LumaEnv: ObservableObject {
         let totals = fuelTotals(on: today), targets = fuelTargets(on: today)
         let week = LumaAnalysis.series(.recovery, days: days, ending: today, count: 7).values.map { $0.map { Int($0.rounded()) } }
         let brief: String? = coach.briefDay == today ? coach.brief : nil
-        return LumaGlance(day: today, recovery: scored?.recovery.map { Int($0.rounded()) }, strain: strain, strainMax: profile.strainOn21 ? 21 : 100,
+        var glance = LumaGlance(day: today, recovery: scored?.recovery.map { Int($0.rounded()) }, strain: strain, strainMax: profile.strainOn21 ? 21 : 100,
                           sleepScore: night?.score.map { Int($0.rounded()) }, sleepMinutes: night.map { Int($0.asleepMin.rounded()) },
                           hrv: wholeNight ? scored?.hrv.map { Int($0.rounded()) } : nil,
                           restingHR: wholeNight ? scored?.restingHR.map { Int($0.rounded()) } : nil,
@@ -853,6 +909,8 @@ public final class LumaEnv: ObservableObject {
                           kcal: Int(totals.kcal.rounded()), kcalTarget: Int(targets.kcal.rounded()), protein: Int(totals.proteinG.rounded()),
                           proteinTarget: Int(targets.proteinG.rounded()), waterMl: Int(totals.waterMl.rounded()),
                           waterTargetMl: Int(targets.waterMl.rounded()), brief: brief, week: week, updated: now)
+        glance.buddy = buddyGlance(now: now)
+        return glance
     }
 
     // MARK: Export and about
@@ -875,12 +933,17 @@ public final class LumaEnv: ObservableObject {
         var lifts: [LiftSession]
         var personalBests: [PersonalBest]
         var raceSessions: [HXSession]
+        var supplementTrials: [SupplementTrial]
+        var weighIns: [WeightEntry]
+        var sweatTests: [SweatTest]
+        var weeklyReviews: [WeeklyReview]
     }
 
     /// Writes everything the athlete has entered to one JSON file and returns where it is.
     func exportFile() -> URL? {
         let file = ExportFile(exportedAt: Date(), profile: profile, routine: routine, planned: planned.filter { $0.status != .removed },
-                              fuel: fuel, supplements: supplements, checkIns: checkIns, lifts: lifts, personalBests: runPBs, raceSessions: sessions)
+                              fuel: fuel, supplements: supplements, checkIns: checkIns, lifts: lifts, personalBests: runPBs, raceSessions: sessions,
+                              supplementTrials: trials, weighIns: weights, sweatTests: sweatTests, weeklyReviews: reviews)
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]

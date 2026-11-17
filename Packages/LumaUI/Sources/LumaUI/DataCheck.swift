@@ -171,7 +171,7 @@ struct DataNoticeCard: View {
             }
             Spacer(minLength: 0)
             if let close = c.close {
-                Button { withAnimation(.easeOut(duration: 0.2)) { close() } } label: {
+                Button { withAnimation(LumaMotion.quick) { close() } } label: {
                     Image(systemName: "xmark").font(.system(size: 12, weight: .bold)).foregroundStyle(Luma.mist)
                         .frame(width: 30, height: 30).contentShape(Rectangle())
                 }

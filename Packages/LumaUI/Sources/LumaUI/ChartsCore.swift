@@ -413,7 +413,7 @@ struct LumaLineChart: View {
     private func start() {
         if reduceMotion { progress = 1; return }
         progress = 0
-        withAnimation(.easeOut(duration: 1.0).delay(0.1)) { progress = 1 }
+        withAnimation(LumaMotion.reveal) { progress = 1 }
     }
 }
 
