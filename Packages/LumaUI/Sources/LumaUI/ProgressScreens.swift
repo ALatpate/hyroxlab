@@ -22,7 +22,7 @@ struct TrainProgressView: View {
                               empty: "Nothing stands out. Luma looks for a lift graded well below your others, a lift that is slipping, and muscle groups no session has reached in two weeks.")
                 LiftProgressList(lifts: p.lifts)
                 MuscleWorkCard(muscles: p.muscles)
-                TrainingMixCard(mix: p.mix)
+                LoggedMixCard(mix: p.mix)
             }
             FuelTrainingCard(read: p.fuel)
             SupplementCard(reads: p.supplements)
@@ -222,7 +222,7 @@ private struct MuscleWorkRow: View {
 
 // MARK: Training mix
 
-struct TrainingMixCard: View {
+struct LoggedMixCard: View {
     let mix: [KindCount]
 
     var body: some View {

@@ -21,6 +21,8 @@ extension Path {
 struct BodyFigure: View {
     let side: BodySide
     let tint: (Muscle) -> Color?
+    /// What the figure shows for a muscle, in words, for someone who cannot see its colours.
+    let describe: (Muscle) -> String
     var selected: Muscle? = nil
     var onSelect: ((Muscle) -> Void)? = nil
 
@@ -58,8 +60,12 @@ struct BodyFigure: View {
             })
         }
         .aspectRatio(CGFloat(BodyMap.width / BodyMap.height), contentMode: .fit)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(side.title) of the body. The list below gives each muscle in words.")
+        .accessibilityLabel("\(side.title) of the body")
+        .accessibilityChildren {
+            ForEach(BodyMap.muscles(on: side)) { m in
+                Button(describe(m)) { onSelect?(m) }
+            }
+        }
     }
 
     /// The muscle under a tap. Small areas are hard to hit, so a near miss counts: the tap is tried
@@ -132,6 +138,16 @@ enum BodyColors {
         case .low: return Luma.ember.opacity(0.32)
         case .middle: return Luma.ember.opacity(0.62)
         case .high: return Luma.ember
+        }
+    }
+
+    /// The same fact the colour carries, in words.
+    static func words(_ state: MuscleState, mode: BodyMode) -> String {
+        let name = state.muscle.title
+        switch mode {
+        case .strength: return name + ": " + (state.level.map { StrengthLevel($0).title } ?? "not measured")
+        case .progress: return name + ": " + (state.trend?.title.lowercased() ?? "nothing to compare")
+        case .work: return name + ": " + ProgressText.sets(state.weekSets) + " in the last seven days"
         }
     }
 
@@ -238,7 +254,8 @@ struct BodyMapCard: View {
 
     private func figure(_ side: BodySide) -> some View {
         VStack(spacing: 6) {
-            BodyFigure(side: side, tint: { BodyColors.tint(progress.state($0), mode: mode) }, selected: selected) { m in
+            BodyFigure(side: side, tint: { BodyColors.tint(progress.state($0), mode: mode) },
+                       describe: { BodyColors.words(progress.state($0), mode: mode) }, selected: selected) { m in
                 LumaHaptics.tap()
                 selected = selected == m ? nil : m
             }

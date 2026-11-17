@@ -477,6 +477,8 @@ public final class CoachEngine: ObservableObject {
         let acc = try await extract(system: CoachPrompt.workoutExtraction(today: w.today, sex: w.profile.sex),
                                     tool: CoachTools.workoutsTool(name: "submit_workouts"),
                                     text: text.isEmpty ? "Log the training sessions these photos show." : text, photos: photos, maxTokens: 8192)
+        // An answer cut off at the length limit holds half a session; better none than that.
+        if acc.stopReason == "max_tokens" { throw CoachError.message("That was too much to read in one go. Try fewer photos at a time.") }
         guard let call = acc.toolCalls.first(where: { $0.name == "submit_workouts" }) else {
             throw CoachError.message(acc.text.isEmpty ? nothing : acc.text)
         }
