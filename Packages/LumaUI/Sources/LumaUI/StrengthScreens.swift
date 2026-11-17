@@ -78,13 +78,25 @@ struct LiftDetailScreen: View {
     let id: UUID
     @EnvironmentObject private var env: LumaEnv
     @Environment(\.dismiss) private var dismiss
+    /// Adding or correcting the loads after the session was saved.
+    @State private var editing = false
 
     var body: some View {
         LumaDetailScreen(title: env.lifts.first(where: { $0.id == id })?.resolvedKind.title ?? "Session", tone: .strain) {
             if let s = env.lifts.first(where: { $0.id == id }) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(s.title).font(LumaFont.title(26)).foregroundStyle(Luma.frost)
-                    Text(heading(s)).font(LumaFont.body(13.5)).foregroundStyle(Luma.mist)
+                HStack(alignment: .top, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(s.title).font(LumaFont.title(26)).foregroundStyle(Luma.frost).fixedSize(horizontal: false, vertical: true)
+                        Text(heading(s)).font(LumaFont.body(13.5)).foregroundStyle(Luma.mist)
+                    }
+                    Spacer(minLength: 6)
+                    if !s.exercises.isEmpty {
+                        Button(editing ? "Done" : "Edit loads") { withAnimation(.easeOut(duration: 0.2)) { editing.toggle() } }
+                            .buttonStyle(LumaSecondaryButtonStyle(compact: true))
+                    }
+                }
+                if editing {
+                    LumaNote("Type the load you used for a movement and it is set for all its sets. Loads are what Luma works your estimated max and strength level from.")
                 }
                 StatGrid {
                     StatCell(label: "Movements", value: "\(s.exercises.count)")
@@ -93,7 +105,17 @@ struct LiftDetailScreen: View {
                     if let m = s.minutes { StatCell(label: "Length", value: "\(Int(m.rounded()))", unit: "min") }
                 }
                 ForEach(s.exercises) { e in
-                    LumaCard(padding: 16) { LiftExerciseDetail(exercise: e, bodyKg: env.profile.weightKg) }
+                    LumaCard(padding: 16) {
+                        if editing {
+                            MovementEditRow(exercise: movement(s, e), last: LiftMath.lastLoad(e.name, in: env.lifts.filter { $0.id != s.id })) {
+                                var changed = s
+                                changed.exercises.removeAll { $0.id == e.id }
+                                env.save(changed)
+                            }
+                        } else {
+                            LiftExerciseDetail(exercise: e, bodyKg: env.profile.weightKg)
+                        }
+                    }
                 }
                 if let written = s.asWritten, !written.isEmpty {
                     LumaSection(title: "As it was written")
@@ -110,6 +132,17 @@ struct LiftDetailScreen: View {
                 .font(LumaFont.body(15, .semibold)).foregroundStyle(Luma.coral).buttonStyle(.plain).frame(maxWidth: .infinity)
             }
         }
+    }
+
+    /// A movement of the stored session, reached by its id and written straight back to the log.
+    private func movement(_ s: LiftSession, _ e: LiftExercise) -> Binding<LiftExercise> {
+        Binding(get: { env.lifts.first { $0.id == s.id }?.exercises.first { $0.id == e.id } ?? e },
+                set: { new in
+                    guard var session = env.lifts.first(where: { $0.id == s.id }),
+                          let i = session.exercises.firstIndex(where: { $0.id == e.id }) else { return }
+                    session.exercises[i] = new
+                    env.save(session)
+                })
     }
 
     private func heading(_ s: LiftSession) -> String {

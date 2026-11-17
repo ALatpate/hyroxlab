@@ -205,8 +205,8 @@ extension WorkoutDraftCard {
     }
 }
 
-/// One movement of a session being checked: what was read, and a field for the load used.
-private struct MovementEditRow: View {
+/// One movement of a session being checked or corrected: what was logged, and a field for the load used.
+struct MovementEditRow: View {
     @Binding var exercise: LiftExercise
     let last: Double?
     let onRemove: () -> Void
@@ -219,6 +219,14 @@ private struct MovementEditRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(exercise.name).font(LumaFont.body(14.5, .medium)).foregroundStyle(Luma.frost).fixedSize(horizontal: false, vertical: true)
                 Text(detail).font(LumaFont.body(12.5)).foregroundStyle(Luma.mist).fixedSize(horizontal: false, vertical: true)
+                // The last load is offered, never filled in: it becomes this session's only when tapped.
+                if load.isEmpty, let last, info?.resistance ?? true {
+                    Button { load = LumaText.kg(last) } label: {
+                        Text("Same as last time: \(LumaText.kg(last)) kg").font(LumaFont.body(12.5, .semibold)).foregroundStyle(Luma.volt)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 2)
+                }
             }
             Spacer(minLength: 6)
             if info?.resistance ?? true {
@@ -253,10 +261,7 @@ private struct MovementEditRow: View {
         return kg
     }
 
-    private var hint: String {
-        if info?.bodyweight ?? false { return "added" }
-        return last.map { LumaText.kg($0) } ?? "–"
-    }
+    private var hint: String { info?.bodyweight ?? false ? "added" : "–" }
 
     private var detail: String {
         var parts: [String] = [exercise.sets.isEmpty ? "No sets listed" : exercise.setsText]
@@ -265,15 +270,19 @@ private struct MovementEditRow: View {
     }
 
     /// One load for the movement: typing it sets every set to it, and clearing it leaves them unloaded.
+    /// The movement is written back once, and only when something changed.
     private func apply(_ text: String) {
         let cleaned = text.replacingOccurrences(of: ",", with: ".").trimmingCharacters(in: .whitespaces)
+        var changed = exercise
         if cleaned.isEmpty {
             // Left alone, sets keep whatever loads were read for them, alike or not.
-            if common != nil { for i in exercise.sets.indices { exercise.sets[i].kg = 0 } }
-            return
+            guard common != nil else { return }
+            for i in changed.sets.indices { changed.sets[i].kg = 0 }
+        } else {
+            guard let kg = Double(cleaned), kg >= 0, kg <= 1000 else { return }
+            for i in changed.sets.indices { changed.sets[i].kg = kg }
         }
-        guard let kg = Double(cleaned), kg >= 0, kg <= 1000 else { return }
-        for i in exercise.sets.indices { exercise.sets[i].kg = kg }
+        if changed != exercise { exercise = changed }
     }
 }
 
