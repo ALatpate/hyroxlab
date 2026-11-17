@@ -228,8 +228,9 @@ struct BodyLegend: View {
 struct BodyMapCard: View {
     let progress: TrainingProgress
     let today: String
-    @State private var mode: BodyMode = .strength
-    @State private var selected: Muscle?
+    // The screenshot harness can open the card on another view of the figure, or with a muscle picked.
+    @State private var mode: BodyMode = LumaLaunch.page == 1 ? .progress : (LumaLaunch.page == 2 ? .work : .strength)
+    @State private var selected: Muscle? = LumaLaunch.page == 3 ? .quads : nil
 
     var body: some View {
         LumaCard {

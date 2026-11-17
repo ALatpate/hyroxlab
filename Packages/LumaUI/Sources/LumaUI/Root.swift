@@ -248,6 +248,9 @@ enum LumaRoute {
             if let first = env.lifts.sorted(by: { $0.start > $1.start }).first { r.open(.train, .lift(first.id)) } else { r.tab = .train }
         case "train.strength": r.open(.train, .strength)
         case "train.progress": r.tab = .train; r.trainView = .progress
+        case "train.progress.trend": r.tab = .train; LumaLaunch.page = 1; r.trainView = .progress
+        case "train.progress.work": r.tab = .train; LumaLaunch.page = 2; r.trainView = .progress
+        case "train.progress.muscle": r.tab = .train; LumaLaunch.page = 3; r.trainView = .progress
         case "sheet.workouts": r.tab = .train; r.sheet = .workoutPhotos(today)
         case "sheet.workouts.review": r.tab = .train; LumaLaunch.page = 1; r.sheet = .workoutPhotos(today)
         case "sheet.workouts.hand": r.tab = .train; LumaLaunch.page = 2; r.sheet = .workoutPhotos(today)

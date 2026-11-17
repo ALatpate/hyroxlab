@@ -3,10 +3,15 @@
 20-train|train|0|demo|5
 21-train-b|train|560|demo|5
 22-progress|train.progress|0|demo|5
+22b-progress-trend|train.progress.trend|0|demo|5
+22c-progress-work|train.progress.work|0|demo|5
+22d-progress-muscle|train.progress.muscle|330|demo|5
 23-progress-b|train.progress|600|demo|5
 24-progress-c|train.progress|1220|demo|5
 25-progress-d|train.progress|1840|demo|5
 26-progress-e|train.progress|2460|demo|5
+26b-progress-f|train.progress|3080|demo|5
+26c-progress-g|train.progress|3700|demo|5
 27-progress-sparse|train.progress|0|sparse|5
 28-workouts|sheet.workouts|0|demo|5
 29-workouts-review|sheet.workouts.review|0|demo|5
@@ -14,5 +19,4 @@
 31-workouts-hand|sheet.workouts.hand|0|demo|5
 32-lift|train.lift|0|demo|5
 33-log|train.strength|0|demo|5
-34-log-b|train.strength|620|demo|5
 40-insights|today.insights|0|demo|5

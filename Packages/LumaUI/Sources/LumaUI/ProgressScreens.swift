@@ -22,7 +22,8 @@ struct TrainProgressView: View {
                               empty: "Nothing stands out. Luma looks for a lift graded well below your others, a lift that is slipping, and muscle groups no session has reached in two weeks.")
                 LiftProgressList(lifts: p.lifts)
                 MuscleWorkCard(muscles: p.muscles)
-                LoggedMixCard(mix: p.mix)
+                BalanceCard(balance: p.balance)
+                LoggedMixCard(mix: p.mix, weeks: p.weeks)
             }
             FuelTrainingCard(read: p.fuel)
             SupplementCard(reads: p.supplements)
@@ -224,21 +225,67 @@ private struct MuscleWorkRow: View {
 
 struct LoggedMixCard: View {
     let mix: [KindCount]
+    let weeks: [WeekCount]
 
     var body: some View {
-        let total = mix.reduce(0) { $0 + $1.count }
-        if total > 0 {
+        if weeks.contains(where: { $0.sessions > 0 }) {
             LumaCard {
                 VStack(alignment: .leading, spacing: 12) {
-                    ProgressHeader(title: "Sessions logged, last 4 weeks", symbol: "calendar", color: Luma.volt)
-                    FlowLayout(spacing: 8) {
-                        ForEach(mix) { m in
-                            LumaPill(text: "\(m.count) × \(m.kind.title)", color: m.kind.sport.tone.color, symbol: m.kind.sport.symbol)
+                    ProgressHeader(title: "Sessions logged each week", symbol: "calendar", color: Luma.volt)
+                    LumaBarChart(bars: weeks.enumerated().map { i, w in
+                        LumaBarChart.Bar(id: i, value: Double(w.sessions), color: Luma.volt, label: LumaText.shortDay(w.weekStart))
+                    }, height: 120)
+                    if !mix.isEmpty {
+                        LumaLabel("By type, last 4 weeks")
+                        FlowLayout(spacing: 8) {
+                            ForEach(mix) { m in
+                                LumaPill(text: "\(m.count) × \(m.kind.title)", color: m.kind.sport.tone.color, symbol: m.kind.sport.symbol)
+                            }
                         }
                     }
                 }
             }
         }
+    }
+}
+
+// MARK: Side by side
+
+/// Push against pull, the front of the legs against the back, upper body against lower: the sets
+/// each side had, with no verdict on what the share should be.
+struct BalanceCard: View {
+    let balance: [BalanceRead]
+
+    var body: some View {
+        if !balance.isEmpty {
+            LumaCard {
+                VStack(alignment: .leading, spacing: 14) {
+                    ProgressHeader(title: "Side by side, last 4 weeks", symbol: "arrow.left.arrow.right", color: Luma.sky)
+                    ForEach(balance) { BalanceRow(read: $0) }
+                    LumaNote("Sets over the last four weeks, counted as in the list above. Neither side has a right share: a lasting tilt shows what your training favours.")
+                }
+            }
+        }
+    }
+}
+
+private struct BalanceRow: View {
+    let read: BalanceRead
+
+    var body: some View {
+        let left: String = ProgressText.count(read.leftSets)
+        let right: String = ProgressText.count(read.rightSets)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(read.left + " " + left).font(LumaFont.body(13.5, .medium)).foregroundStyle(Luma.frost)
+                Spacer(minLength: 8)
+                Text(right + " " + read.right).font(LumaFont.body(13.5, .medium)).foregroundStyle(Luma.frost)
+            }
+            LumaShareBar(shares: [LumaShareBar.Share(id: "left", value: read.leftSets, color: Luma.ember),
+                                  LumaShareBar.Share(id: "right", value: read.rightSets, color: Luma.sky)], height: 10)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(read.left + ", " + left + " sets. " + read.right + ", " + right + " sets.")
     }
 }
 

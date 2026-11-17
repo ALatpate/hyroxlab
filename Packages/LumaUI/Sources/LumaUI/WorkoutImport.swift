@@ -77,7 +77,13 @@ struct WorkoutPhotoSheet: View {
         busy = true; error = nil
         do {
             let found = try await env.coach.readWorkouts(text: text, photos: photos.map { $0.data }, day: day)
-            drafts = found.map { WorkoutDraft(session: $0.session, photos: $0.photos.filter { $0 <= photos.count }) }
+            let count = photos.count
+            drafts = found.map { item in
+                var numbers: [Int] = item.photos.filter { $0 <= count }
+                // One workout and no word on which photos it came from: it came from all of them.
+                if numbers.isEmpty, found.count == 1, count > 0 { numbers = Array(1...count) }
+                return WorkoutDraft(session: item.session, photos: numbers)
+            }
         } catch let e {
             error = (e as? LocalizedError)?.errorDescription ?? e.localizedDescription
         }

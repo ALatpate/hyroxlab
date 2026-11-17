@@ -130,6 +130,28 @@ public struct SupplementRead: Equatable, Sendable, Identifiable {
     public let streak: Int
 }
 
+/// Two sides of the body's work set against each other: the sets each side had over four weeks.
+public struct BalanceRead: Equatable, Sendable, Identifiable {
+    public let id: String
+    public let left: String
+    public let leftSets: Double
+    public let right: String
+    public let rightSets: Double
+
+    /// The left side's share of the two, 0…1; nil when neither had any work.
+    public var share: Double? {
+        let total = leftSets + rightSets
+        return total > 0 ? leftSets / total : nil
+    }
+}
+
+/// Sessions logged in one week (Monday to Sunday).
+public struct WeekCount: Equatable, Sendable, Identifiable {
+    public var id: String { weekStart }
+    public let weekStart: String
+    public let sessions: Int
+}
+
 public struct KindCount: Equatable, Sendable, Identifiable {
     public var id: String { kind.rawValue }
     public let kind: SessionKind
@@ -153,6 +175,11 @@ public struct TrainingProgress: Sendable {
     public let weakPoints: [ProgressNote]
     /// Logged sessions of the last four weeks by kind, most frequent first.
     public let mix: [KindCount]
+    /// Sessions logged in each of the last eight weeks, oldest first; the last is the week in progress.
+    public let weeks: [WeekCount]
+    /// Push against pull, front of the legs against the back, upper body against lower: sets over the
+    /// last four weeks. Only pairs where either side had work.
+    public let balance: [BalanceRead]
     public let sessionsLogged: Int
     public let fuel: FuelTrainingRead?
     public let supplements: [SupplementRead]
@@ -181,10 +208,18 @@ public struct TrainingProgress: Sendable {
         let fortnight = sessions.filter { s in
             (ago[s.id] ?? 0) < 14 && s.exercises.contains { ExerciseLibrary.work($0).resistance }
         }.count
+        let thisWeek = LDate.weekStart(today, calendar: calendar)
+        var perWeek: [String: Int] = [:]
+        for s in sessions { perWeek[LDate.weekStart(s.day, calendar: calendar), default: 0] += 1 }
+        let weeks: [WeekCount] = (0..<8).reversed().map { back in
+            let start = LDate.adding(-7 * back, to: thisWeek, calendar: calendar)
+            return WeekCount(weekStart: start, sessions: perWeek[start] ?? 0)
+        }
         return TrainingProgress(muscles: muscles, lifts: lifts,
                                 strengths: strengthNotes(lifts: lifts),
                                 weakPoints: weakNotes(lifts: lifts, muscles: muscles, sessions: sessions, ago: ago, resistanceSessions14: fortnight),
-                                mix: mix, sessionsLogged: sessions.count,
+                                mix: mix, weeks: weeks, balance: sides(sets(sessions: sessions, ago: ago, from: 0, to: 28)),
+                                sessionsLogged: sessions.count,
                                 fuel: fuelRead(fuel: fuel, workouts: workouts, sessions: sessions, profile: profile, today: today, calendar: calendar),
                                 supplements: supplementReads(fuel: fuel, plans: supplements, today: today, calendar: calendar))
     }
@@ -275,6 +310,24 @@ public struct TrainingProgress: Sendable {
             return MuscleState(muscle: m, basis: basis, weekSets: week[m] ?? 0, usualSets: history >= 21 ? (before[m] ?? 0) / 4 : nil,
                                lastDirect: lastDirect[m], movements: Array(names))
         }
+    }
+
+    static let pushing: [Muscle] = [.chest, .shoulders, .triceps]
+    static let pulling: [Muscle] = [.lats, .upperBack, .biceps]
+    static let legFront: [Muscle] = [.quads]
+    static let legBack: [Muscle] = [.glutes, .hamstrings]
+    static let upper: [Muscle] = [.chest, .shoulders, .triceps, .biceps, .lats, .upperBack, .traps, .forearms]
+    static let lower: [Muscle] = [.quads, .glutes, .hamstrings, .calves, .adductors]
+
+    /// The three pairs, from sets per muscle. A pair neither side of which had work is left out.
+    static func sides(_ sets: [Muscle: Double]) -> [BalanceRead] {
+        func sum(_ muscles: [Muscle]) -> Double { muscles.reduce(0) { $0 + (sets[$1] ?? 0) } }
+        let pairs: [BalanceRead] = [
+            BalanceRead(id: "push-pull", left: "Push", leftSets: sum(pushing), right: "Pull", rightSets: sum(pulling)),
+            BalanceRead(id: "legs", left: "Quads", leftSets: sum(legFront), right: "Glutes and hamstrings", rightSets: sum(legBack)),
+            BalanceRead(id: "upper-lower", left: "Upper body", leftSets: sum(upper), right: "Lower body", rightSets: sum(lower)),
+        ]
+        return pairs.filter { $0.share != nil }
     }
 
     // MARK: Strong and weak points

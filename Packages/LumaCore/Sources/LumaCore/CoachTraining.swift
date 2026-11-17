@@ -36,7 +36,7 @@ public extension CoachTools {
         var fields = sessionFields
         fields["photos"] = AISchema.array("Which photos this session was read from (1 is the first)", items: AISchema.integer("Photo number"))
         return AITool(name: name, description: "Record the training sessions shown in the photos or described in the note: one entry per separate session, each sorted into its kind, with its movements and sets.", properties: [
-            "workouts": AISchema.array("Each separate session", items: AISchema.object(fields, required: ["title", "kind", "movements"])),
+            "workouts": AISchema.array("Each separate session", items: AISchema.object(fields, required: ["title", "kind", "movements", "photos"])),
         ], required: ["workouts"])
     }
 
@@ -151,6 +151,10 @@ public extension CoachTools {
             "weak_points": .array(p.weakPoints.map { ["title": .string($0.title), "detail": .string($0.detail)] }),
             "sessions_logged_last_4_weeks": .object(Dictionary(p.mix.map { ($0.kind.rawValue, JSONValue.number(Double($0.count))) },
                                                                uniquingKeysWith: { a, _ in a })),
+            "sessions_logged_per_week_oldest_first": .array(p.weeks.map { JSONValue.number(Double($0.sessions)) }),
+            "sets_last_4_weeks_side_by_side": .array(p.balance.map { b -> JSONValue in
+                ["left": .string(b.left), "left_sets": .rounded(b.leftSets, 1), "right": .string(b.right), "right_sets": .rounded(b.rightSets, 1)]
+            }),
             "supplements_last_14_days": .array(p.supplements.map {
                 ["name": .string($0.name), "dose": .string($0.dose), "days_taken": .number(Double($0.daysTaken)),
                  "of_days": .number(Double($0.window)), "streak_days": .number(Double($0.streak))]

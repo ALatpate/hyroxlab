@@ -226,6 +226,31 @@ final class ProgressTests: XCTestCase {
         XCTAssertEqual(p.state(.chest).movements, ["Bench press"])
     }
 
+    func testTheTwoSidesOfTheBodyAreSetSideBySide() throws {
+        let logs = [
+            LiftSession(start: noon(1), exercises: [LiftExercise(name: "Bench press", sets: sets(80, 5, 4))]),      // push 4 + 2 + 2
+            LiftSession(start: noon(9), exercises: [LiftExercise(name: "Lat pulldown", sets: sets(60, 10, 3))]),    // pull 3 + 1.5 + 1.5
+            LiftSession(start: noon(40), exercises: [LiftExercise(name: "Back squat", sets: sets(100, 5, 5))]),     // too long ago
+        ]
+        let p = build(logs)
+        let pair = try XCTUnwrap(p.balance.first { $0.id == "push-pull" })
+        XCTAssertEqual(pair.leftSets, 8)
+        XCTAssertEqual(pair.rightSets, 6)
+        XCTAssertEqual(pair.share!, 8.0 / 14, accuracy: 1e-9)
+        XCTAssertNil(p.balance.first { $0.id == "legs" })               // neither side worked in four weeks
+        let whole = try XCTUnwrap(p.balance.first { $0.id == "upper-lower" })
+        XCTAssertEqual(whole.leftSets, 14)
+        XCTAssertEqual(whole.rightSets, 0)
+        // Eight weeks, oldest first, ending with the week in progress.
+        XCTAssertEqual(p.weeks.count, 8)
+        XCTAssertEqual(p.weeks.last?.weekStart, LDate.weekStart(today))
+        XCTAssertEqual(p.weeks.reduce(0) { $0 + $1.sessions }, 3)
+        XCTAssertEqual(p.weeks.last?.sessions, 0)                        // today is a Monday; yesterday's session was last week
+        XCTAssertEqual(p.weeks[6].sessions, 1)
+        XCTAssertEqual(p.weeks[5].sessions, 1)
+        XCTAssertEqual(p.weeks[1].sessions, 1)
+    }
+
     func testMuscleGroupsNothingReachesAreNamedOnceThereIsEnoughLogged() {
         let bench = { (ago: Int) in LiftSession(start: self.noon(ago), exercises: [LiftExercise(name: "Bench press", sets: self.sets(80, 5, 4))]) }
         let two = build([bench(2), bench(5)])
