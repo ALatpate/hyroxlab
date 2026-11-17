@@ -13,14 +13,14 @@ struct StrengthScreen: View {
         let sessions = env.lifts.sorted { $0.start > $1.start }
         let records = LiftMath.records(env.lifts, bodyKg: env.profile.weightKg).sorted { $0.value.e1RM > $1.value.e1RM }
         LumaDetailScreen(title: "Training log", tone: .strain) {
-            HStack(spacing: 10) {
-                Button { router.sheet = .workoutPhotos(env.today) } label: {
-                    Label("From photos", systemImage: "photo.on.rectangle.angled").frame(maxWidth: .infinity)
-                }
-                .buttonStyle(LumaPrimaryButtonStyle(compact: true))
-                Button { router.cover = .lift } label: { Label("Set by set", systemImage: "dumbbell.fill").frame(maxWidth: .infinity) }
-                    .buttonStyle(LumaSecondaryButtonStyle(compact: true))
+            Button { router.sheet = .workoutPhotos(env.today) } label: {
+                Label("Add workouts from photos or by hand", systemImage: "photo.on.rectangle.angled").frame(maxWidth: .infinity)
             }
+            .buttonStyle(LumaPrimaryButtonStyle(compact: true))
+            Button { router.cover = .lift } label: {
+                Label("Log a strength session as you lift", systemImage: "dumbbell.fill").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(LumaSecondaryButtonStyle(compact: true))
             if sessions.isEmpty {
                 LumaCard {
                     LumaEmpty(symbol: "dumbbell", title: "Nothing logged yet",

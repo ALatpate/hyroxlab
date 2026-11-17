@@ -96,9 +96,13 @@ struct WorkoutPhotoSheet: View {
         }
         Button(drafts.count == 1 ? "Save this workout" : "Save \(drafts.count) workouts") { save() }
             .buttonStyle(LumaPrimaryButtonStyle())
-            .disabled(!drafts.contains { WorkoutPhotoSheet.holdsSomething($0.session) })
+            .disabled(!canSave)
+            .opacity(canSave ? 1 : 0.45)
         Button(byHand ? "Back" : "Back to the photos") { drafts = [] }.buttonStyle(LumaSecondaryButtonStyle())
     }
+
+    /// There is something to save: a workout with nothing in it is not one.
+    private var canSave: Bool { drafts.contains { WorkoutPhotoSheet.holdsSomething($0.session) } }
 
     /// Every draft was started by hand, so there was no reading to check.
     private var byHand: Bool { drafts.allSatisfy { $0.session.source == "hand" } }
@@ -351,7 +355,7 @@ struct MovementEditRow: View {
                     eachSet.toggle()
                     if !eachSet { load = common.map { LumaText.kg($0) } ?? "" }
                 } label: {
-                    Text(eachSet ? "One weight for all sets" : "A weight for each set").font(LumaFont.body(12.5, .semibold)).foregroundStyle(Luma.mist)
+                    Text(eachSet ? "One weight for all sets" : "Each set its own weight").font(LumaFont.body(12)).foregroundStyle(Luma.smoke)
                 }
                 .buttonStyle(.plain)
             }
