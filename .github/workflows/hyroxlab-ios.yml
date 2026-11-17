@@ -141,7 +141,13 @@ jobs:
           git add hyroxlab-source.json
           if git diff --cached --quiet; then echo "source unchanged"; exit 0; fi
           git commit -m "ci: hyroxlab-source.json → build ${GITHUB_RUN_NUMBER} [skip ci]"
-          git push origin HEAD:main
+          # A runner has lost its name lookup for a moment before now. The build is already published
+          # at this point, so the listing is worth a few tries.
+          for try in 1 2 3 4 5; do
+            if git push origin HEAD:main; then break; fi
+            if [ "$try" = 5 ]; then echo "::error::could not push the listing"; exit 1; fi
+            sleep 20
+          done
 
       # After the new listing is live. Six builds is far more than a listing can lag by; a phone holding
       # an older one than that sees a failed download and a refresh fixes it.
@@ -167,9 +173,10 @@ jobs:
   # place), is left alone.
   again:
     needs: [ios]
-    # After every run, whatever became of the build. The result this job is handed for the build does
-    # not say "cancelled" for a job no runner took (a condition written on it skipped the same job in
-    # the development workflow twice), so it reads the list of jobs itself and goes by that.
+    # After every run, whatever became of the build. The result this job is handed for a build no
+    # runner took is "abandoned", not "cancelled" or "failure" (seen in the development workflow,
+    # where a condition written on those two skipped the same job twice), while the list of jobs calls
+    # it cancelled. So it reads the list itself and goes by that and by the build's own note.
     if: always()
     runs-on: ubuntu-24.04
     permissions:

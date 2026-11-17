@@ -81,7 +81,13 @@ jobs:
           git checkout -q -b screens
           git add -A
           git -c user.name=luma-ci -c user.email=luma-ci@users.noreply.github.com commit -qm "screens for ${GITHUB_SHA:0:7}"
-          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" screens
+          # The runner has lost its name lookup for a moment before now; the pictures are not thrown
+          # away for that.
+          for try in 1 2 3 4 5; do
+            if git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" screens; then break; fi
+            if [ "$try" = 5 ]; then echo "::error::could not push the pictures"; exit 1; fi
+            sleep 20
+          done
           ls | head -100
 
   # The gallery again, on an Intel runner with the previous Xcode: for the days GitHub has no arm64
@@ -92,7 +98,7 @@ jobs:
   gallery-intel:
     if: contains(github.event.head_commit.message, '[intel]') || (github.event_name == 'workflow_dispatch' && contains(inputs.jobs, 'intel'))
     runs-on: macos-15-intel
-    timeout-minutes: 60
+    timeout-minutes: 100
     steps:
       - uses: actions/checkout@v5
       - name: Install XcodeGen
@@ -125,7 +131,13 @@ jobs:
           git checkout -q -b screens-intel
           git add -A
           git -c user.name=luma-ci -c user.email=luma-ci@users.noreply.github.com commit -qm "screens (intel) for ${GITHUB_SHA:0:7}"
-          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" screens-intel
+          # The runner has lost its name lookup for a moment before now; the pictures are not thrown
+          # away for that.
+          for try in 1 2 3 4 5; do
+            if git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" screens-intel; then break; fi
+            if [ "$try" = 5 ]; then echo "::error::could not push the pictures"; exit 1; fi
+            sleep 20
+          done
           ls | head -100
 
   app:
@@ -174,7 +186,13 @@ jobs:
           git checkout -q -b screens-app
           git add -A
           git -c user.name=luma-ci -c user.email=luma-ci@users.noreply.github.com commit -qm "app screens for ${GITHUB_SHA:0:7}"
-          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" screens-app
+          # The runner has lost its name lookup for a moment before now; the pictures are not thrown
+          # away for that.
+          for try in 1 2 3 4 5; do
+            if git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" screens-app; then break; fi
+            if [ "$try" = 5 ]; then echo "::error::could not push the pictures"; exit 1; fi
+            sleep 20
+          done
           ls | head -60
 
   package:
@@ -240,9 +258,10 @@ jobs:
   # A job cancelled for any other reason (by hand, or by a newer push) is left alone.
   again:
     needs: [gallery, gallery-intel, app, package]
-    # After every run, whatever became of its jobs. The results this job is handed for the jobs it
-    # waits on do not say "cancelled" for a job no runner took (a condition written on them skipped
-    # this job twice), so it reads the list of jobs itself and goes by that.
+    # After every run, whatever became of its jobs. The result this job is handed for a job no
+    # runner took is "abandoned", not "cancelled" or "failure" (a condition written on those two
+    # skipped this job twice), while the list of jobs calls the same job cancelled. So it reads the
+    # list itself and goes by that and by the cancelled job's own note.
     if: always()
     runs-on: ubuntu-24.04
     permissions:

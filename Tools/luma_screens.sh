@@ -65,7 +65,7 @@ while IFS='|' read -r name screen scroll data wait || [ -n "${name:-}" ]; do
   # Three screens in a row that never said so, and the signal is taken to be broken: the rest get a
   # fixed wait, so a run costs minutes more and not the job's whole time limit.
   if [ -n "$DATA" ] && [ -n "${screen:-}" ] && [ "$missed" -lt 3 ]; then
-    for _ in $(seq 1 120); do [ -f "$READY" ] && break; sleep 0.5; done
+    for _ in $(seq 1 180); do [ -f "$READY" ] && break; sleep 0.5; done
     if [ -f "$READY" ]; then sleep 2; missed=0; else late=$((late+1)); missed=$((missed+1)); echo "not ready in time: $name"; fi
   elif [ -n "${screen:-}" ]; then
     late=$((late+1)); sleep 10
