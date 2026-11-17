@@ -157,7 +157,14 @@ public enum DoseModel {
 
         struct Raw { let factor: Factor; let outcome: LMetric; let xs: [Double]; let ys: [Double]; let r: Double; let p: Double; let slope: Double }
         var raw: [Raw] = []
-        let allDays = days.map { $0.day }
+        // The amount is logged on one day and the figure sits on the next, so the days walked are every
+        // day that has either: a day with a food log and no strap row of its own still counts.
+        var daySet = Set(logged)
+        for d in days {
+            daySet.insert(d.day)
+            daySet.insert(LDate.adding(-1, to: d.day, calendar: calendar))
+        }
+        let allDays = daySet.sorted()
         for f in factors {
             for outcome in f.outcomes {
                 var xs: [Double] = [], ys: [Double] = []
