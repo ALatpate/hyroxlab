@@ -216,7 +216,7 @@ SideStore pointing at that release.
   hosted"), and the run reads as failed although nothing was compiled. Read the job's annotation
   before reading its log. Both workflows ask again by themselves: their last job (`again`) runs after
   every run, reads the list of jobs, finds those cancelled with that annotation and starts the
-  workflow once more for just those (up to eight times in development, twelve for the release). It
+  workflow once more for just those (once in development, up to twelve times for the release). It
   reads the list itself because the result a job is handed for such a job is `abandoned`, which a
   condition on `cancelled` or `failure` does not match. For the release each asking is a new run, so its build number moves on and a
   number that never built is skipped. A job cancelled for any other reason is left alone. The fewer

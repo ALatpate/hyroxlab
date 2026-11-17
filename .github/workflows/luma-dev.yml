@@ -46,7 +46,7 @@ jobs:
           swift test 2>&1 | grep -vE "^Test Case .* (started|passed)|^Test Suite .* (started|passed)|Compiling|Build complete|^\[" | tail -80
 
   gallery:
-    if: github.event_name == 'push' || contains(inputs.jobs, 'gallery')
+    if: github.event_name == 'push' || (contains(inputs.jobs, 'gallery') && contains(fromJSON('["0","1"]'), inputs.attempt))
     runs-on: macos-26
     timeout-minutes: 40
     steps:
@@ -96,7 +96,7 @@ jobs:
   # look a little different. Runs only when the commit message contains [intel]; its pictures land on
   # the `screens-intel` branch and never replace the `screens` ones.
   gallery-intel:
-    if: contains(github.event.head_commit.message, '[intel]') || (github.event_name == 'workflow_dispatch' && contains(inputs.jobs, 'intel'))
+    if: contains(github.event.head_commit.message, '[intel]') || (github.event_name == 'workflow_dispatch' && contains(inputs.jobs, 'intel') && contains(fromJSON('["0","1"]'), inputs.attempt))
     runs-on: macos-15-intel
     timeout-minutes: 100
     steps:
@@ -141,7 +141,7 @@ jobs:
           ls | head -100
 
   app:
-    if: contains(github.event.head_commit.message, '[app]') || contains(github.event.head_commit.message, '[app-intel]') || (github.event_name == 'workflow_dispatch' && contains(inputs.jobs, 'app'))
+    if: contains(github.event.head_commit.message, '[app]') || contains(github.event.head_commit.message, '[app-intel]') || (github.event_name == 'workflow_dispatch' && contains(inputs.jobs, 'app') && contains(fromJSON('["0","1"]'), inputs.attempt))
     runs-on: ${{ (contains(github.event.head_commit.message, '[app-intel]') || inputs.runner == 'macos-15-intel') && 'macos-15-intel' || 'macos-26' }}
     timeout-minutes: 110
     steps:
@@ -196,7 +196,7 @@ jobs:
           ls | head -60
 
   package:
-    if: contains(github.event.head_commit.message, '[app]') || contains(github.event.head_commit.message, '[app-intel]') || (github.event_name == 'workflow_dispatch' && contains(inputs.jobs, 'package'))
+    if: contains(github.event.head_commit.message, '[app]') || contains(github.event.head_commit.message, '[app-intel]') || (github.event_name == 'workflow_dispatch' && contains(inputs.jobs, 'package') && contains(fromJSON('["0","1"]'), inputs.attempt))
     runs-on: ${{ (contains(github.event.head_commit.message, '[app-intel]') || inputs.runner == 'macos-15-intel') && 'macos-15-intel' || 'macos-26' }}
     timeout-minutes: 110
     steps:
@@ -253,9 +253,11 @@ jobs:
 
   # GitHub is at times short of macOS runners. A job no runner takes within fifteen minutes is
   # cancelled ("The job was not acquired by Runner of type hosted"), with nothing built. This asks
-  # for those jobs again, as a new run of this workflow on the same branch, up to eight times, each
-  # on the other kind of runner from the one that did not come (arm64, then Intel, then arm64).
-  # A job cancelled for any other reason (by hand, or by a newer push) is left alone.
+  # for those jobs again, once, as a new run of this workflow on the same branch, on the other kind
+  # of runner from the one that did not come. Once only: on the day both kinds were short, runs that
+  # kept asking stood in the queue beside the release build, and a run cannot be cancelled from where
+  # the work is done. A run asked for a second time builds nothing (the conditions on the jobs
+  # above). A job cancelled for any other reason (by hand, or by a newer push) is left alone.
   again:
     needs: [gallery, gallery-intel, app, package]
     # After every run, whatever became of its jobs. The result this job is handed for a job no
@@ -310,7 +312,7 @@ jobs:
           want=$(echo $want)
           if [ -z "$want" ]; then echo "nothing to ask for again"; exit 0; fi
           n=$((ATTEMPT + 1))
-          if [ "$n" -gt 8 ]; then echo "::warning::no macOS runner after 8 attempts for: $want"; exit 0; fi
+          if [ "$n" -gt 1 ]; then echo "::warning::no macOS runner of either kind for: $want; not asking a second time"; exit 0; fi
           if [ "$ASKED" = "macos-26" ]; then other=macos-15-intel; else other=macos-26; fi
           echo "attempt $n for: $want (app and package on $other)"
           gh workflow run "Luma dev" --repo "${GITHUB_REPOSITORY}" --ref "${GITHUB_REF_NAME}" -f attempt="$n" -f jobs="$want" -f runner="$other"
