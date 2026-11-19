@@ -507,7 +507,7 @@ public enum CoachTools {
         ]
         let call: JSONValue = [
             "title": .string(a.call.title), "advice": .string(a.call.body),
-            "strain_target": .optional(a.call.strainTarget.map { "\(Int($0.lowerBound))–\(Int($0.upperBound))" }),
+            "strain_target": .optional(a.call.strainTarget.map { "\(LNum.int($0.lowerBound))–\(LNum.int($0.upperBound))" }),
         ]
         let last = fresh ? a.sleep.last : nil
         var sleepFields: [String: JSONValue] = [

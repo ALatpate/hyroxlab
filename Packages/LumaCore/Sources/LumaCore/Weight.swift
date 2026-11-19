@@ -190,13 +190,13 @@ public enum EnergyModel {
             func mean(_ m: LMetric, _ set: Set<String>) -> Double? { LStat.mean(days.filter { set.contains($0.day) }.compactMap { m.value($0) }) }
             var signs: [String] = []
             if let a = mean(.hrv, recent), let b = mean(.hrv, earlier), b > 0, (a - b) / b <= -0.05 {
-                signs.append("your HRV is running \(Int((abs(a - b) / b * 100).rounded()))% under the six weeks before")
+                signs.append("your HRV is running \(LNum.int((abs(a - b) / b * 100).rounded()))% under the six weeks before")
             }
             if let a = mean(.restingHR, recent), let b = mean(.restingHR, earlier), b > 0, (a - b) / b >= 0.03 {
-                signs.append("your resting heart rate is up \(Int((a - b).rounded())) bpm")
+                signs.append("your resting heart rate is up \(LNum.int((a - b).rounded())) bpm")
             }
             if !signs.isEmpty {
-                notice = "You have eaten about \(Int(ten(burn - intake))) kcal a day under what you burn for \(span / 7) weeks, and \(signs.joined(separator: " and ")). A long shortfall can do this. Eating more around training is the usual first step; see a doctor if it does not lift."
+                notice = "You have eaten about \(LNum.int(ten(burn - intake))) kcal a day under what you burn for \(span / 7) weeks, and \(signs.joined(separator: " and ")). A long shortfall can do this. Eating more around training is the usual first step; see a doctor if it does not lift."
             }
         }
         return EnergyRead(window: window, loggedDays: logged.count, weighIns: weighDays, intake: ten(intake), kgPerWeek: slope * 7,

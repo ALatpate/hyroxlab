@@ -23,7 +23,7 @@ enum LumaReminders {
     /// Makes the pending reminders equal to `planned`. A reminder keeps its id from one plan to the
     /// next, so planning again replaces it; one whose reason has gone is no longer in the plan and is removed.
     static func sync(_ planned: [PlannedReminder]) {
-        let signature = planned.map { "\($0.id)|\(Int($0.at.timeIntervalSince1970))|\($0.title)|\($0.body)" }
+        let signature = planned.map { "\($0.id)|\(LNum.int($0.at.timeIntervalSince1970))|\($0.title)|\($0.body)" }
         guard signature != last else { return }
         last = signature
         let center = UNUserNotificationCenter.current()

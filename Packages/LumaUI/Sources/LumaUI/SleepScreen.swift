@@ -48,7 +48,7 @@ struct SleepScreen: View {
                     StatGrid {
                         StatCell(label: "Efficiency", value: n.efficiency.map { String(format: "%.0f", $0) } ?? "–", unit: "%", note: "Asleep while in bed")
                         StatCell(label: "Time in bed", value: LFormat.clock(minutes: n.inBedMin), unit: "h")
-                        StatCell(label: "Wake-ups", value: n.awakenings.map { String($0) } ?? "–", note: n.awakeMin.map { "\(Int($0.rounded())) min awake" })
+                        StatCell(label: "Wake-ups", value: n.awakenings.map { String($0) } ?? "–", note: n.awakeMin.map { "\(LNum.int($0.rounded())) min awake" })
                         StatCell(label: "Restorative", value: n.restorativePct.map { String(format: "%.0f", $0) } ?? "–", unit: "%", note: "Deep + REM share")
                         StatCell(label: "Sleeping heart rate", value: env.day(n.day)?.restingHR.map { String(format: "%.0f", $0) } ?? "–", unit: "bpm")
                         StatCell(label: "HRV", value: env.day(n.day)?.hrv.map { String(format: "%.0f", $0) } ?? "–", unit: "ms")
@@ -60,7 +60,7 @@ struct SleepScreen: View {
                                     LumaLabel("Heart rate overnight")
                                     Spacer()
                                     if let low = nightHR.map({ $0.lo }).min() {
-                                        Text("Lowest \(Int(low.rounded())) bpm").font(LumaFont.body(13, .medium)).foregroundStyle(Luma.mist)
+                                        Text("Lowest \(LNum.int(low.rounded())) bpm").font(LumaFont.body(13, .medium)).foregroundStyle(Luma.mist)
                                     }
                                 }
                                 LumaLineChart(values: nightGrid.values, labels: nightGrid.labels, color: Luma.coral,
@@ -134,7 +134,7 @@ struct SleepHero: View {
                     Text("In the part that was recorded").font(LumaFont.body(13.5)).foregroundStyle(Luma.amber)
                         .fixedSize(horizontal: false, vertical: true)
                 } else {
-                    Text("\(Int(night.needMetPct.rounded()))% of the \(LFormat.hm(minutes: night.needMin)) you needed")
+                    Text("\(LNum.int(night.needMetPct.rounded()))% of the \(LFormat.hm(minutes: night.needMin)) you needed")
                         .font(LumaFont.body(13.5)).foregroundStyle(Luma.mist).fixedSize(horizontal: false, vertical: true)
                     LumaBar(value: total, total: night.needMin, color: Luma.dusk, height: 6)
                 }
@@ -177,12 +177,12 @@ struct StageBreakdown: View {
                             RoundedRectangle(cornerRadius: 3).fill(row.kind.color).frame(width: 6, height: 34)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(row.kind.title).font(LumaFont.body(15, .semibold)).foregroundStyle(Luma.frost)
-                                Text("Typical \(Int(typical.lowerBound))–\(Int(typical.upperBound))%").font(LumaFont.body(12)).foregroundStyle(Luma.smoke)
+                                Text("Typical \(LNum.int(typical.lowerBound))–\(LNum.int(typical.upperBound))%").font(LumaFont.body(12)).foregroundStyle(Luma.smoke)
                             }
                             Spacer()
                             VStack(alignment: .trailing, spacing: 2) {
                                 Text(LFormat.hm(minutes: row.minutes)).font(LumaFont.numeral(20, .semibold)).foregroundStyle(Luma.frost)
-                                Text("\(Int(pct.rounded()))%").font(LumaFont.body(12, .medium))
+                                Text("\(LNum.int(pct.rounded()))%").font(LumaFont.body(12, .medium))
                                     .foregroundStyle(typical.contains(pct) || (row.kind != .awake && pct > typical.upperBound) ? Luma.mint : Luma.amber)
                             }
                         }

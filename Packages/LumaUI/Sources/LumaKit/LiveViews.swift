@@ -37,7 +37,7 @@ public struct LumaLiveState: Equatable, Sendable {
     var zoneColor: Color { zone.map { Luma.zone($0) } ?? Luma.coral }
 
     static func clock(_ seconds: TimeInterval) -> String {
-        let s = Int(seconds.rounded())
+        let s = whole(seconds.rounded())
         return s >= 3600 ? String(format: "%d:%02d:%02d", s / 3600, (s % 3600) / 60, s % 60) : String(format: "%d:%02d", s / 60, s % 60)
     }
 }

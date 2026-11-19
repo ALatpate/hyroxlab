@@ -120,7 +120,7 @@ struct LiftDetailScreen: View {
                     StatCell(label: "Movements", value: "\(s.exercises.count)")
                     StatCell(label: "Sets", value: "\(s.doneSets)")
                     if let load = StrengthScreen.liftedLoad(s) { StatCell(label: "Load lifted", value: LFormat.grouped(load), unit: "kg") }
-                    if let m = s.minutes { StatCell(label: "Length", value: "\(Int(m.rounded()))", unit: "min") }
+                    if let m = s.minutes { StatCell(label: "Length", value: "\(LNum.int(m.rounded()))", unit: "min") }
                 }
                 ForEach(s.exercises) { e in
                     LumaCard(padding: 16) {
@@ -272,8 +272,11 @@ struct LiftLiveScreen: View {
                                           message: "Your last sets for each exercise are filled in for you.", action: "Add exercise") { picking = true }
                             }
                         }
-                        ForEach($session.exercises) { $exercise in
-                            ExerciseCard(exercise: $exercise, onSetDone: { restUntil = Date().addingTimeInterval(90); LumaHaptics.success() },
+                        // Each card reaches its exercise by id: a card bound by position stops the app
+                        // when its exercise is removed while the card is still on screen.
+                        ForEach(session.exercises) { exercise in
+                            ExerciseCard(exercise: $session.exercises.element(exercise),
+                                         onSetDone: { restUntil = Date().addingTimeInterval(90); LumaHaptics.success() },
                                          onRemove: { session.exercises.removeAll { $0.id == exercise.id } })
                         }
                         if !session.exercises.isEmpty {
@@ -285,7 +288,9 @@ struct LiftLiveScreen: View {
                     .offset(y: -LumaLaunch.scrollOffset)
                 }
                 .scrollIndicators(.hidden)
+                .scrollDismissesKeyboard(.immediately)
             }
+            .lumaKeyboardRoom()
             VStack {
                 Spacer()
                 Button("Finish session") { finish() }.buttonStyle(LumaPrimaryButtonStyle()).padding(.horizontal, Luma.gutter).padding(.bottom, 18)
@@ -353,15 +358,12 @@ struct LiftLiveScreen: View {
 
     private func lastLine(_ name: String) -> String? {
         let last = LiftMath.lastSets(name, in: env.lifts)
-        guard let top = last.max(by: { $0.kg < $1.kg }) else { return nil }
-        return "Last time \(last.count) × \(top.reps) at \(Int(top.kg)) kg"
+        guard !last.isEmpty else { return nil }
+        return "Last time " + LiftExercise(name: name, sets: last).setsText
     }
 
     private func add(_ name: String) {
-        let previous = LiftMath.lastSets(name, in: env.lifts)
-        let sets = previous.isEmpty ? [LiftSet(reps: 8, kg: 20), LiftSet(reps: 8, kg: 20), LiftSet(reps: 8, kg: 20)]
-                                    : previous.map { LiftSet(reps: $0.reps, kg: $0.kg) }
-        session.exercises.append(LiftExercise(name: name.trimmingCharacters(in: .whitespaces), sets: sets))
+        session.exercises.append(LiftExercise.toDo(name: name, previous: LiftMath.lastSets(name, in: env.lifts)))
         search = ""
         picking = false
     }
@@ -374,6 +376,8 @@ struct LiftLiveScreen: View {
             session.exercises = [
                 LiftExercise(name: "Back squat", sets: [LiftSet(reps: 5, kg: 105, done: true), LiftSet(reps: 5, kg: 105, done: true), LiftSet(reps: 5, kg: 105), LiftSet(reps: 5, kg: 105)]),
                 LiftExercise(name: "Romanian deadlift", sets: [LiftSet(reps: 8, kg: 95), LiftSet(reps: 8, kg: 95), LiftSet(reps: 8, kg: 95)]),
+                // A machine counted in metres, with no load to step.
+                LiftExercise.toDo(name: "SkiErg", previous: []),
             ]
             started = Date().addingTimeInterval(-742)
             restUntil = Date().addingTimeInterval(63)
@@ -404,11 +408,16 @@ struct LiftLiveScreen: View {
     }
 }
 
-/// One exercise in a live session: a row per set with steppers for reps and load.
+/// One exercise in a live session: a row per set, with a stepper for what the set counts and, for
+/// a movement done against a load, one for the load. A SkiErg, a rower or a bike is stepped in
+/// metres and has no load.
 struct ExerciseCard: View {
     @Binding var exercise: LiftExercise
     let onSetDone: () -> Void
     let onRemove: () -> Void
+
+    private var measure: SetMeasure { exercise.measure }
+    private var takesLoad: Bool { ExerciseLibrary.match(exercise.name)?.resistance ?? true }
 
     var body: some View {
         LumaCard(padding: 14) {
@@ -416,54 +425,100 @@ struct ExerciseCard: View {
                 HStack {
                     Text(exercise.name).font(LumaFont.heading(17)).foregroundStyle(Luma.frost)
                     Spacer()
-                    Button(action: onRemove) { Image(systemName: "trash").font(.system(size: 13)).foregroundStyle(Luma.smoke) }.buttonStyle(.plain)
-                }
-                ForEach($exercise.sets) { $set in
-                    HStack(spacing: 8) {
-                        Button {
-                            set.done.toggle()
-                            if set.done { onSetDone() }
-                        } label: {
-                            // The tick is drawn as the set is ticked off.
-                            LumaTick(on: set.done, size: 28, color: Luma.volt)
-                        }
-                        .buttonStyle(.plain)
-                        stepper(value: Binding(get: { Double(set.reps) }, set: { set.reps = max(1, Int($0)) }), step: 1, unit: "reps", decimals: 0)
-                        stepper(value: $set.kg, step: 2.5, unit: "kg", decimals: 1)
+                    Button(action: onRemove) {
+                        Image(systemName: "trash").font(.system(size: 13)).foregroundStyle(Luma.smoke)
+                            .frame(width: 36, height: 32).contentShape(Rectangle())
                     }
-                    .opacity(set.done ? 0.75 : 1)
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Remove \(exercise.name)")
+                }
+                // Each row reaches its set by id, for the same reason each card reaches its exercise by id.
+                ForEach(exercise.sets) { row in
+                    SetStepRow(set: $exercise.sets.element(row), measure: measure, takesLoad: takesLoad, onDone: onSetDone)
                 }
                 HStack(spacing: 16) {
                     Button {
                         let last = exercise.sets.last
-                        exercise.sets.append(LiftSet(reps: last?.reps ?? 8, kg: last?.kg ?? 20))
+                        var next = LiftSet(reps: 0, kg: takesLoad ? (last?.kg ?? 20) : 0)
+                        let amount = last?.amount(measure) ?? 0
+                        next.setAmount(amount > 0 ? amount : LiftExercise.startAmount(measure, loaded: takesLoad), measure)
+                        exercise.sets.append(next)
                     } label: { Label("Add set", systemImage: "plus").font(LumaFont.body(13.5, .semibold)).foregroundStyle(Luma.volt) }
                     if exercise.sets.count > 1 {
-                        Button { exercise.sets.removeLast() } label: { Label("Remove last", systemImage: "minus").font(LumaFont.body(13.5, .semibold)).foregroundStyle(Luma.mist) }
+                        Button {
+                            if !exercise.sets.isEmpty { exercise.sets.removeLast() }
+                        } label: { Label("Remove last", systemImage: "minus").font(LumaFont.body(13.5, .semibold)).foregroundStyle(Luma.mist) }
                     }
                 }
                 .buttonStyle(.plain)
             }
         }
     }
+}
 
-    private func stepper(value: Binding<Double>, step: Double, unit: String, decimals: Int) -> some View {
-        HStack(spacing: 0) {
-            Button { value.wrappedValue = max(0, value.wrappedValue - step) } label: {
-                Image(systemName: "minus").font(.system(size: 13, weight: .bold)).frame(width: 34, height: 40)
+/// One set of a live session: a tick, what the set counts, and its load when the movement has one.
+private struct SetStepRow: View {
+    @Binding var set: LiftSet
+    let measure: SetMeasure
+    let takesLoad: Bool
+    let onDone: () -> Void
+
+    var body: some View {
+        let step = LiftExercise.step(measure, loaded: takesLoad)
+        HStack(spacing: 8) {
+            Button {
+                set.done.toggle()
+                if set.done { onDone() }
+            } label: {
+                // The tick is drawn as the set is ticked off.
+                LumaTick(on: set.done, size: 28, color: Luma.volt).frame(width: 34, height: 44).contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel(set.done ? "Set done" : "Mark set done")
+            LumaValueStepper(value: Binding(get: { set.amount(measure) }, set: { set.setAmount($0, measure) }),
+                             step: step, floor: step, unit: unit, text: amountText)
+            if takesLoad {
+                LumaValueStepper(value: $set.kg, step: 2.5, floor: 0, unit: "kg", text: LumaText.kg(set.kg))
+            }
+        }
+        .opacity(set.done ? 0.75 : 1)
+    }
+
+    private var unit: String {
+        switch measure {
+        case .reps: return "reps"
+        case .meters: return "m"
+        case .seconds: return "min"
+        case .calories: return "cal"
+        }
+    }
+
+    private var amountText: String {
+        let text = AmountText.text(set.amount(measure), measure)
+        return text.isEmpty ? "–" : text
+    }
+}
+
+/// A figure with a minus on one side and a plus on the other.
+struct LumaValueStepper: View {
+    @Binding var value: Double
+    let step: Double
+    var floor: Double = 0
+    let unit: String
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 0) {
+            LumaStepButton(symbol: "minus", width: 36, height: 44, label: "Less \(unit)") { value = max(floor, value - step) }
             VStack(spacing: -2) {
-                Text(value.wrappedValue == value.wrappedValue.rounded() ? String(format: "%.0f", value.wrappedValue) : String(format: "%.\(decimals)f", value.wrappedValue))
-                    .font(LumaFont.numeral(22)).foregroundStyle(Luma.frost).contentTransition(.numericText())
+                Text(text).font(LumaFont.numeral(22)).foregroundStyle(Luma.frost).contentTransition(.numericText())
+                    .lineLimit(1).minimumScaleFactor(0.7)
                 Text(unit).font(LumaFont.label(8.5)).foregroundStyle(Luma.smoke)
             }
             .frame(maxWidth: .infinity)
-            Button { value.wrappedValue += step } label: {
-                Image(systemName: "plus").font(.system(size: 13, weight: .bold)).frame(width: 34, height: 40)
-            }
+            LumaStepButton(symbol: "plus", width: 36, height: 44, label: "More \(unit)") { value += step }
         }
         .foregroundStyle(Luma.mist)
-        .buttonStyle(.plain)
         .background(RoundedRectangle(cornerRadius: 13, style: .continuous).fill(Color.white.opacity(0.06)))
         .frame(maxWidth: .infinity)
     }

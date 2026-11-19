@@ -422,7 +422,7 @@ public struct LiftSet: Codable, Equatable, Sendable, Identifiable {
         var parts: [String] = []
         if let m = meters, m > 0 { parts.append(m >= 1000 ? LiftSet.number(m / 1000) + " km" : LiftSet.number(m) + " m") }
         if let s = seconds, s > 0 {
-            let whole = Int(s.rounded())
+            let whole = LNum.int(s.rounded())
             parts.append(whole >= 90 ? String(format: "%d:%02d", whole / 60, whole % 60) : "\(whole) s")
         }
         if let c = calories, c > 0 { parts.append(LiftSet.number(c) + " cal") }
@@ -442,8 +442,30 @@ public struct LiftSet: Codable, Equatable, Sendable, Identifiable {
         return bare.text
     }
 
+    /// How much of one measure the set holds; 0 for none.
+    public func amount(_ measure: SetMeasure) -> Double {
+        switch measure {
+        case .reps: return Double(reps)
+        case .meters: return meters ?? 0
+        case .seconds: return seconds ?? 0
+        case .calories: return calories ?? 0
+        }
+    }
+
+    /// Sets how much of one measure the set holds, leaving the others and the load alone. Zero or
+    /// less, or a figure that is not a number, clears that measure.
+    public mutating func setAmount(_ amount: Double, _ measure: SetMeasure) {
+        let given = amount.isFinite && amount > 0
+        switch measure {
+        case .reps: reps = given ? min(1000, max(1, LNum.int(amount.rounded()))) : 0
+        case .meters: meters = given ? min(100_000, amount) : nil
+        case .seconds: seconds = given ? min(36_000, amount) : nil
+        case .calories: calories = given ? min(5000, amount) : nil
+        }
+    }
+
     static func number(_ v: Double) -> String {
-        v == v.rounded() ? String(Int(v)) : String(format: "%.1f", v)
+        v == v.rounded() ? String(LNum.int(v)) : String(format: "%.1f", v)
     }
 }
 
@@ -457,6 +479,104 @@ public enum SetMeasure: String, CaseIterable, Sendable {
         case .meters: return "m"
         case .seconds: return "sec"
         case .calories: return "cal"
+        }
+    }
+
+    /// The word for it where an amount is asked for: "Distance", "Time".
+    public var asked: String {
+        switch self {
+        case .reps: return "Reps"
+        case .meters: return "Distance"
+        case .seconds: return "Time"
+        case .calories: return "Calories"
+        }
+    }
+}
+
+/// What is typed into a box for an amount, and how an amount is written back into one.
+public enum AmountText {
+    /// The amount typed, in the measure's own unit: metres, seconds, calories or reps. Metres take
+    /// "1000", "1,000", "500m", "1.5 km", "2k". Time takes "4:05", "1:02:30", "45 s", "2 min", and a
+    /// bare number as minutes. Nil when what was typed is not an amount, or is out of range.
+    public static func value(_ text: String, _ measure: SetMeasure) -> Double? {
+        var t = text.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return nil }
+
+        /// A figure of zero or more. "1,000" is a thousand; "1,5" is one and a half.
+        func number(_ s: Substring) -> Double? {
+            var digits = s.trimmingCharacters(in: .whitespaces)
+            let groups = digits.split(separator: ",", omittingEmptySubsequences: false)
+            let thousands = groups.count > 1 && (1...3).contains(groups[0].count)
+                && groups.allSatisfy { !$0.isEmpty && $0.allSatisfy { $0.isNumber } }
+                && groups.dropFirst().allSatisfy { $0.count == 3 }
+            digits = thousands ? digits.replacingOccurrences(of: ",", with: "") : digits.replacingOccurrences(of: ",", with: ".")
+            guard !digits.isEmpty, let v = Double(digits), v.isFinite, v >= 0 else { return nil }
+            return v
+        }
+        /// Drops the first of these endings the text has. True when it had one.
+        func drop(_ endings: [String]) -> Bool {
+            for ending in endings where t.hasSuffix(ending) {
+                t = String(t.dropLast(ending.count))
+                return true
+            }
+            return false
+        }
+
+        switch measure {
+        case .meters:
+            let km = drop(["kilometres", "kilometers", "km", "k"])
+            if !km { _ = drop(["metres", "meters", "m"]) }
+            guard let v = number(Substring(t)), v > 0 else { return nil }
+            let m = km ? v * 1000 : v
+            return m <= 100_000 ? m : nil
+        case .seconds:
+            if t.contains(":") {
+                let parts = t.split(separator: ":", omittingEmptySubsequences: false).map { number($0) }
+                guard parts.count == 2 || parts.count == 3, !parts.contains(where: { $0 == nil }) else { return nil }
+                let v = parts.compactMap { $0 }
+                let s = v.count == 2 ? v[0] * 60 + v[1] : v[0] * 3600 + v[1] * 60 + v[2]
+                return s > 0 && s <= 36_000 ? s : nil
+            }
+            // Minutes first: "mins" ends in an s too.
+            let minutes = drop(["minutes", "minute", "mins", "min"])
+            if !minutes, drop(["seconds", "second", "secs", "sec", "s"]) {
+                guard let v = number(Substring(t)), v > 0, v <= 36_000 else { return nil }
+                return v
+            }
+            // A bare number is minutes: nobody times an erg in single seconds.
+            guard let v = number(Substring(t)), v > 0, v * 60 <= 36_000 else { return nil }
+            return v * 60
+        case .calories:
+            _ = drop(["calories", "calorie", "kcal", "cals", "cal"])
+            guard let v = number(Substring(t)), v > 0, v <= 5000 else { return nil }
+            return v
+        case .reps:
+            _ = drop(["reps", "rep"])
+            guard let v = number(Substring(t)), v >= 1, v <= 1000 else { return nil }
+            return v.rounded()
+        }
+    }
+
+    /// An amount as it is written back into its box: "1000", "402.5", "4:05", "30".
+    public static func text(_ amount: Double, _ measure: SetMeasure) -> String {
+        guard amount.isFinite, amount > 0 else { return "" }
+        switch measure {
+        case .seconds:
+            let whole = LNum.int(amount.rounded())
+            return whole >= 3600 ? String(format: "%d:%02d:%02d", whole / 3600, whole % 3600 / 60, whole % 60)
+                                 : String(format: "%d:%02d", whole / 60, whole % 60)
+        case .reps, .meters, .calories:
+            return amount == amount.rounded() ? String(LNum.int(amount)) : String(format: "%.1f", amount)
+        }
+    }
+
+    /// What an empty box shows for a measure, as an example of what to type.
+    public static func example(_ measure: SetMeasure) -> String {
+        switch measure {
+        case .reps: return "10"
+        case .meters: return "1000"
+        case .seconds: return "4:00"
+        case .calories: return "30"
         }
     }
 }
@@ -492,7 +612,7 @@ public struct LiftExercise: Codable, Equatable, Sendable, Identifiable {
         let load = min(1000, max(0, kg.isFinite ? kg : 0))
         var set = LiftSet(reps: 0, kg: load, done: true)
         switch measure {
-        case .reps: set.reps = min(1000, max(1, Int(amount.rounded())))
+        case .reps: set.reps = min(1000, max(1, LNum.int(amount.rounded())))
         case .meters: set.meters = min(100_000, amount)
         case .seconds: set.seconds = min(36_000, amount)
         case .calories: set.calories = min(5000, amount)
@@ -503,6 +623,82 @@ public struct LiftExercise: Codable, Equatable, Sendable, Identifiable {
             return copy
         }
         return LiftExercise(name: ExerciseLibrary.filedName(trimmed), sets: sets)
+    }
+
+    /// What its sets count: what they hold, or, with nothing counted yet, what a movement of its kind
+    /// is usually counted in (an erg in metres, a plank in seconds).
+    public var measure: SetMeasure {
+        for set in sets {
+            if (set.meters ?? 0) > 0 { return .meters }
+            if (set.seconds ?? 0) > 0 { return .seconds }
+            if (set.calories ?? 0) > 0 { return .calories }
+            if set.reps > 0 { return .reps }
+        }
+        return ExerciseLibrary.match(name)?.counts ?? .reps
+    }
+
+    /// No set says how many, how far or how long: the log is missing what was done.
+    public var needsAmount: Bool { !sets.contains { $0.hasContent } }
+
+    /// The amount every set shares in one measure; nil when they differ or none has one.
+    public func commonAmount(_ measure: SetMeasure) -> Double? {
+        let amounts = Set(sets.map { $0.amount(measure) })
+        guard amounts.count == 1, let one = amounts.first, one > 0 else { return nil }
+        return one
+    }
+
+    /// For a session written up afterwards: gives every set one amount of one measure, leaving their
+    /// loads and other measures alone, and counts them as done. A movement with no sets gets one. Zero
+    /// clears that measure from every set.
+    public mutating func setLoggedAmount(_ amount: Double, _ measure: SetMeasure) {
+        guard amount.isFinite else { return }
+        if sets.isEmpty, amount > 0 { sets = [LiftSet(reps: 0, kg: 0, done: true)] }
+        for i in sets.indices {
+            sets[i].setAmount(amount, measure)
+            if amount > 0 { sets[i].done = true }
+        }
+    }
+
+    /// A movement as a live session opens it: last time's sets to do again, or, with no last time, a
+    /// first set in what the movement is counted in. A lift starts as three sets of eight; an erg as
+    /// one piece in metres, with no load to step.
+    public static func toDo(name: String, previous: [LiftSet]) -> LiftExercise {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !previous.isEmpty {
+            let again = previous.map { LiftSet(reps: $0.reps, kg: $0.kg, meters: $0.meters, seconds: $0.seconds, calories: $0.calories) }
+            return LiftExercise(name: trimmed, sets: again)
+        }
+        let info = ExerciseLibrary.match(trimmed)
+        let measure = info?.counts ?? .reps
+        let loaded = info?.resistance ?? true
+        var first = LiftSet(reps: 0, kg: (info?.expectsLoad ?? true) ? 20 : 0)
+        first.setAmount(startAmount(measure, loaded: loaded), measure)
+        let sets: [LiftSet] = (0..<(measure == .reps ? 3 : 1)).map { _ in
+            var copy = first
+            copy.id = UUID()
+            return copy
+        }
+        return LiftExercise(name: trimmed, sets: sets)
+    }
+
+    /// Where a stepper for a measure starts: eight reps, a 500 m piece, a 25 m length under load.
+    public static func startAmount(_ measure: SetMeasure, loaded: Bool) -> Double {
+        switch measure {
+        case .reps: return 8
+        case .meters: return loaded ? 25 : 500
+        case .seconds: return 60
+        case .calories: return 20
+        }
+    }
+
+    /// How far one press of a stepper moves a measure.
+    public static func step(_ measure: SetMeasure, loaded: Bool) -> Double {
+        switch measure {
+        case .reps: return 1
+        case .meters: return loaded ? 5 : 50
+        case .seconds: return 15
+        case .calories: return 5
+        }
     }
 
     /// The done sets in a line: "4 × 5 × 100 kg" when they are all alike, each one listed otherwise.

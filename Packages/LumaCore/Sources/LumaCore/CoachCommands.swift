@@ -181,10 +181,10 @@ public enum CoachPrompt {
         if !p.name.isEmpty { who.append("Name: \(p.name)") }
         let sexWord = p.sex == .male ? "Male" : "Female"
         let mass = String(format: "%.1f", p.weightKg)
-        who.append("\(sexWord), \(p.age(on: w.now, calendar: calendar)) years, \(Int(p.heightCm)) cm, \(mass) kg")
+        who.append("\(sexWord), \(p.age(on: w.now, calendar: calendar)) years, \(LNum.int(p.heightCm)) cm, \(mass) kg")
         let maxBasis = p.maxHR == nil ? "age estimate" : "measured"
-        who.append("Max heart rate \(Int(p.resolvedMaxHR(on: w.now))) bpm (\(maxBasis))")
-        if let t = p.fiveKSeconds { who.append("Current 5 km: " + String(format: "%d:%02d", Int(t) / 60, Int(t) % 60)) }
+        who.append("Max heart rate \(LNum.int(p.resolvedMaxHR(on: w.now))) bpm (\(maxBasis))")
+        if let t = p.fiveKSeconds { who.append("Current 5 km: " + String(format: "%d:%02d", LNum.int(t) / 60, LNum.int(t) % 60)) }
         if !p.gym.isEmpty { who.append("Trains at \(p.gym) (coach-led classes with full HYROX equipment)") }
         who.append("HYROX format of interest: \(p.format.title)")
         if !p.raceName.isEmpty || p.raceDate != nil {
@@ -205,7 +205,7 @@ public enum CoachPrompt {
         lines.append("Now: \(weekday) \(w.today), \(LFormat.timeOfDay(minutes: CoachTools.minutesOfDay(w.now, calendar))).")
         if w.shareHealth {
             var status: [String] = []
-            if let n = a.lastNight, n.day == w.today, let r = n.recovery { status.append("recovery \(Int(r.rounded()))%") }
+            if let n = a.lastNight, n.day == w.today, let r = n.recovery { status.append("recovery \(LNum.int(r.rounded()))%") }
             else { status.append("no recovery score yet today") }
             if let s = a.day?.strain { status.append(String(format: "strain so far %.1f", LScale.strain21(s))) }
             status.append("\(a.baselines.nights) nights of data")

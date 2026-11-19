@@ -176,7 +176,12 @@ struct WorkoutPhotoSheet: View {
             }
             out.append(WorkoutDraft(session: lower, photos: [1]))
         }
-        if let race = all.first(where: { $0.kind == .hyrox }) { out.append(WorkoutDraft(session: race, photos: [2])) }
+        if var race = all.first(where: { $0.kind == .hyrox }) {
+            // A board that named the ski and gave no distance for it: its row asks for one. The run
+            // was read with its distance, so its box opens holding it.
+            if let i = race.exercises.firstIndex(where: { $0.name == "SkiErg" }) { race.exercises[i].sets = [] }
+            out.append(WorkoutDraft(session: race, photos: [2]))
+        }
         return out
     }
 }
@@ -289,6 +294,7 @@ struct LoadField: View {
                 .foregroundStyle(Luma.frost)
                 .frame(width: 58)
                 .accessibilityLabel(label)
+                .lumaAutofocus(label)
             Text("kg").font(LumaFont.body(11)).foregroundStyle(Luma.smoke)
         }
         .padding(.horizontal, 10)
@@ -305,14 +311,102 @@ struct LoadField: View {
     }
 }
 
-/// One movement of a session being checked or corrected: what was logged, and the weight used. One
-/// box sets every set alike; "a weight for each set" opens a box per set.
+/// A box for how far, how long or how many: what a SkiErg, a rower, a bike, a run or a carry is
+/// counted in. The unit beside it is a menu, so a piece done for calories or for time can say so.
+/// Outlined when an amount is wanted and none has been typed, like the weight box.
+struct AmountField: View {
+    @Binding var text: String
+    let measure: SetMeasure
+    var wanted: Bool = false
+    let label: String
+    /// Another unit was picked from the menu.
+    let onUnit: (SetMeasure) -> Void
+
+    var body: some View {
+        let asking = wanted && text.isEmpty
+        HStack(spacing: 2) {
+            TextField("", text: $text, prompt: Text(asking ? Self.ask(measure) : AmountText.example(measure)).foregroundStyle(asking ? Luma.volt : Luma.smoke))
+                // Time is typed with a colon, which the number pad does not have.
+                .keyboardType(measure == .seconds ? .numbersAndPunctuation : .decimalPad)
+                .multilineTextAlignment(.trailing)
+                .font(LumaFont.numeral(18, .semibold))
+                .foregroundStyle(Luma.frost)
+                .frame(width: 62)
+                .accessibilityLabel(label)
+                .lumaAutofocus(label)
+            Menu {
+                ForEach(SetMeasure.allCases, id: \.self) { option in
+                    Button {
+                        onUnit(option)
+                    } label: {
+                        if option == measure { Label(Self.name(option), systemImage: "checkmark") } else { Text(Self.name(option)) }
+                    }
+                }
+            } label: {
+                HStack(spacing: 2) {
+                    Text(Self.unit(measure)).font(LumaFont.body(11, .medium))
+                    Image(systemName: "chevron.up.chevron.down").font(.system(size: 8, weight: .bold))
+                }
+                .foregroundStyle(Luma.mist)
+                .frame(minWidth: 34, minHeight: 34)
+                .contentShape(Rectangle())
+            }
+            .accessibilityLabel("Unit: \(Self.name(measure))")
+        }
+        .padding(.leading, 10)
+        .padding(.trailing, 4)
+        .padding(.vertical, 3)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.06)))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(asking ? Luma.volt.opacity(0.7) : Color.clear, lineWidth: 1))
+    }
+
+    /// The unit as it stands beside the box.
+    static func unit(_ measure: SetMeasure) -> String {
+        switch measure {
+        case .reps: return "reps"
+        case .meters: return "m"
+        case .seconds: return "time"
+        case .calories: return "cal"
+        }
+    }
+
+    /// The unit as the menu names it.
+    static func name(_ measure: SetMeasure) -> String {
+        switch measure {
+        case .reps: return "Reps"
+        case .meters: return "Distance, in metres"
+        case .seconds: return "Time, as 4:00"
+        case .calories: return "Calories"
+        }
+    }
+
+    /// What an empty box asks for.
+    static func ask(_ measure: SetMeasure) -> String {
+        switch measure {
+        case .reps: return "reps?"
+        case .meters: return "m?"
+        case .seconds: return "time?"
+        case .calories: return "cal?"
+        }
+    }
+}
+
+/// One movement of a session being checked or corrected: what was logged, and what is still to be
+/// said about it. A movement done against a load has a box for the weight: one box sets every set
+/// alike, and "a weight for each set" opens a box per set. A movement with no load (a SkiErg, a
+/// rower, a bike, a run) has a box for its distance, time or calories instead, and so does any
+/// movement that was read with nothing counted.
 struct MovementEditRow: View {
     @Binding var exercise: LiftExercise
     let last: Double?
     let onRemove: () -> Void
     @State private var load = ""
     @State private var eachSet = false
+    @State private var amount = ""
+    @State private var measure: SetMeasure = .reps
+    /// Whether the amount box is shown. Settled when the row appears, so the box does not vanish
+    /// from under the keyboard the moment an amount has been typed into it.
+    @State private var asksAmount = false
 
     private var info: ExerciseInfo? { ExerciseLibrary.match(exercise.name) }
     private var takesLoad: Bool { info?.resistance ?? true }
@@ -327,12 +421,23 @@ struct MovementEditRow: View {
                 Spacer(minLength: 6)
                 if takesLoad && !eachSet {
                     LoadField(text: $load, hint: hint, wanted: exercise.needsLoad, label: "Weight for \(exercise.name), kilograms")
+                } else if !takesLoad && asksAmount {
+                    amountBox
                 }
                 Button(action: onRemove) {
-                    Image(systemName: "minus.circle").font(.system(size: 15, weight: .semibold)).foregroundStyle(Luma.smoke).frame(width: 28, height: 32)
+                    Image(systemName: "minus.circle").font(.system(size: 15, weight: .semibold)).foregroundStyle(Luma.smoke).frame(width: 28, height: 32).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Remove \(exercise.name)")
+            }
+            // A movement with a load that was read with nothing counted: the weight box has the first
+            // line, so how far or how many is asked on a line of its own.
+            if takesLoad && asksAmount {
+                HStack(spacing: 10) {
+                    Text("How far or how many").font(LumaFont.body(12.5)).foregroundStyle(Luma.mist)
+                    Spacer(minLength: 6)
+                    amountBox
+                }
             }
             if eachSet {
                 ForEach(Array(exercise.sets.enumerated()), id: \.element.id) { i, set in
@@ -345,8 +450,32 @@ struct MovementEditRow: View {
             load = common.map { LumaText.kg($0) } ?? ""
             // Sets read with different weights open with a box each, so none of them is hidden.
             eachSet = Set(exercise.sets.map { $0.kg }).count > 1
+            measure = exercise.measure
+            amount = exercise.commonAmount(measure).map { AmountText.text($0, measure) } ?? ""
+            // Asked for where there is no weight to ask for, and wherever nothing was counted. Sets
+            // read with different amounts are left as they were read: one box could not hold them.
+            let differ = !exercise.needsAmount && exercise.commonAmount(measure) == nil
+            asksAmount = !differ && (!takesLoad || exercise.needsAmount)
         }
         .onChange(of: load) { _, new in apply(new) }
+        .onChange(of: amount) { _, new in applyAmount(new, measure) }
+    }
+
+    private var amountBox: some View {
+        AmountField(text: $amount, measure: measure, wanted: exercise.needsAmount,
+                    label: "\(measure.asked) for \(exercise.name)") { picked in switchUnit(to: picked) }
+    }
+
+    /// Another unit was picked for the amount: the figure typed now counts in the new unit, and the
+    /// old unit no longer holds it. Only ever on a choice from the menu, never as the row appears.
+    private func switchUnit(to new: SetMeasure) {
+        let old = measure
+        guard new != old else { return }
+        measure = new
+        var changed = exercise
+        changed.setLoggedAmount(0, old)
+        if changed != exercise { exercise = changed }
+        applyAmount(amount, new)
     }
 
     /// The last weight is offered, never filled in: it becomes this session's only when tapped.
@@ -387,7 +516,13 @@ struct MovementEditRow: View {
     private var hint: String { info?.bodyweight ?? false ? "added" : "–" }
 
     private var detail: String {
-        var parts: [String] = [exercise.sets.isEmpty ? "No sets listed" : exercise.setsText]
+        var parts: [String] = []
+        if exercise.needsAmount {
+            // Says what is missing in the movement's own terms: a distance for an erg, not "sets".
+            parts.append(takesLoad ? "Nothing counted yet" : "No \(exercise.measure.asked.lowercased()) yet")
+        } else {
+            parts.append(exercise.setsText)
+        }
         if let n = exercise.note, !n.isEmpty { parts.append(n) }
         return parts.joined(separator: " · ")
     }
@@ -404,6 +539,23 @@ struct MovementEditRow: View {
         } else {
             guard let kg = LoadField.value(text) else { return }
             for i in changed.sets.indices { changed.sets[i].kg = kg }
+        }
+        if changed != exercise { exercise = changed }
+    }
+
+    /// One amount for the movement, in one unit: typing it gives it to every set (and makes the one
+    /// set a movement read with none needs); clearing the box clears it. Something that is not an
+    /// amount changes nothing.
+    private func applyAmount(_ text: String, _ measure: SetMeasure) {
+        guard asksAmount else { return }
+        var changed = exercise
+        if text.trimmingCharacters(in: .whitespaces).isEmpty {
+            guard changed.commonAmount(measure) != nil else { return }
+            changed.setLoggedAmount(0, measure)
+        } else {
+            // What the box was filled with as the row appeared is already what the sets hold.
+            guard let value = AmountText.value(text, measure), value != exercise.commonAmount(measure) else { return }
+            changed.setLoggedAmount(value, measure)
         }
         if changed != exercise { exercise = changed }
     }
@@ -442,6 +594,8 @@ struct ExerciseAddForm: View {
     @State private var amount = "10"
     @State private var measure: SetMeasure = .reps
     @State private var load = ""
+    /// Whether the unit was chosen by hand. Until it is, it follows the movement being named.
+    @State private var unitChosen = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -459,11 +613,14 @@ struct ExerciseAddForm: View {
             HStack(spacing: 8) {
                 count("Sets", $sets)
                 Text("×").font(LumaFont.body(15)).foregroundStyle(Luma.smoke)
-                count(measure.title, $amount)
+                count(measure == .seconds ? "time" : measure.title, $amount, colon: measure == .seconds)
                 Spacer(minLength: 4)
-                LoadField(text: $load, label: "Weight, kilograms")
+                // A run, an erg or a bike has no weight to give.
+                if takesLoad { LoadField(text: $load, label: "Weight, kilograms") }
             }
-            LumaSegmented(selection: $measure, options: SetMeasure.allCases.map { (value: $0, title: $0.title) }, tint: Luma.frost)
+            LumaSegmented(selection: Binding(get: { measure }, set: { measure = $0; unitChosen = true }),
+                          options: SetMeasure.allCases.map { (value: $0, title: $0 == .seconds ? "time" : $0.title) }, tint: Luma.frost)
+            if measure == .seconds { LumaNote("Type time as 4:00, or as minutes.") }
             HStack(spacing: 10) {
                 Button("Add") { if let exercise = made { onAdd(exercise) } }
                     .buttonStyle(LumaPrimaryButtonStyle(compact: true))
@@ -475,12 +632,27 @@ struct ExerciseAddForm: View {
         .padding(12)
         .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white.opacity(0.04)))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Luma.line, lineWidth: 1))
+        .onChange(of: name) { _, new in follow(new) }
     }
 
-    private func count(_ title: String, _ text: Binding<String>) -> some View {
+    /// False for a movement Luma knows has no load to give: a run, an erg, a bike.
+    private var takesLoad: Bool { ExerciseLibrary.match(name)?.resistance ?? true }
+
+    /// As a movement is named, the form turns to what that movement is counted in: metres and one
+    /// piece for a SkiErg, a rower or a bike; reps and three sets for a lift. Not once the unit has
+    /// been chosen by hand.
+    private func follow(_ typed: String) {
+        guard !unitChosen, let counts = ExerciseLibrary.match(typed)?.counts, counts != measure else { return }
+        measure = counts
+        let loaded = ExerciseLibrary.match(typed)?.resistance ?? true
+        amount = AmountText.text(LiftExercise.startAmount(counts, loaded: loaded), counts)
+        sets = counts == .reps ? "3" : "1"
+    }
+
+    private func count(_ title: String, _ text: Binding<String>, colon: Bool = false) -> some View {
         VStack(spacing: 2) {
             TextField("", text: text, prompt: Text("0").foregroundStyle(Luma.smoke))
-                .keyboardType(.decimalPad)
+                .keyboardType(colon ? .numbersAndPunctuation : .decimalPad)
                 .multilineTextAlignment(.center)
                 .font(LumaFont.numeral(18, .semibold))
                 .foregroundStyle(Luma.frost)
@@ -494,9 +666,8 @@ struct ExerciseAddForm: View {
 
     /// The exercise as typed so far, or nil while something is missing.
     private var made: LiftExercise? {
-        guard let n = Int(sets.trimmingCharacters(in: .whitespaces)),
-              let each = Double(amount.replacingOccurrences(of: ",", with: ".").trimmingCharacters(in: .whitespaces)) else { return nil }
-        return LiftExercise.typed(name: name, sets: n, amount: each, measure: measure, kg: LoadField.value(load) ?? 0)
+        guard let n = Int(sets.trimmingCharacters(in: .whitespaces)), let each = AmountText.value(amount, measure) else { return nil }
+        return LiftExercise.typed(name: name, sets: n, amount: each, measure: measure, kg: takesLoad ? (LoadField.value(load) ?? 0) : 0)
     }
 
     /// Names that fit what has been typed: the athlete's own first, then Luma's list.

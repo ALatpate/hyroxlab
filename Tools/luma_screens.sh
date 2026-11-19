@@ -4,10 +4,12 @@
 #
 #   Tools/luma_screens.sh <path/to/App.app> <outdir> <listfile> [extra launch args…]
 #
-# Each list line is  name|screen|scrollY|data|waitSeconds  (later fields optional). The app reads
-# -lumaScreen / -lumaScroll / -lumaData from the argument domain (LumaLaunch.fromArguments()).
-# waitSeconds is only used for a line with no screen name; a named screen is photographed when the
-# app says it is ready.
+# Each list line is  name|screen|scrollY|data|waitSeconds|focus|draft  (later fields optional). The app
+# reads -lumaScreen / -lumaScroll / -lumaData / -lumaFocus / -lumaDraft from the argument domain
+# (LumaLaunch.fromArguments()). waitSeconds is only used for a line with no screen name; a named
+# screen is photographed when the app says it is ready. focus names a field that takes the keyboard
+# as the screen opens ("coach", or the field's own title), and draft is text already in the coach's
+# box: together they photograph a screen as it is while being typed in.
 set -uo pipefail
 APP="$1"; OUT="$2"; LIST="$3"; shift 3
 EXTRA=("$@")
@@ -34,8 +36,22 @@ for name, lst in sorted(found.items()):
 if [ -z "$UDID" ]; then echo "::error::no iPhone simulator available"; xcrun simctl list devices available; exit 1; fi
 echo "simulator: $(xcrun simctl list devices | grep "$UDID" | head -1 | sed 's/ (.*//' | xargs)  bundle: $BID"
 
+# A simulator takes the Mac's keyboard for its own unless told otherwise, and then shows no keyboard
+# on screen. Screens are photographed as they are typed in on a phone, so the on-screen keyboard has
+# to come up: the setting is written before the simulator boots, for every device and for this one.
+defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool false 2>/dev/null || true
+PREFS="$HOME/Library/Preferences/com.apple.iphonesimulator.plist"
+/usr/libexec/PlistBuddy -c "Add :DevicePreferences dict" "$PREFS" 2>/dev/null || true
+/usr/libexec/PlistBuddy -c "Add :DevicePreferences:$UDID dict" "$PREFS" 2>/dev/null || true
+/usr/libexec/PlistBuddy -c "Add :DevicePreferences:$UDID:ConnectHardwareKeyboard bool false" "$PREFS" 2>/dev/null \
+  || /usr/libexec/PlistBuddy -c "Set :DevicePreferences:$UDID:ConnectHardwareKeyboard false" "$PREFS" 2>/dev/null || true
+
 xcrun simctl boot "$UDID" 2>/dev/null || true
 xcrun simctl bootstatus "$UDID" -b >/dev/null
+# The keyboard's first-use tips would cover it in a picture.
+xcrun simctl spawn "$UDID" defaults write com.apple.keyboard.preferences DidShowContinuousPathIntroduction -bool true 2>/dev/null || true
+xcrun simctl spawn "$UDID" defaults write com.apple.Preferences DidShowContinuousPathIntroduction -bool true 2>/dev/null || true
+xcrun simctl spawn "$UDID" defaults write com.apple.Preferences KeyboardDidShowProductivityTutorial -bool true 2>/dev/null || true
 xcrun simctl ui "$UDID" appearance dark 2>/dev/null || true
 xcrun simctl status_bar "$UDID" override --time "9:41" --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularBars 4 --dataNetwork wifi 2>/dev/null || true
 xcrun simctl install "$UDID" "$APP"
@@ -56,17 +72,21 @@ READY="$DATA/tmp/luma-ready"
 n=0
 late=0
 missed=0
-while IFS='|' read -r name screen scroll data wait || [ -n "${name:-}" ]; do
+while IFS='|' read -r name screen scroll data wait focus draft || [ -n "${name:-}" ]; do
   case "${name:-}" in ''|\#*) continue;; esac
   xcrun simctl terminate "$UDID" "$BID" 2>/dev/null || true
   [ -n "$DATA" ] && rm -f "$READY"
-  xcrun simctl launch "$UDID" "$BID" ${EXTRA[@]+"${EXTRA[@]}"} -lumaScreen "$screen" -lumaScroll "${scroll:-0}" -lumaData "${data:-demo}" >/dev/null 2>&1 \
+  # An argument given once stays in the app's defaults only for that launch, so each line says all of them.
+  xcrun simctl launch "$UDID" "$BID" ${EXTRA[@]+"${EXTRA[@]}"} -lumaScreen "$screen" -lumaScroll "${scroll:-0}" -lumaData "${data:-demo}" \
+      -lumaFocus "${focus:-}" -lumaDraft "${draft:-}" >/dev/null 2>&1 \
     || { echo "launch failed: $name"; continue; }
   # Three screens in a row that never said so, and the signal is taken to be broken: the rest get a
   # fixed wait, so a run costs minutes more and not the job's whole time limit.
   if [ -n "$DATA" ] && [ -n "${screen:-}" ] && [ "$missed" -lt 3 ]; then
     for _ in $(seq 1 180); do [ -f "$READY" ] && break; sleep 0.5; done
     if [ -f "$READY" ]; then sleep 2; missed=0; else late=$((late+1)); missed=$((missed+1)); echo "not ready in time: $name"; fi
+    # A keyboard takes a moment more to come up and for the screen to settle above it.
+    [ -n "${focus:-}" ] && sleep 3
   elif [ -n "${screen:-}" ]; then
     late=$((late+1)); sleep 10
   else

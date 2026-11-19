@@ -245,7 +245,7 @@ struct NewBestBanner: View {
             withAnimation(.easeInOut(duration: 0.9).delay(0.35)) { sweep = 1.2 }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("New best. \(best.lift): estimated max \(Int(best.kg.rounded())) kilograms, up from \(Int(best.previous.rounded())).")
+        .accessibilityLabel("New best. \(best.lift): estimated max \(LNum.int(best.kg.rounded())) kilograms, up from \(LNum.int(best.previous.rounded())).")
     }
 }
 

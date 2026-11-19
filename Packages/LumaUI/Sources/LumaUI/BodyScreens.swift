@@ -33,7 +33,7 @@ struct BodyScreen: View {
                         LumaRow(symbol: nil, title: LumaText.kg(w.kg) + " kg",
                                 subtitle: w.at.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).hour().minute())) {
                             Button { env.deleteWeight(w.id) } label: {
-                                Image(systemName: "trash").font(.system(size: 13)).foregroundStyle(Luma.smoke).frame(width: 34, height: 34)
+                                Image(systemName: "trash").font(.system(size: 13)).foregroundStyle(Luma.smoke).frame(width: 34, height: 34).contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel("Delete this weigh-in")
@@ -150,23 +150,23 @@ private struct SweatCard: View {
                         Text(String(format: "%.1f", rate / 1000)).font(LumaFont.numeral(48, .heavy)).foregroundStyle(Luma.frost)
                         Text("litres an hour").font(LumaFont.body(14, .medium)).foregroundStyle(Luma.mist)
                     }
-                    LumaNote("The middle of your last \(min(3, tests.compactMap { $0.mlPerHour }.count)) tests. Your water target on training days is now built from this, in place of a standard \(Int(SweatModel.standardMlPerHour)) ml an hour.")
+                    LumaNote("The middle of your last \(min(3, tests.compactMap { $0.mlPerHour }.count)) tests. Your water target on training days is now built from this, in place of a standard \(LNum.int(SweatModel.standardMlPerHour)) ml an hour.")
                 } else {
                     Text("Not measured yet").font(LumaFont.heading(16)).foregroundStyle(Luma.frost)
-                    LumaNote("Weigh yourself just before and just after one session, and note what you drank during it. The weight that went, plus what you drank, is what you sweated. Until then your water target uses a standard \(Int(SweatModel.standardMlPerHour)) ml an hour.")
+                    LumaNote("Weigh yourself just before and just after one session, and note what you drank during it. The weight that went, plus what you drank, is what you sweated. Until then your water target uses a standard \(LNum.int(SweatModel.standardMlPerHour)) ml an hour.")
                 }
                 ForEach(tests.prefix(4)) { t in
                     HStack(spacing: 10) {
                         VStack(alignment: .leading, spacing: 1) {
                             Text(LumaText.shortDay(t.day)).font(LumaFont.body(14, .medium)).foregroundStyle(Luma.frost)
-                            Text("\(Int(t.minutes)) min · \(LumaText.kg(t.beforeKg)) to \(LumaText.kg(t.afterKg)) kg · drank \(Int(t.drankMl)) ml")
+                            Text("\(LNum.int(t.minutes)) min · \(LumaText.kg(t.beforeKg)) to \(LumaText.kg(t.afterKg)) kg · drank \(LNum.int(t.drankMl)) ml")
                                 .font(LumaFont.body(12.5)).foregroundStyle(Luma.mist)
                         }
                         Spacer(minLength: 6)
                         Text(t.mlPerHour.map { String(format: "%.1f L/h", $0 / 1000) } ?? "not usable")
                             .font(LumaFont.body(13, .semibold)).foregroundStyle(t.mlPerHour == nil ? Luma.smoke : Luma.frost)
                         Button { env.deleteSweatTest(t.id) } label: {
-                            Image(systemName: "trash").font(.system(size: 13)).foregroundStyle(Luma.smoke).frame(width: 30, height: 30)
+                            Image(systemName: "trash").font(.system(size: 13)).foregroundStyle(Luma.smoke).frame(width: 30, height: 30).contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel("Delete this test")

@@ -118,7 +118,7 @@ public final class LumaDemoSource: LumaDataSource {
                     count += 1
                 }
             }
-            let steps = Int(6200 + dayStrain * 78 + rng.gauss() * 900)
+            let steps = LNum.int(6200 + dayStrain * 78 + rng.gauss() * 900)
             days.append(LDay(day: key, sleepMin: asleep, sleepEfficiency: efficiency, deepMin: block.minutes(.deep),
                              remMin: block.minutes(.rem), lightMin: block.minutes(.light),
                              disturbances: stages.filter { $0.kind == .awake }.count, restingHR: rhr.rounded(),
@@ -134,8 +134,8 @@ public final class LumaDemoSource: LumaDataSource {
             if rng.unit() < 0.2 { tags.append(.stretching) }
             if wd == 7 && rng.unit() < 0.4 { tags.append(.sauna) }
             if unwell { tags.append(.sick) }
-            checkIns.append(CheckIn(day: key, tags: tags, energy: Int(LStat.clamp((recovery / 22).rounded(), 1, 5)),
-                                    soreness: Int(LStat.clamp(((priorStrain - 20) / 16).rounded(), 1, 5))))
+            checkIns.append(CheckIn(day: key, tags: tags, energy: LNum.int(LStat.clamp((recovery / 22).rounded(), 1, 5)),
+                                    soreness: LNum.int(LStat.clamp(((priorStrain - 20) / 16).rounded(), 1, 5))))
             alcoholLastNight = drinks
             fatigue += (dayStrain - fatigue) / 5
             priorStrain = dayStrain
@@ -499,7 +499,7 @@ public extension LumaDemoContent {
                 hr = 120
             }
             clock.advance(seconds)
-            rec.advance(hr: HRSummary(avg: hr, max: hr + 7, min: hr - 14, sampleCount: Int(seconds), expectedCount: Int(seconds), source: .wristOptical))
+            rec.advance(hr: HRSummary(avg: hr, max: hr + 7, min: hr - 14, sampleCount: LNum.int(seconds), expectedCount: LNum.int(seconds), source: .wristOptical))
         }
         var s = rec.session
         s.endedAt = started.addingTimeInterval(s.totalS ?? 0)

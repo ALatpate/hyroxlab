@@ -188,7 +188,7 @@ struct ChartXLabels: View {
     private var visible: [Int] {
         let n = labels.count
         guard n > 0 else { return [] }
-        let picks: [Int] = n <= count || count < 2 ? Array(0..<n) : (0..<count).map { Int((Double($0) / Double(count - 1) * Double(n - 1)).rounded()) }
+        let picks: [Int] = n <= count || count < 2 ? Array(0..<n) : (0..<count).map { LNum.int((Double($0) / Double(count - 1) * Double(n - 1)).rounded()) }
         var shown: [Int] = []
         var edge: CGFloat = -.greatestFiniteMagnitude
         for i in picks where !labels[i].isEmpty && !shown.contains(i) {
@@ -372,7 +372,7 @@ struct LumaLineChart: View {
             .modifier(ChartScrub { location in
                 guard let location, count > 0 else { setSelection(nil); return }
                 let f = min(1, max(0, (location.x - plot.minX) / plot.width))
-                setSelection(Int((f * CGFloat(count - 1)).rounded()))
+                setSelection(LNum.int((f * CGFloat(count - 1)).rounded()))
             })
         }
         .frame(height: height)

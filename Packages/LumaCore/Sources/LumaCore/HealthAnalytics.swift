@@ -105,7 +105,7 @@ public enum RecoveryModel {
             let ratio = v / need
             // 100 % of need is neutral-to-good; each 10 % short is roughly one standard step.
             let effect = LStat.clamp((ratio - 0.92) / 0.1, -3, 2)
-            let note = ratio >= 1 ? "Met your sleep need" : "\(Int(((1 - ratio) * 100).rounded()))% short of your need"
+            let note = ratio >= 1 ? "Met your sleep need" : "\(LNum.int(((1 - ratio) * 100).rounded()))% short of your need"
             factors.append(RecoveryFactor(metric: .sleepHours, value: v / 60, baseline: need / 60, effect: effect, note: note))
         }
         if let v = d.respRate {
@@ -470,7 +470,7 @@ public struct DayCall: Equatable, Sendable {
             let words = waiting(gap)
             return DayCall(level: .unknown, title: words.title, body: words.body, reasons: [], strainTarget: nil)
         }
-        reasons.append("Recovery \(Int(r.rounded()))%")
+        reasons.append("Recovery \(LNum.int(r.rounded()))%")
         let acwr = load?.ready == true ? load?.acwr : nil
         if let a = acwr { reasons.append(String(format: "Load ratio %.2f", a)) }
         if sleepDebtMin >= 60 { reasons.append("Sleep debt \(LFormat.hm(minutes: sleepDebtMin))") }

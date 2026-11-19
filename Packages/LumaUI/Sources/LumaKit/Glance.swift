@@ -227,7 +227,7 @@ public enum LumaQuickLog {
         // A queue that nothing has drained for a long time is not allowed to grow without end.
         store(Array((stored() + [item]).suffix(200)))
         guard item.kind == .water, var glance = LumaGlanceStore.load(), glance.isCurrent(at: item.at) else { return }
-        glance.waterMl += Int(item.amount.rounded())
+        glance.waterMl += whole(item.amount.rounded())
         LumaGlanceStore.save(glance)
     }
 

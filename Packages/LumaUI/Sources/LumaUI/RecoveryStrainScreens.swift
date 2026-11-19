@@ -255,7 +255,7 @@ struct StrainScreen: View {
                             LumaLabel("Heart rate today")
                             Spacer()
                             if let peak = hr.map({ $0.hi }).max() {
-                                Text("Peak \(Int(peak.rounded())) bpm").font(LumaFont.body(13, .medium)).foregroundStyle(Luma.mist)
+                                Text("Peak \(LNum.int(peak.rounded())) bpm").font(LumaFont.body(13, .medium)).foregroundStyle(Luma.mist)
                             }
                         }
                         LumaLineChart(values: grid.values, labels: grid.labels, color: Luma.ember, height: 160, gaps: true)
@@ -311,7 +311,7 @@ struct StrainHero: View {
                 LumaRing(progress: shown / top, lineWidth: 13, colors: [Luma.amber, Luma.ember, Luma.coral])
                 VStack(spacing: -2) {
                     Text(strain.map { String(format: top == 21 ? "%.1f" : "%.0f", $0) } ?? "–").font(LumaFont.numeral(48, .heavy)).foregroundStyle(Luma.frost)
-                    LumaLabel("of \(Int(top))")
+                    LumaLabel("of \(LNum.int(top))")
                 }
             }
             .frame(width: 140, height: 140)
@@ -319,7 +319,7 @@ struct StrainHero: View {
                 LumaLabel("Day strain")
                 Text(band).font(LumaFont.title(22)).foregroundStyle(Luma.frost)
                 if let t = target {
-                    Text("Today's target is \(Int(t.lowerBound))–\(Int(t.upperBound)).").font(LumaFont.body(14)).foregroundStyle(Luma.mist)
+                    Text("Today's target is \(LNum.int(t.lowerBound))–\(LNum.int(t.upperBound)).").font(LumaFont.body(14)).foregroundStyle(Luma.mist)
                     StrainTrack(target: t, current: strain, color: Luma.ember)
                 } else {
                     Text("Strain builds with time at higher heart rates.").font(LumaFont.body(14)).foregroundStyle(Luma.mist)
@@ -371,7 +371,7 @@ struct WorkoutRow: View {
     private var subtitle: String {
         var parts = [LumaText.time(workout.start), LumaText.duration(workout.durationS)]
         if let d = workout.distanceM, d > 200 { parts.append("\(LumaText.km(d)) km") }
-        if let hr = workout.avgHR { parts.append("\(Int(hr.rounded())) bpm") }
+        if let hr = workout.avgHR { parts.append("\(LNum.int(hr.rounded())) bpm") }
         return parts.joined(separator: " · ")
     }
 }

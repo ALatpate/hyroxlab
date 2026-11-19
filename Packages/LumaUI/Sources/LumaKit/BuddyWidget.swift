@@ -35,7 +35,7 @@ public enum BuddyTimeline {
     static let beats = [0, 2, 0, 3]
 
     private static func beat(at date: Date) -> Int {
-        let slot = Int((date.timeIntervalSince1970 / shiftEvery).rounded(.down))
+        let slot = whole((date.timeIntervalSince1970 / shiftEvery).rounded(.down))
         return beats[((slot % beats.count) + beats.count) % beats.count]
     }
 

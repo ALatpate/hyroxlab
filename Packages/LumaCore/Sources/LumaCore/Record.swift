@@ -134,10 +134,10 @@ public enum RecordCheck {
     public static func slots(_ points: [LHRPoint], from: Double, to: Double, step: Double) -> [Double?] {
         guard step > 0, to > from else { return [] }
         let origin: Double = slotStart(from, step: step)
-        let count: Int = Int(((to - origin) / step).rounded(.up))
+        let count: Int = LNum.int(((to - origin) / step).rounded(.up))
         var out = [Double?](repeating: nil, count: count)
         for p in points {
-            let i: Int = Int(((p.t - origin) / step).rounded(.down))
+            let i: Int = LNum.int(((p.t - origin) / step).rounded(.down))
             if i >= 0 && i < count { out[i] = p.bpm }
         }
         return out
@@ -287,7 +287,7 @@ public enum RecordReport {
 
         out.append("Minutes of heart rate that reached the phone, by hour, newest first")
         for hour in RecordCheck.hourly(stretches, endingAt: now, hours: 24).reversed() {
-            let minutes: Int = Int((hour.seconds / 60).rounded())
+            let minutes: Int = LNum.int((hour.seconds / 60).rounded())
             out.append(stamp(hour.hourStart, calendar: calendar) + "  " + String(minutes))
         }
         out.append("")

@@ -567,7 +567,7 @@ public struct LumaHeartWidgetView: View {
                     HStack(spacing: 8) {
                         Text("3 h").font(LumaFont.label(8.5)).foregroundStyle(Luma.smoke)
                         Spacer()
-                        Text("\(Int(values.min() ?? 0))–\(Int(values.max() ?? 0))").font(LumaFont.numeral(12, .medium)).foregroundStyle(Luma.mist)
+                        Text("\(whole(values.min() ?? 0))–\(whole(values.max() ?? 0))").font(LumaFont.numeral(12, .medium)).foregroundStyle(Luma.mist)
                         if let resting { Text("resting \(resting)").font(LumaFont.body(10)).foregroundStyle(Luma.smoke) }
                     }
                 } else {

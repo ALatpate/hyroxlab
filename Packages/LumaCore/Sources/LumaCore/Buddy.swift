@@ -134,7 +134,7 @@ public enum Buddy {
         guard let score = f.recovery else {
             return BuddyLook(mood: .waiting, title: "No score yet", line: f.noScore ?? "Last night has not been scored yet.", energy: nil)
         }
-        let figure = "Recovery \(Int(score.rounded()))%." + (f.call.map { " \($0)." } ?? "")
+        let figure = "Recovery \(LNum.int(score.rounded()))%." + (f.call.map { " \($0)." } ?? "")
         switch RecoveryBand.of(score) {
         case .high: return BuddyLook(mood: .charged, title: "Charged", line: figure, energy: energy)
         case .moderate: return BuddyLook(mood: .steady, title: "Steady", line: figure, energy: energy)
@@ -212,7 +212,7 @@ public enum Buddy {
     }
 
     static func litres(_ ml: Double) -> String { String(format: "%.1f", ml / 1000) }
-    static func weight(_ kg: Double) -> String { kg == kg.rounded() ? String(Int(kg)) : String(format: "%.1f", kg) }
+    static func weight(_ kg: Double) -> String { kg == kg.rounded() ? String(LNum.int(kg)) : String(format: "%.1f", kg) }
 }
 
 // MARK: - Its build

@@ -80,11 +80,11 @@ public enum InsightEngine {
         if let c = sleep.consistency, sleep.nights.count >= 7 {
             if c < 60 {
                 out.append(Insight(id: "sleep-consistency", topic: .sleep, tone: .caution, title: "Your sleep times are scattered",
-                                   body: "Bed and wake times have varied a lot this week (consistency \(Int(c.rounded()))%). Regular timing improves sleep quality even at the same duration.",
+                                   body: "Bed and wake times have varied a lot this week (consistency \(LNum.int(c.rounded()))%). Regular timing improves sleep quality even at the same duration.",
                                    evidence: .none, priority: 55))
             } else if c >= 85 {
                 out.append(Insight(id: "sleep-consistency", topic: .sleep, tone: .good, title: "Rock-steady sleep schedule",
-                                   body: "Bed and wake times have barely moved this week (consistency \(Int(c.rounded()))%).",
+                                   body: "Bed and wake times have barely moved this week (consistency \(LNum.int(c.rounded()))%).",
                                    evidence: .none, priority: 25))
             }
         }
@@ -136,7 +136,7 @@ public enum InsightEngine {
            let low = means.min(by: { $0.value.mean < $1.value.mean }), let overall = LStat.mean(means.values.map { $0.mean }),
            overall - low.value.mean >= 8 {
             out.append(Insight(id: "weekday", topic: .habits, tone: .neutral, title: "\(weekdayNames[low.key - 1]) are your lowest mornings",
-                               body: "Recovery averages \(Int(low.value.mean.rounded()))% on \(weekdayNames[low.key - 1]) against \(Int(overall.rounded()))% across the week. Look at what the day before usually holds.",
+                               body: "Recovery averages \(LNum.int(low.value.mean.rounded()))% on \(weekdayNames[low.key - 1]) against \(LNum.int(overall.rounded()))% across the week. Look at what the day before usually holds.",
                                evidence: .weekdays((1...7).map { means[$0]?.mean }, metric: .recovery), priority: 52))
         }
 

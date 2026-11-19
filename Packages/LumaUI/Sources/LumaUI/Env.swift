@@ -13,12 +13,19 @@ public struct LumaLaunch {
     public static var scrollOffset: CGFloat = 0
     /// The step a multi-step screen opens on.
     public static var page = 0
+    /// The field that takes the keyboard as its screen opens, by the name it is asked under ("coach",
+    /// or a field's title), so a picture can show a screen being typed in.
+    public static var focus: String?
+    /// What is already typed in the coach's box when it opens.
+    public static var draft: String?
 
     public init(screen: String? = nil) { self.screen = screen }
 
     public static func fromArguments() -> LumaLaunch {
         let d = UserDefaults.standard
         scrollOffset = CGFloat(d.double(forKey: "lumaScroll"))
+        focus = d.string(forKey: "lumaFocus").flatMap { $0.isEmpty ? nil : $0 }
+        draft = d.string(forKey: "lumaDraft").flatMap { $0.isEmpty ? nil : $0 }
         return LumaLaunch(screen: d.string(forKey: "lumaScreen").flatMap { $0.isEmpty ? nil : $0 })
     }
 }
@@ -211,6 +218,8 @@ public enum LumaDest: Hashable {
     case devices, settings, profile, about
     /// Where heart rate reached the phone and what is stored, hour by hour.
     case dataCheck
+    /// The copies kept of what the athlete has logged, and going back to one.
+    case backups
     /// The companion: why it looks the way it does, its build, and its day ahead.
     case buddy
     /// Supplement trials, and one trial.
@@ -369,54 +378,33 @@ public final class LumaRouter: ObservableObject {
 
 // MARK: - Disk
 
-/// Small JSON files under Application Support. `nil` directory keeps everything in memory (demo).
+/// The athlete's own records: small JSON files under Application Support, kept by a `LumaVault`, which
+/// tells a file it could not read from one that is not there, keeps daily copies, and will not save
+/// over a store it has not read. A vault with no directory keeps nothing (the gallery).
 struct LumaDisk {
-    let directory: URL?
+    let vault: LumaVault
+    var directory: URL? { vault.directory }
 
     static func standard() -> LumaDisk {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-        let dir = base?.appendingPathComponent("HYROXLab", isDirectory: true)
-        if let dir { try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true) }
-        return LumaDisk(directory: dir)
-    }
-
-    private static func encoder() -> JSONEncoder {
-        let e = JSONEncoder()
-        e.dateEncodingStrategy = .iso8601
-        return e
-    }
-    private static func decoder() -> JSONDecoder {
-        let d = JSONDecoder()
-        // Files written by the first build used the default (reference-date) encoding; accept both.
-        d.dateDecodingStrategy = .custom { decoder in
-            let c = try decoder.singleValueContainer()
-            if let s = try? c.decode(String.self), let date = ISO8601DateFormatter().date(from: s) { return date }
-            return Date(timeIntervalSinceReferenceDate: try c.decode(Double.self))
+        let vault = LumaVault(directory: base?.appendingPathComponent("HYROXLab", isDirectory: true))
+        #if canImport(UIKit)
+        // Asked on the main thread, where every store is read.
+        vault.sealed = {
+            guard Thread.isMainThread else { return false }
+            return MainActor.assumeIsolated { !UIApplication.shared.isProtectedDataAvailable }
         }
-        return d
+        #endif
+        return LumaDisk(vault: vault)
     }
 
-    func load<T: Decodable>(_ type: T.Type, _ name: String) -> T? {
-        guard let url = directory?.appendingPathComponent(name), let data = try? Data(contentsOf: url) else { return nil }
-        return try? LumaDisk.decoder().decode(type, from: data)
-    }
+    static func memory() -> LumaDisk { LumaDisk(vault: LumaVault(directory: nil)) }
 
-    func save<T: Encodable>(_ value: T, _ name: String) {
-        guard let url = directory?.appendingPathComponent(name), let data = try? LumaDisk.encoder().encode(value) else { return }
-        try? data.write(to: url, options: .atomic)
-    }
-
-    func remove(_ name: String) {
-        guard let url = directory?.appendingPathComponent(name) else { return }
-        try? FileManager.default.removeItem(at: url)
-    }
-
-    func list(prefix: String) -> [String] {
-        guard let directory, let names = try? FileManager.default.contentsOfDirectory(atPath: directory.path) else { return [] }
-        return names.filter { $0.hasPrefix(prefix) }
-    }
-
-    func url(_ name: String) -> URL? { directory?.appendingPathComponent(name) }
+    func load<T: Decodable>(_ type: T.Type, _ name: String) -> T? { vault.load(type, name) }
+    func save<T: Encodable>(_ value: T, _ name: String) { vault.save(value, name) }
+    func remove(_ name: String) { vault.remove(name) }
+    func list(prefix: String) -> [String] { vault.list(prefix: prefix) }
+    func url(_ name: String) -> URL? { vault.url(name) }
 }
 
 // MARK: - Environment
@@ -439,6 +427,13 @@ public final class LumaEnv: ObservableObject {
     @Published public private(set) var workouts: [LWorkout] = []
     @Published public private(set) var analysis: LumaAnalysis = .empty
     @Published public private(set) var loaded = false
+    /// False while any of the athlete's own records could not be read from disk, which is what
+    /// happens when the app is started while the phone is locked. What is in memory is then not
+    /// theirs: it is not shown, not saved, and not sent to the widgets, and the stores are read again
+    /// as soon as they can be (`retryStores`).
+    @Published public private(set) var storesReady = true
+    /// True while stores are being put in place from disk.
+    private var adopting = false
     /// Sessions the strap saw and nobody recorded, waiting to be kept or dismissed. Newest first.
     @Published public private(set) var suggestions: [LSuggestedSession] = []
     /// Everything the last search of the strap record found, before Luma's own rules are applied.
@@ -466,26 +461,28 @@ public final class LumaEnv: ObservableObject {
     }
 
     // Athlete's own records
-    @Published public var profile: LProfile { didSet { if profile != oldValue { disk.save(profile, "profile.json"); onProfileChange?(profile); refreshAnalysis() } } }
-    @Published var routine: [RoutineSlot] { didSet { disk.save(routine, "routine.json") } }
-    @Published var planned: [PlannedSession] { didSet { disk.save(planned, "planned.json") } }
-    @Published var fuel: [FuelEntry] { didSet { disk.save(fuel, "fuel.json"); refreshProgress() } }
-    @Published var supplements: [SupplementPlan] { didSet { disk.save(supplements, "supplements.json"); refreshProgress() } }
-    @Published var checkIns: [CheckIn] { didSet { disk.save(checkIns, "checkins.json") } }
-    @Published var lifts: [LiftSession] { didSet { disk.save(lifts, "lifts.json"); refreshProgress() } }
+    // Each saves itself when it changes, except while the stores are being put in place from disk
+    // (`adopting`): what was just read is not written back, and nothing is rebuilt until all are in.
+    @Published public var profile: LProfile { didSet { if !adopting, profile != oldValue { profileChanged() } } }
+    @Published var routine: [RoutineSlot] { didSet { if !adopting { disk.save(routine, "routine.json") } } }
+    @Published var planned: [PlannedSession] { didSet { if !adopting { disk.save(planned, "planned.json") } } }
+    @Published var fuel: [FuelEntry] { didSet { if !adopting { disk.save(fuel, "fuel.json"); refreshProgress() } } }
+    @Published var supplements: [SupplementPlan] { didSet { if !adopting { disk.save(supplements, "supplements.json"); refreshProgress() } } }
+    @Published var checkIns: [CheckIn] { didSet { if !adopting { disk.save(checkIns, "checkins.json") } } }
+    @Published var lifts: [LiftSession] { didSet { if !adopting { disk.save(lifts, "lifts.json"); refreshProgress() } } }
     /// What the training, food and supplement logs add up to: lifts, muscles, strong and weak points.
     /// Rebuilt whenever a log it reads changes, so every screen that shows a figure from it shows the same one.
     @Published private(set) var progress: TrainingProgress = .empty
     @Published private(set) var sessions: [HXSession] = []
     @Published private(set) var benchmarks = Benchmarks()
-    @Published var runPBs: [PersonalBest] { didSet { disk.save(runPBs, "runpbs.json") } }
+    @Published var runPBs: [PersonalBest] { didSet { if !adopting { disk.save(runPBs, "runpbs.json") } } }
 
     // The newer records: supplement trials, weigh-ins, sweat tests, weekly reviews, and small settings.
-    @Published var trials: [SupplementTrial] { didSet { disk.save(trials, "trials.json"); refreshNext() } }
-    @Published var weights: [WeightEntry] { didSet { disk.save(weights, "weights.json"); weightsChanged() } }
-    @Published var sweatTests: [SweatTest] { didSet { disk.save(sweatTests, "sweat-tests.json"); refreshNext() } }
-    @Published var reviews: [WeeklyReview] { didSet { disk.save(reviews, "reviews.json") } }
-    @Published var extras: LumaExtras { didSet { if extras != oldValue { disk.save(extras, "extras.json"); refreshNext(); onGlanceChange?() } } }
+    @Published var trials: [SupplementTrial] { didSet { if !adopting { disk.save(trials, "trials.json"); refreshNext() } } }
+    @Published var weights: [WeightEntry] { didSet { if !adopting { disk.save(weights, "weights.json"); weightsChanged() } } }
+    @Published var sweatTests: [SweatTest] { didSet { if !adopting { disk.save(sweatTests, "sweat-tests.json"); refreshNext() } } }
+    @Published var reviews: [WeeklyReview] { didSet { if !adopting { disk.save(reviews, "reviews.json") } } }
+    @Published var extras: LumaExtras { didSet { if !adopting, extras != oldValue { disk.save(extras, "extras.json"); refreshNext(); onGlanceChange?() } } }
     /// What those records and the logs add up to. Rebuilt with `progress`, so every screen that shows a
     /// figure from it shows the same one.
     @Published var next = LumaNext()
@@ -503,14 +500,22 @@ public final class LumaEnv: ObservableObject {
     public var requestNotifications: (() async -> Bool)?
 
     private var reloadTask: Task<Void, Never>?
-    private(set) lazy var coach = CoachEngine(env: self)
+    private var profileWork: Task<Void, Never>?
+    private var madeCoach: CoachEngine?
+    /// Made when first asked for, so a start in the background does not build it.
+    var coach: CoachEngine {
+        if let made = madeCoach { return made }
+        let made = CoachEngine(env: self)
+        madeCoach = made
+        return made
+    }
 
     public init(source: LumaDataSource, live: LumaLive, secrets: LumaSecrets, persistent: Bool = true) {
         self.source = source
         self.live = live
         self.secrets = secrets
         self.isDemo = !persistent
-        let disk = persistent ? LumaDisk.standard() : LumaDisk(directory: nil)
+        let disk = persistent ? LumaDisk.standard() : LumaDisk.memory()
         self.disk = disk
         profile = disk.load(LProfile.self, "profile.json") ?? LProfile()
         routine = disk.load([RoutineSlot].self, "routine.json") ?? []
@@ -532,6 +537,12 @@ public final class LumaEnv: ObservableObject {
         progress = TrainingProgress.build(lifts: lifts, workouts: [], fuel: fuel, supplements: supplements, profile: profile,
                                           today: LumaAnalysis.todayKey())
         sessions = disk.list(prefix: "session-").compactMap { disk.load(HXSession.self, $0) }.sorted { $0.startedAt > $1.startedAt }
+        storesReady = disk.vault.isReady
+        if storesReady {
+            disk.vault.markOpened()
+        } else {
+            disk.vault.note("started with \(disk.vault.blocked.count) records out of reach\(disk.vault.sealed() ? " (the phone was locked)" : "")")
+        }
         // Whether the strap's record is still arriving decides what Luma says about the night, so the
         // analysis is rebuilt the moment that changes, not at the next reload.
         live.$strap.map { $0.reading }.removeDuplicates().dropFirst()
@@ -552,6 +563,8 @@ public final class LumaEnv: ObservableObject {
         live.health = .on
         let env = LumaEnv(source: source, live: live, secrets: MemorySecrets(key: sparse ? nil : "demo"), persistent: false)
         env.demoScenario = scenario
+        // The gallery's pictures of the screen shown while the records cannot be opened.
+        if scenario == "locked" || scenario == "stuck" { env.storesReady = false }
         env.profile = LumaDemoContent.profile()
         if !sparse {
             env.routine = LumaDemoContent.routine()
@@ -567,6 +580,129 @@ public final class LumaEnv: ObservableObject {
             LumaDemoNext.stage(env, source: source)
         }
         return env
+    }
+
+    // MARK: The athlete's own records
+
+    /// The athlete's details changed. They are saved at once. Telling the strap layer and working
+    /// everything out again waits until the changes stop coming: a stepper held down changes them
+    /// several times a second, and doing all of that on each step made the stepper miss taps.
+    private func profileChanged() {
+        disk.save(profile, "profile.json")
+        profileWork?.cancel()
+        profileWork = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard let self, !Task.isCancelled else { return }
+            self.onProfileChange?(self.profile)
+            self.refreshAnalysis()
+        }
+    }
+
+    /// Reads every store from disk again and puts it in place: when they could not be read at launch
+    /// and now can, and after a day has been restored from its copies. Nothing is saved by doing so.
+    public func readStores() {
+        guard !isDemo else { return }
+        disk.vault.protect()
+        disk.vault.forgetBlocked()
+        adopting = true
+        profile = disk.load(LProfile.self, "profile.json") ?? LProfile()
+        routine = disk.load([RoutineSlot].self, "routine.json") ?? []
+        planned = disk.load([PlannedSession].self, "planned.json") ?? []
+        fuel = disk.load([FuelEntry].self, "fuel.json") ?? []
+        supplements = disk.load([SupplementPlan].self, "supplements.json") ?? []
+        checkIns = disk.load([CheckIn].self, "checkins.json") ?? []
+        lifts = disk.load([LiftSession].self, "lifts.json") ?? []
+        runPBs = disk.load([PersonalBest].self, "runpbs.json") ?? []
+        trials = disk.load([SupplementTrial].self, "trials.json") ?? []
+        weights = disk.load([WeightEntry].self, "weights.json") ?? []
+        sweatTests = disk.load([SweatTest].self, "sweat-tests.json") ?? []
+        reviews = disk.load([WeeklyReview].self, "reviews.json") ?? []
+        extras = disk.load(LumaExtras.self, "extras.json") ?? LumaExtras()
+        benchmarks = disk.load(Benchmarks.self, "benchmarks.json") ?? Benchmarks()
+        dismissedStretches = SessionSuggestions.prune(Set(disk.load([String].self, "stretches-dismissed.json") ?? []),
+                                                      now: Date().timeIntervalSince1970)
+        nightMarks = disk.load([NightMark].self, "night-marks.json") ?? []
+        sessions = disk.list(prefix: "session-").compactMap { disk.load(HXSession.self, $0) }.sorted { $0.startedAt > $1.startedAt }
+        adopting = false
+        let wasReady = storesReady
+        storesReady = disk.vault.isReady
+        guard storesReady else { return }
+        if !wasReady { disk.vault.note("records read") }
+        disk.vault.markOpened()
+        madeCoach?.readStored()
+        // The strap layer is only told about details the athlete has entered, never the blank ones.
+        if profile.isSetUp { onProfileChange?(profile) }
+        // Everything worked out from the records is worked out again, and the strap data read with them.
+        refreshAnalysis()
+        reload()
+    }
+
+    /// Reads the stores again if they could not be read before. Costs nothing when they could.
+    public func retryStores() {
+        if !storesReady { readStores() }
+    }
+
+    /// Whether the phone says its files are sealed right now: it is locked, or has not been unlocked
+    /// since it was switched on.
+    var storesSealed: Bool { disk.vault.sealed() }
+
+    /// The records that could not be opened, in the app's words for them, each once.
+    var unreadStores: [String] {
+        if isDemo { return ["Food, water and supplements taken", "Strength sessions"] }
+        var seen: Set<String> = []
+        return disk.vault.blocked.map { LumaVault.title(for: $0) }.filter { seen.insert($0).inserted }
+    }
+
+    /// The way out when records will not open and the phone is not locked: those files are moved
+    /// aside (not deleted), the last copy kept of each takes its place, and the stores are read again.
+    func startWithoutUnreadStores() {
+        guard !isDemo else { return }
+        disk.vault.setAsideBlocked()
+        readStores()
+    }
+
+    /// What is known about each store in this run and what the vault has logged, as readings for the
+    /// data check and its report.
+    var storeFacts: [LFact] {
+        let section = "Your records"
+        var out: [LFact] = [LFact(section, "All read", storesReady ? "yes" : "no")]
+        let notes = disk.vault.notes()
+        for note in notes where !note.name.hasPrefix("session-") && !note.name.hasPrefix("run-") {
+            out.append(LFact(section, LumaVault.title(for: note.name), note.words))
+        }
+        let races = notes.filter { $0.name.hasPrefix("session-") }
+        if !races.isEmpty {
+            let read = races.filter { $0.read == .loaded || $0.read == nil }.count
+            out.append(LFact(section, "Race sessions", read == races.count ? "\(read) read" : "\(read) read, \(races.count - read) not"))
+        }
+        let sets = disk.vault.backupList()
+        let days = sets.filter { $0.kind == .day }
+        out.append(LFact(section, "Days with a copy", days.isEmpty ? "none yet" : "\(days.count), back to \(days.last?.name ?? "")"))
+        let log = "Record log"
+        let events = disk.vault.events()
+        if events.isEmpty { out.append(LFact(log, "Events", "none")) }
+        for (i, event) in events.suffix(12).enumerated() { out.append(LFact(log, "Event \(i + 1)", event)) }
+        return out
+    }
+
+    /// The copies that can be gone back to, newest first.
+    var backups: [VaultBackup] {
+        guard isDemo else { return disk.vault.backupList() }
+        let today = LumaAnalysis.todayKey()
+        let names = ["checkins.json", "extras.json", "fuel.json", "lifts.json", "planned.json", "profile.json", "routine.json", "supplements.json", "weights.json"]
+        let days = (0..<6).map { VaultBackup(name: LDate.adding(-$0, to: today), files: names, bytes: 48_200 - $0 * 1_900) }
+        return days + [VaultBackup(name: "before-restore-\(LDate.adding(-2, to: today))-214503", files: names, bytes: 47_100),
+                       VaultBackup(name: "before-change-\(LDate.adding(-4, to: today))-073012", files: ["fuel.json"], bytes: 21_400)]
+    }
+
+    /// Puts every store back as it was in one set of copies, and reads them. What was there is kept
+    /// as a set of its own first, so this can be undone.
+    @discardableResult
+    func restore(_ backup: VaultBackup) -> Bool {
+        guard !isDemo else { return true }
+        let done = disk.vault.restore(backup.name)
+        readStores()
+        return done
     }
 
     // MARK: Strap data
@@ -805,7 +941,7 @@ public final class LumaEnv: ObservableObject {
     /// Stores a photo beside the log and returns its file name.
     func savePhoto(_ data: Data) -> String {
         let name = "photo-\(UUID().uuidString).jpg"
-        if let url = disk.url(name) { try? data.write(to: url, options: .atomic) }
+        disk.vault.write(data, name)
         return name
     }
 
@@ -899,16 +1035,16 @@ public final class LumaEnv: ObservableObject {
         }
         let strain = a.day?.strain.map { LScale.shown($0, on21: profile.strainOn21) }
         let totals = fuelTotals(on: today), targets = fuelTargets(on: today)
-        let week = LumaAnalysis.series(.recovery, days: days, ending: today, count: 7).values.map { $0.map { Int($0.rounded()) } }
+        let week = LumaAnalysis.series(.recovery, days: days, ending: today, count: 7).values.map { $0.map { LNum.int($0.rounded()) } }
         let brief: String? = coach.briefDay == today ? coach.brief : nil
-        var glance = LumaGlance(day: today, recovery: scored?.recovery.map { Int($0.rounded()) }, strain: strain, strainMax: profile.strainOn21 ? 21 : 100,
-                          sleepScore: night?.score.map { Int($0.rounded()) }, sleepMinutes: night.map { Int($0.asleepMin.rounded()) },
-                          hrv: wholeNight ? scored?.hrv.map { Int($0.rounded()) } : nil,
-                          restingHR: wholeNight ? scored?.restingHR.map { Int($0.rounded()) } : nil,
+        var glance = LumaGlance(day: today, recovery: scored?.recovery.map { LNum.int($0.rounded()) }, strain: strain, strainMax: profile.strainOn21 ? 21 : 100,
+                          sleepScore: night?.score.map { LNum.int($0.rounded()) }, sleepMinutes: night.map { LNum.int($0.asleepMin.rounded()) },
+                          hrv: wholeNight ? scored?.hrv.map { LNum.int($0.rounded()) } : nil,
+                          restingHR: wholeNight ? scored?.restingHR.map { LNum.int($0.rounded()) } : nil,
                           call: a.call.title, callDetail: a.call.body, sessions: Array(sessions.prefix(4)), tomorrow: tomorrow,
-                          kcal: Int(totals.kcal.rounded()), kcalTarget: Int(targets.kcal.rounded()), protein: Int(totals.proteinG.rounded()),
-                          proteinTarget: Int(targets.proteinG.rounded()), waterMl: Int(totals.waterMl.rounded()),
-                          waterTargetMl: Int(targets.waterMl.rounded()), brief: brief, week: week, updated: now)
+                          kcal: LNum.int(totals.kcal.rounded()), kcalTarget: LNum.int(targets.kcal.rounded()), protein: LNum.int(totals.proteinG.rounded()),
+                          proteinTarget: LNum.int(targets.proteinG.rounded()), waterMl: LNum.int(totals.waterMl.rounded()),
+                          waterTargetMl: LNum.int(targets.waterMl.rounded()), brief: brief, week: week, updated: now)
         glance.buddy = buddyGlance(now: now)
         return glance
     }

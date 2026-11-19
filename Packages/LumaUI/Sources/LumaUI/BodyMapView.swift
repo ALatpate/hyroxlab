@@ -318,7 +318,7 @@ struct MuscleFacts: View {
                 Spacer(minLength: 4)
                 if let onClose {
                     Button(action: onClose) {
-                        Image(systemName: "xmark").font(.system(size: 11, weight: .bold)).foregroundStyle(Luma.smoke).frame(width: 28, height: 28)
+                        Image(systemName: "xmark").font(.system(size: 11, weight: .bold)).foregroundStyle(Luma.smoke).frame(width: 28, height: 28).contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Close")
@@ -382,7 +382,7 @@ enum ProgressText {
     /// Sets to the nearest half: "7", "7.5".
     static func count(_ v: Double) -> String {
         let half = (v * 2).rounded() / 2
-        return half == half.rounded() ? String(Int(half)) : String(format: "%.1f", half)
+        return half == half.rounded() ? String(LNum.int(half)) : String(format: "%.1f", half)
     }
 
     static func sets(_ v: Double) -> String {

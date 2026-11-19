@@ -123,6 +123,21 @@ jobs:
           test "$PUBLISHED" = "$SIZE" || { echo "::error::published file is ${PUBLISHED:-missing} bytes, built ${SIZE}"; exit 1; }
           echo "url=https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/Luma.ipa" >> "$GITHUB_OUTPUT"
 
+      # What iOS reports about a crash is a list of offsets into the app's binary (Settings, Data
+      # check shows them). The symbols of the same build turn an offset into a function and a line, so
+      # they are kept beside the build. The listing names only Luma.ipa; this file changes nothing
+      # about what a phone downloads, and failing to keep it does not fail the release.
+      - name: Keep this build's symbols beside it
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd build/dd/Build/Products/Release-iphoneos
+          ls -d *.dSYM
+          zip -qr "$GITHUB_WORKSPACE/Luma-symbols.zip" *.dSYM
+          gh release upload "build-${GITHUB_RUN_NUMBER}" "$GITHUB_WORKSPACE/Luma-symbols.zip" --repo "$GITHUB_REPOSITORY" --clobber
+
       - name: Rewrite hyroxlab-source.json (AltStore / SideStore source)
         env:
           VER: ${{ steps.pkg.outputs.ver }}

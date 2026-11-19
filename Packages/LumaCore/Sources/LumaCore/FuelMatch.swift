@@ -76,7 +76,7 @@ public enum FuelMatch {
         // Carbohydrate for the work.
         let perKg = totals.carbsG / body
         let want = carbsPerKg(kind)
-        let wantText = want == want.rounded() ? String(Int(want)) : String(format: "%.1f", want)
+        let wantText = want == want.rounded() ? String(LNum.int(want)) : String(format: "%.1f", want)
         let carbText = "\(String(format: "%.1f", perKg)) g of carbs per kg\(soFar). A \(kind.title.lowercased()) suits about \(wantText)."
         checks.append(FuelCheck(id: "carbs", title: "Carbs for the work", met: closed ? perKg >= want * 0.85 : (perKg >= want * 0.85 ? true : nil),
                                 detail: carbText))
@@ -86,7 +86,7 @@ public enum FuelMatch {
         let meals = food.filter { $0.proteinG >= proteinMealPerKg * body }.count
         let enough = totals.proteinG >= target * 0.9
         let spread = meals >= proteinMeals - 1
-        var proteinText = "\(Int(totals.proteinG.rounded())) g of \(Int(target))\(soFar), in \(meals) protein meal\(meals == 1 ? "" : "s")."
+        var proteinText = "\(LNum.int(totals.proteinG.rounded())) g of \(LNum.int(target))\(soFar), in \(meals) protein meal\(meals == 1 ? "" : "s")."
         if enough, !spread { proteinText += " Spread over \(proteinMeals), the same amount does more." }
         checks.append(FuelCheck(id: "protein", title: "Protein across the day", met: closed ? (enough && spread) : (enough && spread ? true : nil),
                                 detail: proteinText))
@@ -106,7 +106,7 @@ public enum FuelMatch {
                                         detail: "Nothing logged before your \(startClock) \(name). An early session is often done fasted; a small carb snack helps if it felt flat."))
             } else {
                 checks.append(FuelCheck(id: "before", title: "Before training", met: preCarbs >= preWant * 0.7,
-                                        detail: "\(Int(preCarbs.rounded())) g of carbs in the 4 hours before your \(startClock) \(name). About \(Int(preWant.rounded())) g suits it."))
+                                        detail: "\(LNum.int(preCarbs.rounded())) g of carbs in the 4 hours before your \(startClock) \(name). About \(LNum.int(preWant.rounded())) g suits it."))
             }
             let after = food.filter { $0.at >= end && $0.at <= end.addingTimeInterval(2 * 3600) }
             let postProtein = after.reduce(0) { $0 + $1.proteinG }
@@ -114,7 +114,7 @@ public enum FuelMatch {
             // A session that ended under two hours ago on a day still open has not had its chance yet.
             let waited = closed || food.contains { $0.at > end.addingTimeInterval(2 * 3600) }
             checks.append(FuelCheck(id: "after", title: "After training", met: postProtein >= postWant * 0.8 ? true : (waited ? false : nil),
-                                    detail: "\(Int(postProtein.rounded())) g of protein in the 2 hours after. About \(Int(postWant.rounded())) g suits it."))
+                                    detail: "\(LNum.int(postProtein.rounded())) g of protein in the 2 hours after. About \(LNum.int(postWant.rounded())) g suits it."))
         }
         return FuelDayRead(day: day, dayClass: kind, usable: usable, checks: checks)
     }

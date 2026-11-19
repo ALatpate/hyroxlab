@@ -24,7 +24,7 @@ final class SessionVoice {
 
     static func pace(_ p: Double?) -> String {
         guard let p, p.isFinite, p > 0 else { return "unknown" }
-        let s = Int(p.rounded())
+        let s = LNum.int(p.rounded())
         return "\(s / 60) \(s % 60) per kilometre"
     }
 }
@@ -63,7 +63,7 @@ final class DemoRecorder: LumaRecorder {
     func route() -> [LumaRoutePoint] {
         guard gps else { return [] }
         let loop = LumaDemoSource.loop(distanceM: 9200, salt: 3)
-        let n = min(loop.count, max(2, Int(distanceM / 9200 * Double(loop.count))))
+        let n = min(loop.count, max(2, LNum.int(distanceM / 9200 * Double(loop.count))))
         return loop.prefix(n).enumerated().map { LumaRoutePoint(lat: $0.element.lat, lon: $0.element.lon, t: Double($0.offset) * 13) }
     }
 
@@ -160,7 +160,7 @@ final class RunController: ObservableObject {
     }
     var phaseRemaining: String {
         guard let p = phase else { return "" }
-        if let m = p.metres { return "\(Int(max(0, m - (distanceM - phaseStartD)))) m to go" }
+        if let m = p.metres { return "\(LNum.int(max(0, m - (distanceM - phaseStartD)))) m to go" }
         if let s = p.seconds { return "\(LumaText.duration(max(0, s - (elapsed - phaseStartT)))) to go" }
         return ""
     }
@@ -248,7 +248,7 @@ final class RunController: ObservableObject {
             pace = usesGPS ? smoother.push(tS: elapsed, distanceM: distanceM) : nil
             avgPace = distanceM > 50 ? elapsed / (distanceM / 1000) : nil
             if usesGPS, distanceM - lapStartD >= 1000 { closeLap(partial: false, distance: lapStartD + 1000, time: elapsed) }
-            if Int(elapsed) % 5 == 0, usesGPS { route = recorder.route().map { LCoord(lat: $0.lat, lon: $0.lon) } }
+            if LNum.int(elapsed) % 5 == 0, usesGPS { route = recorder.route().map { LCoord(lat: $0.lat, lon: $0.lon) } }
             cues()
             if plan.mode == .intervals { advancePhase() }
         }
@@ -269,13 +269,13 @@ final class RunController: ObservableObject {
     }
 
     private func cues() {
-        let km = Int(distanceM / 1000)
+        let km = LNum.int(distanceM / 1000)
         let heart = hr.map { " Heart rate \($0)." } ?? ""
         if usesGPS, env.profile.cueEveryKm, km > lastCueKm {
             lastCueKm = km
             voice.say("\(km) kilometre\(km == 1 ? "" : "s"). Last split \(SessionVoice.pace(laps.last?.paceSPerKm)).\(heart)")
         } else if !usesGPS || !env.profile.cueEveryKm {
-            let block = Int(elapsed / 300)
+            let block = LNum.int(elapsed / 300)
             if block > lastCueBlock { lastCueBlock = block; voice.say("\(block * 5) minutes.\(heart)") }
         }
     }
@@ -349,7 +349,7 @@ final class RunController: ObservableObject {
             lastCueKm = laps.count
             route = recorder.route().map { LCoord(lat: $0.lat, lon: $0.lon) }
         }
-        lastCueBlock = Int(total / 300)
+        lastCueBlock = LNum.int(total / 300)
         lastMoveD = recorder.distanceM; lastMoveT = total
         if plan.mode == .intervals, phases.count > 3 {
             phaseIndex = 3; phase = phases[3]
@@ -508,7 +508,7 @@ final class RaceController: ObservableObject {
             if cur.kind == .run, !halfwaySpoken, segment >= target * 0.5 {
                 halfwaySpoken = true
                 let delta = aheadBehind ?? 0
-                voice.say("Halfway. \(Int(abs(delta))) seconds \(delta >= 0 ? "ahead" : "behind").")
+                voice.say("Halfway. \(LNum.int(abs(delta))) seconds \(delta >= 0 ? "ahead" : "behind").")
             }
         }
     }
@@ -529,7 +529,7 @@ final class RaceController: ObservableObject {
         case .run: return "Run. Target \(LumaText.duration(targets[p.id] ?? 0))."
         case .roxzone: return "Roxzone. Keep moving."
         case .station:
-            if let kg = p.loadKg, kg > 0 { return "\(p.label) at \(Int(kg)) kilos." }
+            if let kg = p.loadKg, kg > 0 { return "\(p.label) at \(LNum.int(kg)) kilos." }
             return "\(p.label)."
         case .rest: return "Rest."
         default: return p.label
@@ -543,7 +543,7 @@ final class RaceController: ObservableObject {
             guard let cur = current else { break }
             let t = (targets[cur.id] ?? 60) * rng.range(0.9, 1.04)
             clock.offsetMs += Int64(t * 1000)
-            recorder.advance(hr: HRSummary(avg: 161, max: 170, min: 150, sampleCount: Int(t), expectedCount: Int(t), source: .wristOptical))
+            recorder.advance(hr: HRSummary(avg: 161, max: 170, min: 150, sampleCount: LNum.int(t), expectedCount: LNum.int(t), source: .wristOptical))
             cumulativeTarget += targets[cur.id] ?? 0
         }
         clock.offsetMs += 96_000

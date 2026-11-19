@@ -105,7 +105,7 @@ struct LiveHeartHero: View {
                     if liveHR == nil, let at = strap.heartRateAt {
                         Text("Last reading \(at.formatted(.relative(presentation: .named)))").font(LumaFont.body(13)).foregroundStyle(Luma.smoke)
                     } else if let z = zone, let s = shown {
-                        Text("Zone \(z) · \(Int((Double(s) / maxHR * 100).rounded()))% of max").font(LumaFont.body(13, .medium)).foregroundStyle(color)
+                        Text("Zone \(z) · \(LNum.int((Double(s) / maxHR * 100).rounded()))% of max").font(LumaFont.body(13, .medium)).foregroundStyle(color)
                     }
                 }
                 Spacer(minLength: 0)
@@ -140,8 +140,8 @@ struct ZoneTable: View {
         VStack(alignment: .leading, spacing: 12) {
             LumaGroup {
                 ForEach((0..<5).reversed(), id: \.self) { i in
-                    let lo = Int(zones.bounds[i].rounded())
-                    let hi = i < 4 ? Int(zones.bounds[i + 1].rounded()) - 1 : Int(maxHR.rounded())
+                    let lo = LNum.int(zones.bounds[i].rounded())
+                    let hi = i < 4 ? LNum.int(zones.bounds[i + 1].rounded()) - 1 : LNum.int(maxHR.rounded())
                     HStack(spacing: 12) {
                         Text("Z\(i + 1)").font(LumaFont.numeral(20, .bold)).foregroundStyle(Luma.zone(i + 1)).frame(width: 30, alignment: .leading)
                         Text(names[i]).font(LumaFont.body(15, .medium)).foregroundStyle(Luma.frost)
@@ -154,10 +154,10 @@ struct ZoneTable: View {
                 }
             }
             if !measured {
-                LumaNote("Zones use an age-based maximum of \(Int(maxHR)) bpm. If you know your real maximum or threshold heart rate, set it in your profile for accurate zones.")
+                LumaNote("Zones use an age-based maximum of \(LNum.int(maxHR)) bpm. If you know your real maximum or threshold heart rate, set it in your profile for accurate zones.")
             }
             if let o = observed, o > maxHR + 2 {
-                LumaNote("Luma has seen \(Int(o)) bpm in a recent session, above the maximum your zones assume. Consider raising your maximum heart rate in your profile.")
+                LumaNote("Luma has seen \(LNum.int(o)) bpm in a recent session, above the maximum your zones assume. Consider raising your maximum heart rate in your profile.")
             }
         }
     }

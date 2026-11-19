@@ -131,9 +131,9 @@ final class LumaRepoSource: LumaDataSource {
 
     func saveWorkout(_ workout: LWorkout, replacing old: LWorkout?) async {
         let previous = old.flatMap { rows[$0.id] } ?? rows[workout.id]
-        let row = WorkoutRow(startTs: Int(workout.start), endTs: Int(workout.end), sport: workout.sport, source: "manual",
-                             durationS: workout.durationS, energyKcal: workout.kcal, avgHr: workout.avgHR.map { Int($0.rounded()) },
-                             maxHr: workout.maxHR.map { Int($0.rounded()) }, strain: workout.strain, distanceM: workout.distanceM,
+        let row = WorkoutRow(startTs: LNum.int(workout.start), endTs: LNum.int(workout.end), sport: workout.sport, source: "manual",
+                             durationS: workout.durationS, energyKcal: workout.kcal, avgHr: workout.avgHR.map { LNum.int($0.rounded()) },
+                             maxHr: workout.maxHR.map { LNum.int($0.rounded()) }, strain: workout.strain, distanceM: workout.distanceM,
                              zonesJSON: previous?.zonesJSON, notes: workout.notes, steps: previous?.steps)
         await repo.saveManualWorkout(row, replacing: old.flatMap { rows[$0.id] })
         await repo.refresh()
@@ -163,7 +163,7 @@ final class LumaRepoSource: LumaDataSource {
     func facts() async -> [LFact] {
         var out: [LFact] = linkFacts?() ?? []
         let calendar = Calendar.current
-        let now = Int(Date().timeIntervalSince1970)
+        let now = LNum.int(Date().timeIntervalSince1970)
         let from = now - 86_400
         func count(_ n: Int, cap: Int) -> String { n >= cap ? "\(LFormat.grouped(Double(cap))) or more" : LFormat.grouped(Double(n)) }
 
@@ -198,7 +198,7 @@ final class LumaRepoSource: LumaDataSource {
     /// minutes, short dips tolerated, with every stored session's window excluded. A pure read; the
     /// detector's opt-in prompt in the earlier shell is not involved and nothing is stored here.
     func suggestedSessions(days: Int) async -> [LSuggestedSession] {
-        let now = Int(Date().timeIntervalSince1970)
+        let now = LNum.int(Date().timeIntervalSince1970)
         let from = now - max(1, days) * 86_400
         // One reading a second: three days is about 260,000.
         let samples: [HRSample] = await repo.hrSamples(from: from, to: now, limit: 320_000)
@@ -219,18 +219,18 @@ final class LumaRepoSource: LumaDataSource {
 
     func heartRate(from: Double, to: Double, bucketSeconds: Int) async -> [LHRPoint] {
         guard to > from else { return [] }
-        let buckets = await repo.hrBuckets(from: Int(from), to: Int(to), bucketSeconds: max(1, bucketSeconds))
+        let buckets = await repo.hrBuckets(from: LNum.int(from), to: LNum.int(to), bucketSeconds: max(1, bucketSeconds))
         return buckets.map { LHRPoint(t: Double($0.ts), bpm: $0.bpm, lo: $0.minBpm, hi: $0.maxBpm) }
     }
 
     func hrvSeries(from: Double, to: Double) async -> [LPoint] {
         guard to > from else { return [] }
-        let series = await repo.timelineSeries(metric: .hrv, from: Int(from), to: Int(to))
+        let series = await repo.timelineSeries(metric: .hrv, from: LNum.int(from), to: LNum.int(to))
         return series.points.map { LPoint(t: $0.date.timeIntervalSince1970, v: $0.value) }
     }
 
     func route(for workout: LWorkout) async -> [LCoord] {
-        guard let route = RouteStore.load(startTs: Int(workout.start), sport: workout.sport) else { return [] }
+        guard let route = RouteStore.load(startTs: LNum.int(workout.start), sport: workout.sport) else { return [] }
         return RouteMath.decode(route.polyline).map { LCoord(lat: $0.lat, lon: $0.lon) }
     }
 
@@ -249,7 +249,7 @@ final class LumaRepoSource: LumaDataSource {
     }
 
     func heartRateRecovery(for workout: LWorkout, maxHR: Double) async -> LHRRecovery? {
-        guard let result = await repo.workoutHeartRateRecovery(from: Int(workout.start), to: Int(workout.end), maxHR: maxHR,
+        guard let result = await repo.workoutHeartRateRecovery(from: LNum.int(workout.start), to: LNum.int(workout.end), maxHR: maxHR,
                                                                source: workout.source), result.hasMeasurement else { return nil }
         return LHRRecovery(endHR: Double(result.endHR), drop1: result.after1Minute.map { Double($0) },
                            drop2: result.after2Minutes.map { Double($0) })

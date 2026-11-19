@@ -213,10 +213,15 @@ struct NightRecordNote: View {
 struct DataCheckScreen: View {
     @EnvironmentObject private var env: LumaEnv
     @EnvironmentObject private var live: LumaLive
+    @EnvironmentObject private var router: LumaRouter
     @State private var facts: [LFact] = []
 
     /// The moment the record on screen was read.
     private var asOf: Double { env.recordReadAt ?? Date().timeIntervalSince1970 }
+
+    /// The readings listed under their own headings: what the strap layer and iOS report, then how
+    /// the athlete's own records came off the disk.
+    private var shown: [LFact] { facts + env.storeFacts }
 
     private var ownFacts: [LFact] {
         var out: [LFact] = []
@@ -228,7 +233,7 @@ struct DataCheckScreen: View {
 
     private var report: String {
         RecordReport.text(version: env.versionLine, now: asOf, stretches: env.record, night: env.analysis.night, sleeps: env.sleeps,
-                          days: env.days, marks: env.nightMarks, facts: ownFacts + facts)
+                          days: env.days, marks: env.nightMarks, facts: ownFacts + shown)
     }
 
     var body: some View {
@@ -283,7 +288,13 @@ struct DataCheckScreen: View {
             ForEach(sections, id: \.self) { section in
                 LumaSection(title: section)
                 LumaGroup {
-                    ForEach(facts.filter { $0.section == section }) { f in fact(f.label, f.value) }
+                    ForEach(shown.filter { $0.section == section }) { f in fact(f.label, f.value) }
+                    if section == "Your records" {
+                        Button { router.push(.backups) } label: {
+                            LumaRow(symbol: "clock.arrow.circlepath", symbolColor: Luma.sky, title: "Copies of your records", chevron: true)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
 
@@ -292,7 +303,7 @@ struct DataCheckScreen: View {
             Button("Read everything again") { env.reload() }.buttonStyle(LumaSecondaryButtonStyle())
             LumaNote("The report is plain text: the times, counts and figures on this screen. It goes only where you send it.")
         }
-        .task(id: "\(Int(asOf))|\(live.strap.connected)|\(live.strap.syncing)") { facts = await env.source.facts() }
+        .task(id: "\(LNum.int(asOf))|\(live.strap.connected)|\(live.strap.syncing)") { facts = await env.source.facts() }
     }
 
     /// What is known about the record behind last night. A night nothing covers is said to be that,
@@ -309,7 +320,7 @@ struct DataCheckScreen: View {
     /// Fact headings in the order they first appear.
     private var sections: [String] {
         var seen: [String] = []
-        for f in facts where !seen.contains(f.section) { seen.append(f.section) }
+        for f in shown where !seen.contains(f.section) { seen.append(f.section) }
         return seen
     }
 

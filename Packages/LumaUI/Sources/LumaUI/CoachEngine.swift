@@ -94,6 +94,13 @@ public final class CoachEngine: ObservableObject {
         config.timeoutIntervalForRequest = 120
         config.timeoutIntervalForResource = 600
         session = URLSession(configuration: config)
+        readStored()
+    }
+
+    /// The conversation, the coach's notes and today's brief, as they are on disk. Left alone while an
+    /// answer is being written.
+    func readStored() {
+        guard !working else { return }
         messages = env.disk.load([CoachMessage].self, "coach-thread.json") ?? []
         notes = env.disk.load([String].self, "coach-notes.json") ?? []
         if let saved = env.disk.load([String].self, "coach-brief.json"), saved.count == 2 { briefDay = saved[0]; brief = saved[1] }
@@ -108,7 +115,7 @@ public final class CoachEngine: ObservableObject {
         let a = env.analysis
         var opening = a.call.title + "."
         if let night = a.lastNight, let r = night.recovery {
-            opening = "Recovery is \(Int(r.rounded()))%" + (night.sleepMin.map { " after \(LFormat.hm(minutes: $0)) of sleep." } ?? ".")
+            opening = "Recovery is \(LNum.int(r.rounded()))%" + (night.sleepMin.map { " after \(LFormat.hm(minutes: $0)) of sleep." } ?? ".")
         }
         brief = opening + " " + a.call.body + " Eat to your carbohydrate target around training and aim for lights out by 22:30."
         let lunch = env.fuel.last { $0.kind == .meal && $0.source == .photo }
@@ -329,7 +336,7 @@ public final class CoachEngine: ObservableObject {
             return Outcome(result: "Noted.", card: .note(fact))
         case .logWorkout(let workout):
             env.saveWorkout(workout)
-            return Outcome(result: "Logged \(workout.sport), \(Int(workout.durationS / 60)) min on \(workout.day).", card: .done("Logged \(workout.sport), \(Int(workout.durationS / 60)) min"))
+            return Outcome(result: "Logged \(workout.sport), \(LNum.int(workout.durationS / 60)) min on \(workout.day).", card: .done("Logged \(workout.sport), \(LNum.int(workout.durationS / 60)) min"))
         case .logStrength(let s):
             env.save(s)
             return Outcome(result: "Logged \(s.title) on \(s.day) with \(s.exercises.count) movements.", card: .done("Logged \(s.title)"))

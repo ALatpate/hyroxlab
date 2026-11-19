@@ -117,7 +117,7 @@ struct WorkoutScreen: View {
     }
 
     /// The spacing of the heart-rate trace: about 120 readings across the session, never finer than 15 s.
-    private static func bucketSeconds(_ w: LWorkout) -> Int { max(15, Int(w.durationS / 120)) }
+    private static func bucketSeconds(_ w: LWorkout) -> Int { max(15, LNum.int(w.durationS / 120)) }
 
     /// Time in each zone: what was stored with the session or, for one kept or logged after the fact,
     /// what the strap's heart-rate record for that time says.
@@ -211,7 +211,7 @@ struct SessionReportView: View {
                                 if let d = r.driftVsFirstS, r.index > 1 {
                                     Text(String(format: "%+.0f s vs run 1", d)).font(LumaFont.body(12.5)).foregroundStyle(d > 12 ? Luma.amber : Luma.mist)
                                 }
-                                if let hr = r.avgHR { Text("\(Int(hr.rounded()))").font(LumaFont.numeral(16, .medium)).foregroundStyle(Luma.coral).frame(width: 34, alignment: .trailing) }
+                                if let hr = r.avgHR { Text("\(LNum.int(hr.rounded()))").font(LumaFont.numeral(16, .medium)).foregroundStyle(Luma.coral).frame(width: 34, alignment: .trailing) }
                             }
                         }
                         if let drift = report.hrDriftBpm {
@@ -231,7 +231,7 @@ struct SessionReportView: View {
                                     .frame(width: 32, height: 32).background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Luma.volt.opacity(0.13)))
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(st.station.title).font(LumaFont.body(15, .medium)).foregroundStyle(Luma.frost)
-                                    if let kg = st.loadKg, kg > 0 { Text("\(Int(kg)) kg").font(LumaFont.body(12)).foregroundStyle(Luma.smoke) }
+                                    if let kg = st.loadKg, kg > 0 { Text("\(LNum.int(kg)) kg").font(LumaFont.body(12)).foregroundStyle(Luma.smoke) }
                                 }
                                 Spacer()
                                 VStack(alignment: .trailing, spacing: 1) {
@@ -279,7 +279,7 @@ struct RaceReadinessScreen: View {
                     let load = st.loadKg(format: env.profile.format, sex: env.profile.sex)
                     let best = env.benchmarks.bestStationS(st, loadKg: load)
                     LumaRow(symbol: st.symbol, symbolColor: best == nil ? Luma.smoke : Luma.volt, title: st.title,
-                            subtitle: load > 0 ? st.measure.label + " · \(Int(load)) kg" : st.measure.label) {
+                            subtitle: load > 0 ? st.measure.label + " · \(LNum.int(load)) kg" : st.measure.label) {
                         Text(best.map { LumaText.duration($0) } ?? "Not yet").font(LumaFont.numeral(20)).foregroundStyle(best == nil ? Luma.smoke : Luma.frost)
                     }
                 }
@@ -351,7 +351,7 @@ struct ReadinessCard: View {
                 HStack(spacing: 8) {
                     LumaLabel("Evidence")
                     LumaBar(value: readiness.confidence, total: 1, color: color, height: 5)
-                    Text("\(Int((readiness.confidence * 100).rounded()))%").font(LumaFont.numeral(15, .semibold)).foregroundStyle(Luma.mist)
+                    Text("\(LNum.int((readiness.confidence * 100).rounded()))%").font(LumaFont.numeral(15, .semibold)).foregroundStyle(Luma.mist)
                 }
                 ForEach(readiness.gaps.prefix(3), id: \.self) { gap in
                     HStack(alignment: .firstTextBaseline, spacing: 8) {

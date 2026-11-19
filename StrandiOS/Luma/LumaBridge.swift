@@ -51,6 +51,8 @@ final class LumaBridge: ObservableObject, LumaDeviceControl {
         env.device = self
         env.recorder = recorder
         source.linkFacts = { [weak self] in self?.linkFacts() ?? [] }
+        // What iOS reports about the app stopping is kept on the phone, for the data check.
+        LumaCrashLog.shared.start()
         Self.settleEarlierShell()
         retireEarlierAutomations()
         adoptStrapProfileIfNew()
@@ -121,7 +123,8 @@ final class LumaBridge: ObservableObject, LumaDeviceControl {
     /// Before Luma's own setup has run, start from what the strap layer already knows about the
     /// athlete, so nothing has to be typed twice.
     private func adoptStrapProfileIfNew() {
-        guard !env.profile.isSetUp else { return }
+        // Only for someone with no details of their own, never while their details could not be read.
+        guard env.storesReady, !env.profile.isSetUp else { return }
         var p = env.profile
         let known = model.profile
         p.sex = known.sex == "female" ? .female : .male
@@ -179,6 +182,20 @@ final class LumaBridge: ObservableObject, LumaDeviceControl {
             .store(in: &bag)
         applyCapture()
 
+        // The athlete's records could not be read when Luma was started (the phone was locked): read
+        // them the moment the phone says its files are open again, and pick up from there.
+        NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.env.retryStores() }
+            .store(in: &bag)
+        env.$storesReady.removeDuplicates().dropFirst().filter { $0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.adoptStrapProfileIfNew()
+                self?.publishGlance()
+            }
+            .store(in: &bag)
+
         // Widgets and the Lock Screen card.
         env.onGlanceChange = { [weak self] in self?.publishGlance() }
         // Reminders ask iOS for leave the first time one is switched on.
@@ -203,6 +220,7 @@ final class LumaBridge: ObservableObject, LumaDeviceControl {
         if UIApplication.shared.alternateIconName != nil {
             UIApplication.shared.setAlternateIconName(nil, completionHandler: nil)
         }
+        env.retryStores()
         env.reload()
         refreshStrap()
         publishGlance()
@@ -316,7 +334,7 @@ final class LumaBridge: ObservableObject, LumaDeviceControl {
     }
 
     func pair(_ strap: LumaFoundStrap, generation: LumaStrapGeneration) {
-        let now = Int(Date().timeIntervalSince1970)
+        let now = LNum.int(Date().timeIntervalSince1970)
         let label = generation == .four ? "4.0" : "5.0 MG"
         let device = PairedDevice(id: "whoop-\(strap.id)", brand: "WHOOP", model: label, nickname: strap.name.isEmpty ? nil : strap.name,
                                   peripheralId: strap.id, sourceKind: .liveBLE,
@@ -405,7 +423,7 @@ final class LumaBridge: ObservableObject, LumaDeviceControl {
         if known.sex != sex { known.sex = sex }
         if known.weightKg != profile.weightKg { known.weightKg = profile.weightKg }
         if known.heightCm != profile.heightCm { known.heightCm = profile.heightCm }
-        let maxHR = Int((profile.maxHR ?? 0).rounded())
+        let maxHR = LNum.int((profile.maxHR ?? 0).rounded())
         if known.hrMaxOverride != maxHR { known.hrMaxOverride = maxHR }
         let calendar = Calendar.current
         if calendar.component(.year, from: known.dateOfBirth) != profile.birthYear,
@@ -452,7 +470,7 @@ final class LumaBridge: ObservableObject, LumaDeviceControl {
         let bpm: Int? = model.bpm ?? state.heartRate
         out.append(LFact(link, "Heart rate now", bpm.map { "\($0) bpm" } ?? "none arriving"))
         out.append(LFact(link, "On wrist", yes(state.worn)))
-        out.append(LFact(link, "Battery", state.batteryPct.map { "\(Int($0.rounded()))%" } ?? "not reported"))
+        out.append(LFact(link, "Battery", state.batteryPct.map { "\(LNum.int($0.rounded()))%" } ?? "not reported"))
         out.append(LFact(link, "Firmware", state.strapFirmware ?? "not reported"))
         out.append(LFact(link, "Model", activeDevice?.model ?? "none"))
 
@@ -468,12 +486,16 @@ final class LumaBridge: ObservableObject, LumaDeviceControl {
         out.append(LFact(lock, "Live Activities allowed in iOS", yes(ActivityAuthorizationInfo().areActivitiesEnabled)))
         out.append(LFact(lock, "Cards on the Lock Screen now", String(Activity<NOOPActivityAttributes>.activities.count)))
         out.append(LFact(lock, "Widget figures last written", lastGlance.map { stamp($0.updated.timeIntervalSince1970) } ?? "not in this run"))
+        out.append(contentsOf: LumaCrashLog.shared.facts(stamp: stamp))
         return out
     }
 
     // MARK: Widgets and the Lock Screen
 
     private func publishGlance() {
+        // With the athlete's records unread, what Luma holds is not theirs: the widgets and the Lock
+        // Screen card keep what was last written, and no reminder is planned or cleared.
+        guard env.storesReady else { return }
         // First, whatever a widget button or a shortcut logged since the app last ran: the glance about
         // to be written must hold it, or the widget that was tapped would step back.
         env.applyQuickLog()
@@ -489,6 +511,16 @@ final class LumaBridge: ObservableObject, LumaDeviceControl {
     /// The day's scores as every other Luma surface shows them, the athlete's own zone for the reading,
     /// and the session being recorded, if any.
     private func decorate(_ state: inout NOOPActivityAttributes.ContentState) {
+        guard env.storesReady else {
+            // The figures last written for the widgets stand in; no zone is worked out from details
+            // that are not the athlete's.
+            if let kept = lastGlance ?? LumaGlanceStore.load(), kept.isCurrent() {
+                state.recovery = kept.recovery
+                state.sleep = kept.sleepScore
+                state.strainText = kept.strainText
+            }
+            return
+        }
         let glance = lastGlance ?? env.glance()
         lastGlance = glance
         let current = glance.isCurrent()
@@ -514,13 +546,22 @@ final class LumaBridge: ObservableObject, LumaDeviceControl {
     /// Opens what a widget, the Lock Screen card or a shortcut points at.
     func open(_ url: URL) {
         guard url.host == "luma" else { return }
+        // A link is followed by someone holding an unlocked phone, so the records can be read by now.
+        env.retryStores()
+        guard env.storesReady else { return }
         env.router.open(link: url.pathComponents.dropFirst().first ?? "today")
     }
 
-    func askCoach(_ question: String) { env.router.askCoach(question) }
+    func askCoach(_ question: String) {
+        env.retryStores()
+        guard env.storesReady else { return }
+        env.router.askCoach(question)
+    }
 
     /// A Home Screen quick action (a long press on the app icon).
     func open(_ action: HomeScreenQuickAction) {
+        env.retryStores()
+        guard env.storesReady else { return }
         switch action {
         case .startWorkout: env.router.open(link: "go")
         case .liveHeartRate: env.router.open(link: "heart")
@@ -587,7 +628,7 @@ final class LumaWorkoutRecorder: LumaRecorder {
 
     func finish() async -> LWorkout? {
         guard let workout = model.activeWorkout else { return nil }
-        let start = Int(workout.start.timeIntervalSince1970), sport = workout.sport
+        let start = LNum.int(workout.start.timeIntervalSince1970), sport = workout.sport
         defer { gps = false; onChange?() }
         if AppModel.isTooShortToSave(elapsedSeconds: workout.elapsed()) {
             model.discardWorkout()

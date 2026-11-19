@@ -48,6 +48,8 @@ public struct LumaRootView: View {
                 .ignoresSafeArea(.keyboard, edges: .bottom)
         }
         .overlay(alignment: .top) { celebration }
+        // While the athlete's records cannot be opened, nothing behind this can be reached.
+        .overlay { if !env.storesReady { LumaHoldingScreen() } }
         .background(Luma.night.ignoresSafeArea())
         // Text sized from the system setting is measured again when that setting changes.
         .id(textSize)
@@ -75,18 +77,102 @@ public struct LumaRootView: View {
         }
         .task {
             env.isInFront = scenePhase != .background
+            env.retryStores()
             env.reload()
             LumaRoute.apply(launch.screen, env: env)
-            if launch.screen == nil, !env.profile.isSetUp { router.cover = .onboarding }
+            offerSetup()
             await signalReady()
         }
+        .onChange(of: env.storesReady) { _, ready in if ready { offerSetup() } }
         // Coming back on screen reloads, so anything held back while the app was out of sight (the
         // search for unrecorded sessions) runs for the person now looking.
         .onChange(of: scenePhase) { _, phase in
+            // A phone that was locked when Luma was started is unlocked by now.
+            if phase == .active { env.retryStores() }
             let front = phase != .background
             guard front != env.isInFront else { return }
             env.isInFront = front
             if front { env.reload() }
+        }
+    }
+
+    /// The first-run screens are for someone whose details are not there, never for someone whose
+    /// details could not be read: asking for them again then ends with the real ones saved over.
+    private func offerSetup() {
+        guard launch.screen == nil, env.storesReady, !env.profile.isSetUp, router.cover == nil else { return }
+        router.cover = .onboarding
+    }
+}
+
+/// Shown in place of the app while the athlete's records cannot be opened, which is what happens
+/// when the strap starts Luma while the phone is locked. It clears by itself the moment they can be.
+struct LumaHoldingScreen: View {
+    @EnvironmentObject private var env: LumaEnv
+    @State private var tries = 0
+    @State private var asking = false
+
+    /// Still unread after several tries with the phone unlocked: not the lock, so say what and offer the way on.
+    private var stuck: Bool {
+        if env.isDemo { return env.demoScenario == "stuck" }
+        return tries >= 3 && !env.storesSealed
+    }
+
+    var body: some View {
+        ZStack {
+            LumaBackdrop(tone: .neutral, strength: 0.7)
+            VStack(spacing: 14) {
+                Image(systemName: stuck ? "exclamationmark.triangle" : "lock.open")
+                    .font(.system(size: 26, weight: .medium))
+                    .foregroundStyle(stuck ? Luma.amber : Luma.mist)
+                    .frame(width: 64, height: 64)
+                    .background(Circle().fill(Color.white.opacity(0.06)))
+                Text(stuck ? "Some of your records will not open" : "Opening your records")
+                    .font(LumaFont.title(24)).foregroundStyle(Luma.frost).multilineTextAlignment(.center)
+                Text(stuck
+                     ? "Luma could not read these, though the phone is unlocked. Nothing has been changed or deleted."
+                     : "Luma was started while your phone was locked and could not read what you have logged. Nothing is lost. This clears by itself in a moment.")
+                    .font(LumaFont.body(15)).foregroundStyle(Luma.mist).multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                if stuck {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(env.unreadStores, id: \.self) { name in
+                            Text(name).font(LumaFont.body(14, .medium)).foregroundStyle(Luma.frost)
+                        }
+                    }
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(LumaPanel(radius: 18))
+                    Button("Try again") {
+                        LumaHaptics.tap()
+                        env.retryStores()
+                    }
+                    .buttonStyle(LumaPrimaryButtonStyle())
+                    Button("Start without them") { asking = true }
+                        .buttonStyle(LumaSecondaryButtonStyle())
+                    Text("Starting without them moves those files aside on this phone and uses the last copy Luma kept of each. The files are not deleted.")
+                        .font(LumaFont.body(12.5)).foregroundStyle(Luma.smoke).multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    ProgressView().tint(Luma.mist).padding(.top, 4)
+                }
+            }
+            .padding(.horizontal, 28)
+        }
+        // Nothing underneath can be touched through this.
+        .contentShape(Rectangle())
+        .task {
+            // Tried again every second and a half while this is up.
+            while !Task.isCancelled, !env.storesReady {
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                env.retryStores()
+                tries += 1
+            }
+        }
+        .confirmationDialog("Start without these records?", isPresented: $asking, titleVisibility: .visible) {
+            Button("Start without them", role: .destructive) { env.startWithoutUnreadStores() }
+            Button("Keep trying", role: .cancel) {}
+        } message: {
+            Text("The files are moved aside, not deleted, and the last copy Luma kept of each is used.")
         }
     }
 }
@@ -225,6 +311,7 @@ struct LumaDestinationView: View {
         case .profile: ProfileScreen()
         case .about: AboutScreen()
         case .dataCheck: DataCheckScreen()
+        case .backups: BackupsScreen()
         case .buddy: BuddyScreen()
         case .trials: TrialsScreen()
         case .trial(let id): TrialScreen(id: id)
@@ -324,6 +411,7 @@ enum LumaRoute {
         case "you.profile": r.open(.today, .profile)
         case "you.about": r.open(.today, .about)
         case "you.datacheck": r.open(.today, .dataCheck)
+        case "you.backups": r.open(.today, .backups)
         case "sheet.go": r.sheet = .go
         case "sheet.you": r.sheet = .you
         case "sheet.checkin": r.sheet = .checkIn(today)

@@ -63,13 +63,13 @@ public enum WeekDigest {
         let planned = schedule.flatMap { d in d.planned.filter { $0.kind != .rest && $0.status != .skipped } }
         let done = schedule.reduce(0) { n, d in n + d.planned.filter { $0.kind != .rest && d.isDone($0) }.count + d.unplannedWorkouts.count }
         out.append(ReviewFigure(label: "Sessions", value: planned.isEmpty ? "\(done)" : "\(done) of \(max(planned.count, done)) planned"))
-        if let r = LStat.mean(week.compactMap { $0.recovery }) { out.append(ReviewFigure(label: "Recovery", value: "\(Int(r.rounded()))% average")) }
+        if let r = LStat.mean(week.compactMap { $0.recovery }) { out.append(ReviewFigure(label: "Recovery", value: "\(LNum.int(r.rounded()))% average")) }
         if let s = LStat.mean(week.compactMap { $0.sleepMin }) { out.append(ReviewFigure(label: "Sleep", value: LFormat.hm(minutes: s) + " a night")) }
         if let s = LStat.mean(week.compactMap { $0.strain }) { out.append(ReviewFigure(label: "Strain", value: LScale.text(s, on21: profile.strainOn21) + " a day")) }
         let byDay = Dictionary(grouping: fuel, by: { $0.day })
         let usable = keys.filter { TrainingProgress.isUsable(byDay[$0] ?? []) }
         if usable.count >= 3, let p = LStat.mean(usable.map { FuelTotals.of(byDay[$0] ?? []).proteinG }) {
-            out.append(ReviewFigure(label: "Protein", value: "\(Int(p.rounded())) g a day of \(Int(FuelPlanner.proteinTarget(profile)))"))
+            out.append(ReviewFigure(label: "Protein", value: "\(LNum.int(p.rounded())) g a day of \(LNum.int(FuelPlanner.proteinTarget(profile)))"))
         }
         return out
     }
@@ -86,31 +86,31 @@ public enum WeekDigest {
             let key = LDate.adding(i, to: weekStart, calendar: calendar)
             var parts: [String] = []
             if let d = byDay[key] {
-                if let r = d.recovery { parts.append("recovery \(Int(r.rounded()))%") }
+                if let r = d.recovery { parts.append("recovery \(LNum.int(r.rounded()))%") }
                 if let s = d.sleepMin { parts.append("slept \(LFormat.hm(minutes: s))") }
                 if let s = d.strain { parts.append("strain \(String(format: "%.1f", LScale.strain21(s)))") }
-                if let h = d.hrv { parts.append("HRV \(Int(h.rounded())) ms") }
+                if let h = d.hrv { parts.append("HRV \(LNum.int(h.rounded())) ms") }
             }
             if let day = schedule.first(where: { $0.day == key }) {
                 for p in day.planned where p.kind != .rest {
                     parts.append("\(p.title) \(p.durationMin) min \(p.intensity.rawValue): \(day.isDone(p) ? "done" : (p.status == .skipped ? "skipped" : "not done"))")
                 }
-                for w in day.unplannedWorkouts { parts.append("\(w.kind == .other ? w.sport : w.kind.title) \(Int(w.durationS / 60)) min (unplanned)") }
+                for w in day.unplannedWorkouts { parts.append("\(w.kind == .other ? w.sport : w.kind.title) \(LNum.int(w.durationS / 60)) min (unplanned)") }
                 for log in day.logs { parts.append("logged \(log.title): \(log.doneSets) sets") }
             }
             let entries = foodByDay[key] ?? []
             if TrainingProgress.isUsable(entries) {
                 let t = FuelTotals.of(entries)
-                parts.append("ate \(Int(t.kcal.rounded())) kcal, protein \(Int(t.proteinG.rounded())) g, carbs \(Int(t.carbsG.rounded())) g")
-                if t.alcoholG > 0 { parts.append("alcohol \(Int(t.alcoholG.rounded())) g") }
+                parts.append("ate \(LNum.int(t.kcal.rounded())) kcal, protein \(LNum.int(t.proteinG.rounded())) g, carbs \(LNum.int(t.carbsG.rounded())) g")
+                if t.alcoholG > 0 { parts.append("alcohol \(LNum.int(t.alcoholG.rounded())) g") }
             }
             lines.append("\(names[i]) \(key): " + (parts.isEmpty ? "no data" : parts.joined(separator: "; ")))
         }
         lines.append("")
-        lines.append("Protein target \(Int(FuelPlanner.proteinTarget(profile))) g a day.")
+        lines.append("Protein target \(LNum.int(FuelPlanner.proteinTarget(profile))) g a day.")
         let moved = progress.lifts.filter { $0.trend != nil && $0.trend != .steady }
         for lift in moved.prefix(8) {
-            let pct = Int(((lift.change ?? 0) * 100).rounded())
+            let pct = LNum.int(((lift.change ?? 0) * 100).rounded())
             lines.append("\(lift.name): \(lift.figure), \(pct >= 0 ? "+" : "")\(pct)% against the six weeks before.")
         }
         for note in progress.weakPoints.prefix(3) { lines.append("Weak point: \(note.title). \(note.detail)") }
@@ -269,7 +269,7 @@ public enum ReminderPlanner {
         }
         if kinds.contains(.protein), f.foodEntries > 0, f.proteinTarget > 0, f.proteinG < f.proteinTarget * 0.5 {
             add(.protein, f.today, at(16 * 60 + 30), "Protein is behind",
-                "\(Int(f.proteinG.rounded())) g of \(Int(f.proteinTarget.rounded())) so far. Two protein meals still fit in today.")
+                "\(LNum.int(f.proteinG.rounded())) g of \(LNum.int(f.proteinTarget.rounded())) so far. Two protein meals still fit in today.")
         }
         if kinds.contains(.bedtime), let lights = f.bedtimeTonight {
             add(.bedtime, f.today, night.addingTimeInterval((lights - 30) * 60), "Half an hour to lights out",

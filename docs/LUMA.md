@@ -175,6 +175,49 @@ bridge implements them:
   keychain service, the `noop` URL scheme, widget kinds and `NOOPActivityAttributes` keep their names:
   renaming any of them orphans data or placed widgets on an installed phone. Only text a person reads
   says Luma. Luma's own files live under `Application Support/HYROXLab/` for the same reason.
+- **A record that could not be read is not an empty one.** What the athlete logs (their details,
+  food, training, weigh-ins, the coach's conversation) is kept by `LumaVault` (LumaCore) as small
+  files under `Application Support/HYROXLab/`. The strap starts the app in the background, often
+  while the phone is locked, and a locked phone refuses to open files of the default class. Taking
+  such a file for an empty one ended with the first-run screens shown to someone already set up and
+  the real file saved over. So every read ends in one of five states (`VaultRead`): read, nothing
+  saved yet, could not be read (`blocked`), could not be understood with a copy standing in, or with
+  none. While any store is `blocked`, `LumaEnv.storesReady` is false: the app shows a holding screen
+  in place of its interface, saves nothing (the vault refuses a store it has not read), writes no
+  glance for the widgets, plans no reminder, and offers no setup. It reads again when iOS says the
+  files are open, when the app comes to the front, and every second and a half while the holding
+  screen is up. The files are also given the class that stays readable after the first unlock
+  (`protect`), which a locked phone will not allow, so it is asked for at every read. A file that
+  cannot be read with the phone unlocked can be moved aside (never deleted) from the holding screen.
+- **One bad save is not the only copy.** Under `Backups/` the vault keeps a set for each of the last
+  fourteen days a store was saved. A day's set is every store as it stood at the end of that day, not
+  only what was saved on it: the first save of a day fills in the last day's set before changing
+  anything. A save that would leave under half of a file keeps the file as a set of its own, and what
+  is there before the first copy is kept as found. **Settings, Copies of your records** goes back to
+  a set; what is there is kept first, so going back can be undone. A store a set does not hold is left
+  as it is: nothing is deleted by going back. The vault logs what happens to the records in its own
+  marker file, and the data check shows the log.
+- **A row is reached by its id.** `ForEach($items)` hands each row a binding by position, and removing
+  a row while a view still holds its binding asks for a position that is gone, which stops the app.
+  Lists that can lose a row use `Binding.element(_:)`, which answers with the element as it last was.
+- **A whole number is made with `LNum.int`** (`whole` in `LumaKit`), never `Int(x)` on a figure that
+  was measured or divided: `Int` of a figure that is not a number stops the app, and one bad reading
+  can make a figure that.
+- **The whole of a control takes the tap.** A plain button around an icon in a frame is only as wide
+  as the icon's glyph unless it is given a shape (`contentShape`); a minus sign is two points tall.
+  Steppers use `LumaStepButton`, which also goes on stepping while held.
+- **A field being typed in is above the keyboard.** SwiftUI moves content out of the keyboard's way
+  in most places and not in all. `lumaKeyboardRoom` measures how much of a page or sheet the keyboard
+  still covers after SwiftUI has had its turn and adds only that, and `LumaKeyboard` scrolls the
+  field into view if it is still hidden. Where SwiftUI has done the whole job both come to nothing,
+  so neither can move a screen twice.
+- **A set counts what the movement is counted in.** A lift counts reps at a load; a SkiErg, a rower,
+  a bike, a run or a carry counts metres, time or calories (`ExerciseInfo.counts`,
+  `LiftExercise.measure`). A movement with no load is never asked for a weight, and one read with
+  nothing counted is asked for its amount in its own measure. What is typed is read by `AmountText`.
+- **What iOS says about a stop is kept on the phone.** `LumaCrashLog` keeps what MetricKit delivers
+  (a crash or a freeze with its frames, and the day's count of how the app was ended) for the data
+  check. It is sent nowhere; the athlete can send the report.
 - **The upstream credit stays.** About carries the open-source licence credit the licence requires.
 - **What the earlier shell did on its own is not left running.** Its first-run screens, update check,
   coach and banners are marked settled, and automations with no Luma screen (alarm, reminders, haptic
@@ -244,6 +287,13 @@ timeline on the Lock Screen, whether the tap is answered within a second, and wh
 widget's refresh budget. The gallery draws the same views still (`dev.buddy`, `dev.buddy.builds`).
 Notifications, Siri phrases and the widget's water button are likewise only exercised on a phone. A change is not verified on hardware until someone says
 what they tried.
+
+The gallery also photographs screens as they are while being typed in: a list line can name a field
+that takes the keyboard as the screen opens and text already in the coach's box
+(`name|screen|scroll|data|wait|focus|draft`), and `Tools/luma_screens.sh` makes the simulator show its
+on-screen keyboard. `-lumaData locked` and `stuck` stage the holding screen. What the gallery cannot
+show is the thing the holding screen is for: an app started by the strap while the phone is locked.
+That is only seen on a phone, in **Settings, Data check**, under "Record log".
 
 Still to be confirmed on a strap: that recording all the time keeps the app receiving heart rate through
 a whole night in the background, what it costs the strap's battery, and whether a given WHOOP 5.0 or MG

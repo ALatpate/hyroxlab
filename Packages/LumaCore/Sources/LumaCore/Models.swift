@@ -36,7 +36,7 @@ public enum LDate {
     /// Whole days from `a` to `b` (positive when b is later).
     public static func daysBetween(_ a: String, _ b: String, calendar: Calendar = LDate.calendar) -> Int {
         guard let da = date(a, calendar: calendar), let db = date(b, calendar: calendar) else { return 0 }
-        return Int(((db.timeIntervalSince(da)) / 86_400).rounded())
+        return LNum.int(((db.timeIntervalSince(da)) / 86_400).rounded())
     }
 
     /// 1 = Monday … 7 = Sunday.
@@ -251,7 +251,7 @@ public enum LScale {
 
 public enum LFormat {
     public static func grouped(_ v: Double) -> String {
-        let n = Int(v.rounded())
+        let n = LNum.int(v.rounded())
         var s = String(abs(n)), out = ""
         while s.count > 3 { out = "," + String(s.suffix(3)) + out; s = String(s.dropLast(3)) }
         return (n < 0 ? "-" : "") + s + out
@@ -259,19 +259,19 @@ public enum LFormat {
 
     /// "7h 42m" (or "42m" under an hour).
     public static func hm(minutes: Double) -> String {
-        let m = Int(minutes.rounded())
+        let m = LNum.int(minutes.rounded())
         return m >= 60 ? "\(m / 60)h \(String(format: "%02d", m % 60))m" : "\(m)m"
     }
 
     /// "7:42" hours:minutes.
     public static func clock(minutes: Double) -> String {
-        let m = Int(minutes.rounded())
+        let m = LNum.int(minutes.rounded())
         return "\(m / 60):\(String(format: "%02d", m % 60))"
     }
 
     /// Minutes after local midnight (may exceed 1440 or be negative) → "23:10".
     public static func timeOfDay(minutes: Double) -> String {
-        var m = Int(minutes.rounded()) % 1440
+        var m = LNum.int(minutes.rounded()) % 1440
         if m < 0 { m += 1440 }
         return String(format: "%d:%02d", m / 60, m % 60)
     }
@@ -334,7 +334,7 @@ public struct LSleep: Codable, Equatable, Sendable, Identifiable {
 // MARK: - Workouts and series
 
 public struct LWorkout: Codable, Equatable, Sendable, Identifiable {
-    public var id: String { "\(Int(start))|\(sport)" }
+    public var id: String { "\(LNum.int(start))|\(sport)" }
     /// Unix seconds.
     public var start: Double
     public var end: Double
@@ -382,7 +382,7 @@ public struct LSuggestedSession: Codable, Equatable, Hashable, Sendable, Identif
         self.start = start; self.end = end; self.avgHR = avgHR; self.peakHR = peakHR
     }
 
-    public var id: String { "\(Int(start)):\(Int(end))" }
+    public var id: String { "\(LNum.int(start)):\(LNum.int(end))" }
     public var durationS: Double { max(0, end - start) }
     public var day: String { LDate.key(Date(timeIntervalSince1970: start)) }
 }

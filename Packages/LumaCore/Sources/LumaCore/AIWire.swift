@@ -65,7 +65,7 @@ public enum JSONValue: Equatable, Sendable, Codable {
         default: return nil
         }
     }
-    public var int: Int? { number.map { Int($0.rounded()) } }
+    public var int: Int? { number.map { LNum.int($0.rounded()) } }
 }
 
 extension JSONValue: ExpressibleByStringLiteral, ExpressibleByFloatLiteral, ExpressibleByIntegerLiteral, ExpressibleByBooleanLiteral,

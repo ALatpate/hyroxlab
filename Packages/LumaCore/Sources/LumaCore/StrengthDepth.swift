@@ -105,7 +105,7 @@ public enum StrengthDepth {
         for lift in progress.lifts where lift.trend == .steady {
             let recent = lift.points.filter { LDate.daysBetween($0.day, today, calendar: calendar) < TrainingProgress.trendDays }.count
             guard recent >= stallSessions, let now = lift.recentBest else { continue }
-            let detail = "at about \(Int(now.rounded())) kg estimated max for twelve weeks, over \(recent) sessions in the last six."
+            let detail = "at about \(LNum.int(now.rounded())) kg estimated max for twelve weeks, over \(recent) sessions in the last six."
             out.append(StalledLift(name: lift.name, sessions: recent, text: "\(lift.name) has stayed \(detail)", detail: "Has stayed \(detail)"))
         }
         return out.sorted { $0.sessions > $1.sessions }
@@ -148,7 +148,7 @@ public enum EaseOff {
         let hard = planned.filter { $0.day == today && $0.status == .planned && $0.intensity == .hard && $0.kind != .rest && !settled.contains($0.id) }
             .sorted { ($0.startMinutes ?? 0) < ($1.startMinutes ?? 0) }
         guard let session = hard.first else { return nil }
-        let reason = "Recovery was \(Int(before.rounded()))% yesterday and \(Int(now.rounded()))% today."
+        let reason = "Recovery was \(LNum.int(before.rounded()))% yesterday and \(LNum.int(now.rounded()))% today."
         return EaseOffer(session: session, eased: eased(session), reason: reason)
     }
 
@@ -157,7 +157,7 @@ public enum EaseOff {
     public static func eased(_ p: PlannedSession) -> PlannedSession {
         var e = p
         e.intensity = .easy
-        e.durationMin = max(20, Int((Double(p.durationMin) * 0.75 / 5).rounded()) * 5)
+        e.durationMin = max(20, LNum.int((Double(p.durationMin) * 0.75 / 5).rounded()) * 5)
         e.targetPaceSPerKm = nil
         let note = "Eased after two low-recovery days: keep it conversational and leave the top sets."
         e.detail = p.detail.isEmpty ? note : note + " " + p.detail

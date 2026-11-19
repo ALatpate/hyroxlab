@@ -196,14 +196,14 @@ struct DayStepper: View {
             Button {
                 LumaHaptics.select()
                 day = LDate.adding(-1, to: day)
-            } label: { Image(systemName: "chevron.left").font(.system(size: 14, weight: .bold)).frame(width: 40, height: 40) }
+            } label: { Image(systemName: "chevron.left").font(.system(size: 14, weight: .bold)).frame(width: 40, height: 40).contentShape(Rectangle()) }
             .disabled(earliest.map { day <= $0 } ?? true)
             Text(LumaText.dayTitle(day, today: today)).font(LumaFont.heading(15)).foregroundStyle(Luma.frost)
                 .frame(maxWidth: .infinity)
             Button {
                 LumaHaptics.select()
                 day = LDate.adding(1, to: day)
-            } label: { Image(systemName: "chevron.right").font(.system(size: 14, weight: .bold)).frame(width: 40, height: 40) }
+            } label: { Image(systemName: "chevron.right").font(.system(size: 14, weight: .bold)).frame(width: 40, height: 40).contentShape(Rectangle()) }
             .disabled(day >= today)
         }
         .foregroundStyle(Luma.frost)

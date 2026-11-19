@@ -198,7 +198,7 @@ struct DriversScreen: View {
         if read.loggedNights >= DriverModel.minimumLogged { text += ", \(read.loggedNights) of them with a food log" }
         text += ". The dot is the effect; the band is the range it most likely lies in."
         if let r = read.leftOutR2, r > 0 {
-            text += " Tried on nights it was not fitted on, it accounts for about \(Int((r * 100).rounded()))% of how recovery moves from one morning to the next. The rest is everything it cannot see."
+            text += " Tried on nights it was not fitted on, it accounts for about \(LNum.int((r * 100).rounded()))% of how recovery moves from one morning to the next. The rest is everything it cannot see."
         }
         return text
     }
@@ -212,8 +212,8 @@ private struct ForecastCard: View {
             VStack(alignment: .leading, spacing: 8) {
                 LumaLabel("Tomorrow morning, as today stands")
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text("\(Int(forecast.value.rounded()))%").font(LumaFont.numeral(56, .heavy)).foregroundStyle(Luma.frost)
-                    Text("likely \(Int(forecast.low.rounded())) to \(Int(forecast.high.rounded()))").font(LumaFont.body(14, .medium)).foregroundStyle(Luma.mist)
+                    Text("\(LNum.int(forecast.value.rounded()))%").font(LumaFont.numeral(56, .heavy)).foregroundStyle(Luma.frost)
+                    Text("likely \(LNum.int(forecast.low.rounded())) to \(LNum.int(forecast.high.rounded()))").font(LumaFont.body(14, .medium)).foregroundStyle(Luma.mist)
                 }
                 LumaNote(forecast.basis + " An estimate from your own pattern, not a promise.")
             }

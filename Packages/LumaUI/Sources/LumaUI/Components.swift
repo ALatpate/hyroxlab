@@ -86,6 +86,8 @@ struct LumaTabScreen<Trailing: View, Content: View>: View {
                 .offset(y: -LumaLaunch.scrollOffset)
             }
             .scrollIndicators(.hidden)
+            .scrollDismissesKeyboard(.immediately)
+            .lumaKeyboardRoom()
         }
         .overlay(alignment: .top) {
             // Keeps the status bar legible when content scrolls beneath it.
@@ -116,6 +118,8 @@ struct LumaDetailScreen<Content: View>: View {
                     .offset(y: -LumaLaunch.scrollOffset)
             }
             .scrollIndicators(.hidden)
+            .scrollDismissesKeyboard(.immediately)
+            .lumaKeyboardRoom()
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -590,6 +594,7 @@ struct LumaField: View {
             .font(LumaFont.body(16))
             .foregroundStyle(Luma.frost)
             .keyboardType(keyboard)
+            .lumaAutofocus(title)
             .padding(.horizontal, 14)
             .padding(.vertical, 13)
             .background(RoundedRectangle(cornerRadius: Luma.radiusControl, style: .continuous).fill(Color.white.opacity(0.06)))
@@ -623,12 +628,77 @@ struct LumaSheet<Content: View>: View {
                         .offset(y: -LumaLaunch.scrollOffset)
                 }
                 .scrollIndicators(.hidden)
-                .scrollDismissesKeyboard(.interactively)
+                .scrollDismissesKeyboard(.immediately)
             }
+            .lumaKeyboardRoom()
         }
         .presentationDragIndicator(.visible)
         .presentationBackground(Luma.night)
     }
+}
+
+// MARK: - Lists that can lose a row
+
+extension Binding {
+    /// A binding to one element of a list, reached by its id.
+    ///
+    /// A binding reached by position (`ForEach($items)`) stops the app when its row is removed while
+    /// a view still holds it: the view asks for a position that is no longer there. This one answers
+    /// with the element as it last was, and writes nothing once the element has gone.
+    func element<Element: Identifiable>(_ item: Element) -> Binding<Element> where Value == [Element] {
+        Binding<Element>(
+            get: { wrappedValue.first { $0.id == item.id } ?? item },
+            set: { new in
+                if let i = wrappedValue.firstIndex(where: { $0.id == item.id }) { wrappedValue[i] = new }
+            })
+    }
+}
+
+// MARK: - Stepping a value
+
+/// The minus or plus of a stepper. The whole of its box takes the tap, not only the glyph, and
+/// holding it down goes on stepping.
+struct LumaStepButton: View {
+    let symbol: String
+    var width: CGFloat = 44
+    var height: CGFloat = 56
+    let label: String
+    let action: () -> Void
+
+    var body: some View {
+        Button {
+            LumaHaptics.select()
+            action()
+        } label: {
+            Image(systemName: symbol).font(.system(size: 14, weight: .bold))
+                .frame(width: width, height: height)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .buttonRepeatBehavior(.enabled)
+        .accessibilityLabel(label)
+    }
+}
+
+/// Takes the keyboard as the screen opens when the launch arguments name this field (development:
+/// a picture of a screen being typed in).
+private struct LumaAutofocus: ViewModifier {
+    let name: String
+    @FocusState private var on: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .focused($on)
+            .task {
+                guard LumaLaunch.focus == name else { return }
+                try? await Task.sleep(nanoseconds: 900_000_000)
+                on = true
+            }
+    }
+}
+
+extension View {
+    func lumaAutofocus(_ name: String) -> some View { modifier(LumaAutofocus(name: name)) }
 }
 
 // MARK: - Formatting helpers used across screens
@@ -666,14 +736,14 @@ enum LumaText {
     }
 
     static func duration(_ seconds: Double) -> String {
-        let s = Int(seconds.rounded())
+        let s = LNum.int(seconds.rounded())
         if s >= 3600 { return String(format: "%d:%02d:%02d", s / 3600, (s % 3600) / 60, s % 60) }
         return String(format: "%d:%02d", s / 60, s % 60)
     }
 
     static func pace(_ sPerKm: Double?) -> String {
         guard let p = sPerKm, p.isFinite, p > 0, p < 3600 else { return "–:––" }
-        let s = Int(p.rounded())
+        let s = LNum.int(p.rounded())
         return String(format: "%d:%02d", s / 60, s % 60)
     }
 

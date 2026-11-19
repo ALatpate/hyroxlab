@@ -114,8 +114,8 @@ private struct SuggestedSessionCard: View {
                     LumaLabel(more > 0 ? "Looks like a session · \(more) more after this" : "Looks like a session", color: Luma.volt)
                     Text("\(LumaText.dayTitle(stretch.day, today: env.today)), \(LumaText.time(stretch.start)) – \(LumaText.time(stretch.end))")
                         .font(LumaFont.heading(17)).foregroundStyle(Luma.frost)
-                    Text(LumaText.line(["\(Int((stretch.durationS / 60).rounded())) min", "average \(Int(stretch.avgHR.rounded())) bpm",
-                                        "peak \(Int(stretch.peakHR.rounded())) bpm"]))
+                    Text(LumaText.line(["\(LNum.int((stretch.durationS / 60).rounded())) min", "average \(LNum.int(stretch.avgHR.rounded())) bpm",
+                                        "peak \(LNum.int(stretch.peakHR.rounded())) bpm"]))
                         .font(LumaFont.body(13.5)).foregroundStyle(Luma.mist)
                 }
                 LumaNote(plan.map { "Your strap recorded this and nothing is logged for it. It fits \($0.title) on your calendar." }
@@ -264,7 +264,7 @@ struct PlannedCard: View {
                     }
                     Spacer(minLength: 6)
                     Button { router.sheet = .plan(session, session.day) } label: {
-                        Image(systemName: "ellipsis").font(.system(size: 15, weight: .bold)).foregroundStyle(Luma.mist).frame(width: 34, height: 34)
+                        Image(systemName: "ellipsis").font(.system(size: 15, weight: .bold)).foregroundStyle(Luma.mist).frame(width: 34, height: 34).contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }
@@ -581,7 +581,7 @@ struct HistoryRow: View {
         var parts = [LumaText.duration(workout.durationS)]
         if let d = workout.distanceM, d > 200 { parts.append("\(LumaText.km(d)) km") }
         if let p = workout.paceSPerKm, workout.kind == .run { parts.append("\(LumaText.pace(p))/km") }
-        if let hr = workout.avgHR { parts.append("\(Int(hr.rounded())) bpm") }
+        if let hr = workout.avgHR { parts.append("\(LNum.int(hr.rounded())) bpm") }
         return LumaText.line(parts)
     }
 }

@@ -87,7 +87,7 @@ public struct RobustBaseline: Equatable, Sendable {
 public enum HXFormat {
     /// 5:07 for 307 s; 1:02:03 above an hour.
     public static func duration(_ seconds: Double, showHours: Bool? = nil) -> String {
-        let s = Int(seconds.rounded())
+        let s = LNum.int(seconds.rounded())
         let h = s / 3600, m = (s % 3600) / 60, sec = s % 60
         if showHours ?? (h > 0) { return String(format: "%d:%02d:%02d", h, m, sec) }
         return String(format: "%d:%02d", m, sec)
@@ -95,15 +95,15 @@ public enum HXFormat {
 
     /// Tenths for short splits: 1:04.3
     public static func durationTenths(_ seconds: Double) -> String {
-        let whole = Int(seconds)
-        let tenths = Int(((seconds - Double(whole)) * 10).rounded())
+        let whole = LNum.int(seconds)
+        let tenths = LNum.int(((seconds - Double(whole)) * 10).rounded())
         return String(format: "%d:%02d.%d", whole / 60, whole % 60, tenths)
     }
 
     /// 4:52 /km from seconds per km; "—" when unavailable or absurd.
     public static func pace(_ sPerKm: Double?) -> String {
         guard let p = sPerKm, p.isFinite, p > 0, p < 60 * 30 else { return "—" }
-        let s = Int(p.rounded())
+        let s = LNum.int(p.rounded())
         return String(format: "%d:%02d", s / 60, s % 60)
     }
 
@@ -112,7 +112,7 @@ public enum HXFormat {
     }
 
     public static func signedSeconds(_ s: Double) -> String {
-        let v = Int(s.rounded())
+        let v = LNum.int(s.rounded())
         return v >= 0 ? "+\(v)s" : "\(v)s"
     }
 }

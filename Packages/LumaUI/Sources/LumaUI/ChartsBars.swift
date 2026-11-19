@@ -78,7 +78,7 @@ struct LumaBarChart: View {
             }
             .modifier(ChartScrub { location in
                 guard let location, !bars.isEmpty else { setSelection(nil); return }
-                let i = Int(((location.x - plot.minX) / slot).rounded(.down))
+                let i = LNum.int(((location.x - plot.minX) / slot).rounded(.down))
                 setSelection(min(bars.count - 1, max(0, i)))
             })
         }
@@ -203,12 +203,12 @@ struct LumaZoneBars: View {
                     LumaBar(value: seconds[i], total: peak, color: Luma.zone(i + 1), height: 10)
                     Text(LumaText.duration(seconds[i])).font(LumaFont.numeral(15, .semibold)).foregroundStyle(Luma.frost)
                         .frame(width: 52, alignment: .trailing)
-                    Text("\(Int((seconds[i] / total * 100).rounded()))%").font(LumaFont.body(12)).foregroundStyle(Luma.mist)
+                    Text("\(LNum.int((seconds[i] / total * 100).rounded()))%").font(LumaFont.body(12)).foregroundStyle(Luma.mist)
                         .frame(width: 34, alignment: .trailing)
                 }
             }
             if bounds.count == 5 {
-                Text("Zone 2 from \(Int(bounds[1])) bpm, zone 4 from \(Int(bounds[3])) bpm, zone 5 from \(Int(bounds[4])) bpm")
+                Text("Zone 2 from \(LNum.int(bounds[1])) bpm, zone 4 from \(LNum.int(bounds[3])) bpm, zone 5 from \(LNum.int(bounds[4])) bpm")
                     .font(LumaFont.body(12)).foregroundStyle(Luma.smoke)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }

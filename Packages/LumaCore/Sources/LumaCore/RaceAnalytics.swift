@@ -138,7 +138,7 @@ public struct Benchmarks: Codable, Equatable, Sendable {
 
     /// Loads are bucketed to the nearest 5 kg so 152 and 153 compare, 152 and 202 do not.
     public static func loadKey(_ station: Station, loadKg: Double?) -> String {
-        let bucket = Int(((loadKg ?? 0) / 5).rounded()) * 5
+        let bucket = LNum.int(((loadKg ?? 0) / 5).rounded()) * 5
         return "\(station.rawValue)@\(bucket)"
     }
 
@@ -305,7 +305,7 @@ public enum RaceReadiness {
             if let best = b.bestStationS(st, loadKg: load) {
                 stationSum += best; covered += 1
             } else {
-                gaps.append("No timed \(st.title) at \(load > 0 ? "\(Int(load)) kg" : "bodyweight") yet")
+                gaps.append("No timed \(st.title) at \(load > 0 ? "\(LNum.int(load)) kg" : "bodyweight") yet")
             }
         }
         let run1k = b.bestRun1kS?.seconds ?? fresh1kS

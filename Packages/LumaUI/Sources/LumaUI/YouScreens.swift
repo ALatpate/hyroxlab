@@ -16,7 +16,7 @@ struct YouSheet: View {
             HStack(spacing: 0) {
                 fact("\(p.age())", "years")
                 fact(String(format: "%.0f", p.weightKg), "kg")
-                fact("\(Int(p.resolvedMaxHR()))", "max bpm")
+                fact("\(LNum.int(p.resolvedMaxHR()))", "max bpm")
                 fact("\(env.analysis.dayCount)", "days of data")
             }
             .padding(.vertical, 14).background(LumaPanel(radius: 20))
@@ -67,7 +67,7 @@ struct ProfileScreen: View {
         LumaDetailScreen(title: "Profile", tone: .recovery) {
             ProfileFields()
             LumaSection(title: "Heart rate")
-            optionalNumber("Maximum heart rate", "Leave off to use the age estimate (\(Int((208 - 0.7 * Double(env.profile.age())).rounded())) bpm). Set it if you have seen higher in an all-out effort.",
+            optionalNumber("Maximum heart rate", "Leave off to use the age estimate (\(LNum.int((208 - 0.7 * Double(env.profile.age())).rounded())) bpm). Set it if you have seen higher in an all-out effort.",
                            value: $env.profile.maxHR, fallback: env.profile.resolvedMaxHR(), range: 120...230)
             optionalNumber("Threshold heart rate", "If you know your lactate-threshold heart rate, zones are built from it instead.",
                            value: $env.profile.lthr, fallback: (env.profile.resolvedMaxHR() * 0.88).rounded(), range: 100...220)
@@ -101,7 +101,7 @@ struct ProfileScreen: View {
                            value: $env.profile.sleepNeedHours, fallback: 8, range: 5...11, step: 0.25, decimals: 2)
         }
         .onAppear {
-            if let t = env.profile.fiveKSeconds { fiveKMinutes = Double(Int(t) / 60); fiveKSeconds = Double(Int(t) % 60) }
+            if let t = env.profile.fiveKSeconds { fiveKMinutes = Double(LNum.int(t) / 60); fiveKSeconds = Double(LNum.int(t) % 60) }
             hasRace = env.profile.raceDate != nil
             if let d = env.profile.raceDate { raceDate = d }
         }
@@ -147,14 +147,40 @@ struct ProfileScreen: View {
 /// Name, sex, age and body size: shared by the profile screen and first-run setup.
 struct ProfileFields: View {
     @EnvironmentObject private var env: LumaEnv
+    /// The figure being typed in place of stepping to it.
+    @State private var typing: Typed?
+    @State private var typed = ""
+
+    private enum Typed: String, Identifiable {
+        case born, height, mass
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .born: return "Year you were born"
+            case .height: return "Height in centimetres"
+            case .mass: return "Body mass in kilograms"
+            }
+        }
+
+        var example: String {
+            switch self {
+            case .born: return "1992"
+            case .height: return "178"
+            case .mass: return "76.5"
+            }
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             LumaField(title: "First name", text: $env.profile.name)
             LumaSegmented(selection: $env.profile.sex, options: [(Sex.male, "Male"), (.female, "Female")], tint: Luma.frost)
             HStack(spacing: 10) {
-                stepper("Born", "\(env.profile.birthYear)", { env.profile.birthYear = max(1930, env.profile.birthYear - 1) }, { env.profile.birthYear = min(2015, env.profile.birthYear + 1) })
-                stepper("Height", "\(Int(env.profile.heightCm)) cm", { env.profile.heightCm = max(120, env.profile.heightCm - 1) }, { env.profile.heightCm = min(230, env.profile.heightCm + 1) })
+                stepper("Born", "\(env.profile.birthYear)", .born,
+                        { env.profile.birthYear = max(1930, env.profile.birthYear - 1) }, { env.profile.birthYear = min(2015, env.profile.birthYear + 1) })
+                stepper("Height", "\(LNum.int(env.profile.heightCm)) cm", .height,
+                        { env.profile.heightCm = max(120, env.profile.heightCm - 1) }, { env.profile.heightCm = min(230, env.profile.heightCm + 1) })
             }
             if let trend = env.next.weight.current {
                 // With a weight log, the trend is the weight: it is shown here and changed by weighing in.
@@ -166,24 +192,50 @@ struct ProfileFields: View {
                 .background(LumaPanel(radius: 18))
                 LumaNote("This is the trend of your weigh-ins. Add a weigh-in on the Fuel tab to move it.")
             } else {
-                stepper("Body mass", String(format: "%.1f kg", env.profile.weightKg), { env.profile.weightKg = max(35, env.profile.weightKg - 0.5) }, { env.profile.weightKg = min(250, env.profile.weightKg + 0.5) })
+                stepper("Body mass", String(format: "%.1f kg", env.profile.weightKg), .mass,
+                        { env.profile.weightKg = max(35, env.profile.weightKg - 0.5) }, { env.profile.weightKg = min(250, env.profile.weightKg + 0.5) })
             }
-            LumaNote("Sex and body size are used for energy targets, training load weighting and official HYROX loads.")
+            LumaNote("Hold − or + to keep stepping, or tap a figure to type it. Sex and body size are used for energy targets, training load weighting and official HYROX loads.")
+        }
+        .alert(typing?.title ?? "", isPresented: Binding(get: { typing != nil }, set: { if !$0 { typing = nil } })) {
+            TextField(typing?.example ?? "", text: $typed)
+                .keyboardType(typing == .mass ? .decimalPad : .numberPad)
+            Button("Set") { applyTyped() }
+            Button("Cancel", role: .cancel) { typing = nil }
         }
     }
 
-    private func stepper(_ label: String, _ value: String, _ down: @escaping () -> Void, _ up: @escaping () -> Void) -> some View {
+    /// Takes what was typed, when it is a figure in range; anything else changes nothing.
+    private func applyTyped() {
+        defer { typing = nil }
+        guard let field = typing, let value = Double(typed.replacingOccurrences(of: ",", with: ".").trimmingCharacters(in: .whitespaces)),
+              value.isFinite else { return }
+        switch field {
+        case .born: if (1930...2015).contains(value) { env.profile.birthYear = LNum.int(value.rounded()) }
+        case .height: if (120...230).contains(value) { env.profile.heightCm = value.rounded() }
+        case .mass: if (35...250).contains(value) { env.profile.weightKg = (value * 10).rounded() / 10 }
+        }
+    }
+
+    private func stepper(_ label: String, _ value: String, _ field: Typed, _ down: @escaping () -> Void, _ up: @escaping () -> Void) -> some View {
         HStack(spacing: 0) {
-            Button(action: down) { Image(systemName: "minus").font(.system(size: 14, weight: .bold)).frame(width: 44, height: 56) }
-            VStack(spacing: 1) {
-                Text(value).font(LumaFont.numeral(24)).foregroundStyle(Luma.frost).contentTransition(.numericText())
-                LumaLabel(label)
+            LumaStepButton(symbol: "minus", label: "\(label), less", action: down)
+            Button {
+                typed = ""
+                typing = field
+            } label: {
+                VStack(spacing: 1) {
+                    Text(value).font(LumaFont.numeral(24)).foregroundStyle(Luma.frost).contentTransition(.numericText())
+                    LumaLabel(label)
+                }
+                .frame(maxWidth: .infinity, minHeight: 56)
+                .contentShape(Rectangle())
             }
-            .frame(maxWidth: .infinity)
-            Button(action: up) { Image(systemName: "plus").font(.system(size: 14, weight: .bold)).frame(width: 44, height: 56) }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(label), \(value). Tap to type it.")
+            LumaStepButton(symbol: "plus", label: "\(label), more", action: up)
         }
         .foregroundStyle(Luma.mist)
-        .buttonStyle(.plain)
         .background(LumaPanel(radius: 18))
     }
 }
@@ -214,7 +266,7 @@ struct DevicesScreen: View {
                         if let b = s.battery {
                             VStack(alignment: .trailing, spacing: 0) {
                                 // Away from the phone the strap reports nothing, so the figure is the last one it sent.
-                                Text("\(Int(b.rounded()))%").font(LumaFont.numeral(40))
+                                Text("\(LNum.int(b.rounded()))%").font(LumaFont.numeral(40))
                                     .foregroundStyle(!s.connected ? Luma.mist : (b <= 20 ? Luma.coral : Luma.frost))
                                 Text(!s.connected ? "Battery when last connected" : (s.charging ? "Charging" : "Battery"))
                                     .font(LumaFont.label(10)).foregroundStyle(Luma.mist)
@@ -259,7 +311,7 @@ struct DevicesScreen: View {
                             }
                             Menu {
                                 Button("Forget this strap", role: .destructive) { env.device?.forget(p.id) }
-                            } label: { Image(systemName: "ellipsis").font(.system(size: 15, weight: .bold)).foregroundStyle(Luma.mist).frame(width: 30, height: 30) }
+                            } label: { Image(systemName: "ellipsis").font(.system(size: 15, weight: .bold)).foregroundStyle(Luma.mist).frame(width: 30, height: 30).contentShape(Rectangle()) }
                         }
                     }
                 }
@@ -393,6 +445,13 @@ struct SettingsScreen: View {
             }
             LumaSection(title: "Your data")
             LumaNote("Strap data, sessions, food log and everything else Luma keeps are stored on this phone only.")
+            LumaGroup {
+                Button { router.push(.backups) } label: {
+                    LumaRow(symbol: "clock.arrow.circlepath", symbolColor: Luma.sky, title: "Copies of your records",
+                            subtitle: "A copy of everything you log, kept for each of the last 14 days. Go back to one if something goes missing.", chevron: true)
+                }
+                .buttonStyle(.plain)
+            }
             if let url = exportURL {
                 ShareLink(item: url) { Label("Export my Luma records", systemImage: "square.and.arrow.up").frame(maxWidth: .infinity) }
                     .buttonStyle(LumaSecondaryButtonStyle())
@@ -485,6 +544,7 @@ struct OnboardingScreen: View {
                     .offset(y: -LumaLaunch.scrollOffset)
                 }
                 .scrollIndicators(.hidden)
+                .scrollDismissesKeyboard(.immediately)
                 HStack(spacing: 12) {
                     if page > 0 { Button("Back") { withAnimation(LumaMotion.snap) { page -= 1 } }.buttonStyle(LumaSecondaryButtonStyle()).frame(width: 110) }
                     Button(page == 4 ? "Open Luma" : "Continue") { next() }.buttonStyle(LumaPrimaryButtonStyle())
@@ -492,6 +552,7 @@ struct OnboardingScreen: View {
                 }
                 .padding(.horizontal, Luma.gutter).padding(.bottom, 18)
             }
+            .lumaKeyboardRoom()
         }
     }
 

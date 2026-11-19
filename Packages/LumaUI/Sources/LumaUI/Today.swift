@@ -43,7 +43,7 @@ struct TodayScreen: View {
             CheckInPrompt()
         }
         // Redrawn when a day is added and as the record grows, so the line keeps up with the strap.
-        .task(id: "\(env.days.count)|\(Int((env.recordEnd ?? 0) / 300))") {
+        .task(id: "\(env.days.count)|\(LNum.int((env.recordEnd ?? 0) / 300))") {
             guard let start = LDate.startOfDay(a.today)?.timeIntervalSince1970 else { return }
             hr = await env.source.heartRate(from: start, to: start + 86_400, bucketSeconds: 600)
             stress = await env.source.stress(day: a.today)
@@ -69,7 +69,7 @@ struct StrapChip: View {
                     .shadow(color: s.connected ? Luma.volt.opacity(0.8) : .clear, radius: 4)
                 if let b = s.battery {
                     // Dimmed while the strap is away: the figure is then the last one it sent.
-                    Text("\(Int(b.rounded()))%").font(LumaFont.numeral(15, .semibold)).foregroundStyle(s.connected ? Luma.frost : Luma.mist)
+                    Text("\(LNum.int(b.rounded()))%").font(LumaFont.numeral(15, .semibold)).foregroundStyle(s.connected ? Luma.frost : Luma.mist)
                     Image(systemName: s.charging ? "battery.100.bolt" : (b > 60 ? "battery.75" : b > 25 ? "battery.50" : "battery.25"))
                         .font(.system(size: 12, weight: .medium)).foregroundStyle(b <= 20 ? Luma.coral : Luma.mist)
                 } else {
@@ -131,7 +131,7 @@ struct TodayHero: View {
                     Text(LumaWords.gapLine(analysis.gap))
                     // An earlier score is named only when there is one, with the figure it had.
                     if let last = analysis.lastScored, let earlier = last.recovery {
-                        Text("Last score: \(LumaText.dayTitle(last.day, today: analysis.today).lowercased()), \(Int(earlier.rounded()))%")
+                        Text("Last score: \(LumaText.dayTitle(last.day, today: analysis.today).lowercased()), \(LNum.int(earlier.rounded()))%")
                             .foregroundStyle(Luma.smoke)
                     }
                 }
@@ -226,7 +226,7 @@ struct SuggestedSessionPrompt: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Looks like a session").font(LumaFont.heading(15)).foregroundStyle(Luma.frost).lineLimit(1).minimumScaleFactor(0.85)
                         Text(LumaText.line(["\(LumaText.dayTitle(s.day, today: env.today)) \(LumaText.time(s.start))",
-                                            "\(Int((s.durationS / 60).rounded())) min", "\(Int(s.avgHR.rounded())) bpm"]))
+                                            "\(LNum.int((s.durationS / 60).rounded())) min", "\(LNum.int(s.avgHR.rounded())) bpm"]))
                             .font(LumaFont.body(12.5)).foregroundStyle(Luma.mist).fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 6)
@@ -271,7 +271,7 @@ struct CallCard: View {
 
     private var targetText: String? {
         guard let t = call.strainTarget else { return nil }
-        let lo = Int(LScale.shownFrom21(t.lowerBound, on21: on21).rounded()), hi = Int(LScale.shownFrom21(t.upperBound, on21: on21).rounded())
+        let lo = LNum.int(LScale.shownFrom21(t.lowerBound, on21: on21).rounded()), hi = LNum.int(LScale.shownFrom21(t.upperBound, on21: on21).rounded())
         return "Aim for strain \(lo)–\(hi)"
     }
 
@@ -700,7 +700,7 @@ private struct CoachBriefBody: View {
                             Button {
                                 Task { await coach.loadBrief(force: true) }
                             } label: {
-                                Image(systemName: "arrow.clockwise").font(.system(size: 12, weight: .semibold)).foregroundStyle(Luma.smoke).frame(width: 28, height: 28)
+                                Image(systemName: "arrow.clockwise").font(.system(size: 12, weight: .semibold)).foregroundStyle(Luma.smoke).frame(width: 28, height: 28).contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel("Write the read again")

@@ -1,4 +1,4 @@
-# name|screen|scrollY|data|waitSeconds
+# name|screen|scrollY|data|waitSeconds|focus|draft
 01-today|today|0|demo|5
 20-train|train|0|demo|5
 21-train-b|train|560|demo|5
@@ -55,3 +55,20 @@
 83-coach|coach|0|demo|5
 84-settings|you.settings|0|demo|5
 85-sheet-you|sheet.you|0|demo|5
+30b-workouts-review-c|sheet.workouts.review|1040|demo|5
+86-holding|today|0|locked|5
+87-holding-stuck|today|0|stuck|5
+88-backups|you.backups|0|demo|5
+89-datacheck|you.datacheck|0|demo|5
+89b-datacheck-b|you.datacheck|900|demo|5
+89c-datacheck-c|you.datacheck|1700|demo|5
+97-profile|you.profile|0|demo|5
+98-lift-live|cover.lift|0|demo|5
+98b-lift-live-b|cover.lift|420|demo|5
+90-type-coach|coach|0|demo|5|coach|
+91-type-coach-long|coach|0|demo|5|coach|Yesterday's class was 4 rounds of 500 m ski, 25 m sled push, 20 burpee broad jumps and 400 m run. My legs are heavy today and I slept badly. Should I still do the strength class tonight or swap it for an easy run and stretch?
+92-type-weighin|sheet.weighin|0|demo|5|Or type it, e.g. 76.4|
+93-type-review|sheet.workouts.review|0|demo|5|Weight for Romanian deadlift, kilograms|
+94-type-profile|you.profile|0|demo|5|Your goals, in your own words|
+95-type-onboarding|cover.onboarding.1|0|demo|5|First name|
+96-type-hand|sheet.workouts.hand|0|demo|5|Exercise, e.g. Back squat|

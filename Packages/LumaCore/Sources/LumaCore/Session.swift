@@ -64,7 +64,7 @@ public struct HRSummary: Codable, Equatable, Sendable {
         guard !samples.isEmpty else { return nil }
         return HRSummary(avg: samples.reduce(0, +) / Double(samples.count), max: samples.max() ?? 0,
                          min: samples.min() ?? 0, sampleCount: samples.count,
-                         expectedCount: Swift.max(1, Int(durationS.rounded())), source: source)
+                         expectedCount: Swift.max(1, LNum.int(durationS.rounded())), source: source)
     }
 }
 

@@ -15,7 +15,7 @@ public enum LStat {
         guard !x.isEmpty else { return nil }
         let s = x.sorted()
         let pos = min(1, max(0, p)) * Double(s.count - 1)
-        let lo = Int(pos.rounded(.down)), hi = Int(pos.rounded(.up))
+        let lo = LNum.int(pos.rounded(.down)), hi = LNum.int(pos.rounded(.up))
         return s[lo] + (s[hi] - s[lo]) * (pos - Double(lo))
     }
 

@@ -132,7 +132,7 @@ struct PhotoStrip: View {
 struct CoachScreen: View {
     @EnvironmentObject private var env: LumaEnv
     @EnvironmentObject private var router: LumaRouter
-    @State private var draft = ""
+    @State private var draft = LumaLaunch.draft ?? ""
     @State private var photos: [PickedPhoto] = []
     @State private var picked: [PhotosPickerItem] = []
     @State private var showCamera = false
@@ -166,6 +166,10 @@ private struct CoachBody: View {
     var focused: FocusState<Bool>.Binding
     @EnvironmentObject private var env: LumaEnv
     @EnvironmentObject private var router: LumaRouter
+    @ObservedObject private var keyboard = LumaKeyboard.shared
+    /// Counts the messages sent. The box is made anew for each, so it is one line again however many
+    /// the last message ran to.
+    @State private var sent = 0
 
     private let starters = [
         "How recovered am I, and what should I do today?",
@@ -200,13 +204,22 @@ private struct CoachBody: View {
                         .offset(y: -LumaLaunch.scrollOffset)
                     }
                     .scrollIndicators(.hidden)
-                    .scrollDismissesKeyboard(.interactively)
+                    .scrollDismissesKeyboard(.immediately)
                     .onChange(of: coach.messages.last?.text) { _, _ in proxy.scrollTo("bottom", anchor: .bottom) }
                     .onChange(of: coach.messages.count) { _, _ in withAnimation(LumaMotion.snap) { proxy.scrollTo("bottom", anchor: .bottom) } }
+                    // The keyboard takes half the screen: the last message stays in what is left.
+                    .onChange(of: keyboard.isUp) { _, _ in proxy.scrollTo("bottom", anchor: .bottom) }
                     .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }
                 }
                 composer
             }
+            // The box being typed in stays above the keyboard, whether or not SwiftUI has moved it.
+            .lumaKeyboardRoom()
+        }
+        .task {
+            guard LumaLaunch.focus == "coach" else { return }
+            try? await Task.sleep(nanoseconds: 900_000_000)
+            focused.wrappedValue = true
         }
         .onChange(of: picked) { _, items in
             guard !items.isEmpty else { return }
@@ -304,6 +317,7 @@ private struct CoachBody: View {
                 TextField("Message the coach", text: $draft, prompt: Text("Message the coach").foregroundStyle(Luma.smoke), axis: .vertical)
                     .font(LumaFont.body(16)).foregroundStyle(Luma.frost).lineLimit(1...6)
                     .focused(focused)
+                    .id(sent)
                     .padding(.horizontal, 14).padding(.vertical, 11)
                     .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Color.white.opacity(0.07)))
                     .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Luma.line, lineWidth: 1))
@@ -314,6 +328,11 @@ private struct CoachBody: View {
                         coach.send(draft, photos: photos.map { $0.data })
                         draft = ""
                         photos = []
+                        // The answer is what is wanted next: the keyboard goes away and the box is
+                        // one line again, so the conversation has the screen.
+                        focused.wrappedValue = false
+                        LumaKeyboard.dismiss()
+                        sent += 1
                     } else {
                         router.sheet = .coachSetup
                     }
@@ -328,7 +347,8 @@ private struct CoachBody: View {
         }
         .padding(.horizontal, 14)
         .padding(.top, 8)
-        .padding(.bottom, focused.wrappedValue ? 8 : 84)
+        // Above the tab bar when the keyboard is away, and just above the keyboard when it is up.
+        .padding(.bottom, keyboard.isUp ? 8 : 84)
         .background(Luma.night.opacity(0.6))
     }
 }
@@ -465,11 +485,11 @@ struct FuelEntryLine: View {
             Spacer(minLength: 6)
             switch entry.kind {
             case .water:
-                Text("\(Int(entry.waterMl ?? 0)) ml").font(LumaFont.numeral(17, .semibold)).foregroundStyle(Luma.sky)
+                Text("\(LNum.int(entry.waterMl ?? 0)) ml").font(LumaFont.numeral(17, .semibold)).foregroundStyle(Luma.sky)
             case .supplement:
                 Text(entry.supplement?.text ?? "").font(LumaFont.numeral(17, .semibold)).foregroundStyle(Luma.mint)
             default:
-                Text("\(Int(entry.kcal.rounded())) kcal · \(Int(entry.proteinG.rounded())) g protein").font(LumaFont.numeral(16, .semibold)).foregroundStyle(Luma.mist)
+                Text("\(LNum.int(entry.kcal.rounded())) kcal · \(LNum.int(entry.proteinG.rounded())) g protein").font(LumaFont.numeral(16, .semibold)).foregroundStyle(Luma.mist)
             }
         }
     }

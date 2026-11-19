@@ -70,7 +70,7 @@ public struct StrengthScale: Equatable, Sendable {
 public enum StrengthLevel: Int, CaseIterable, Sendable {
     case starting, building, solid, strong, veryStrong, exceptional
 
-    public init(_ level: Double) { self = StrengthLevel(rawValue: min(5, max(0, Int(level)))) ?? .starting }
+    public init(_ level: Double) { self = StrengthLevel(rawValue: min(5, max(0, LNum.int(level)))) ?? .starting }
 
     public var title: String {
         switch self {
@@ -103,6 +103,9 @@ public struct ExerciseInfo: Equatable, Sendable {
     /// The movement is normally done with a bar, a bell, a ball or a sled, so a set of it with no
     /// load written down is missing something. A push-up or a plank is not.
     public let expectsLoad: Bool
+    /// What a set of it is usually counted in: an erg, a run, a sled or a carry in metres, a plank or
+    /// a hang in seconds, most other things in reps.
+    public let counts: SetMeasure
 }
 
 public enum ExerciseLibrary {
@@ -113,10 +116,10 @@ public enum ExerciseLibrary {
 
     private static func entry(_ name: String, _ primary: [Muscle], _ secondary: [Muscle] = [], also: [String] = [],
                               marks: [Double]? = nil, measures: [Muscle] = [], upper: Bool = false, bodyweight: Bool = false,
-                              resistance: Bool = true, load: Bool = true) -> Entry {
+                              resistance: Bool = true, load: Bool = true, counts: SetMeasure = .reps) -> Entry {
         let scale = marks.map { StrengthScale(marks: $0, measures: measures, upperBody: upper) }
         let info = ExerciseInfo(name: name, primary: primary, secondary: secondary, scale: scale, bodyweight: bodyweight,
-                                resistance: resistance, expectsLoad: load && resistance && !bodyweight)
+                                resistance: resistance, expectsLoad: load && resistance && !bodyweight, counts: counts)
         return Entry(info: info, keys: ([name] + also).map { key($0) })
     }
 
@@ -132,13 +135,13 @@ public enum ExerciseLibrary {
         entry("Leg extension", [.quads]),
         entry("Bulgarian split squat", [.quads, .glutes], [.hamstrings, .adductors],
               also: ["split squat", "rear foot elevated split squat", "rfess"]),
-        entry("Walking lunge", [.quads, .glutes], [.hamstrings, .adductors], also: ["db walking lunge", "kb walking lunge"], load: false),
+        entry("Walking lunge", [.quads, .glutes], [.hamstrings, .adductors], also: ["db walking lunge", "kb walking lunge"], load: false, counts: .meters),
         entry("Lunge", [.quads, .glutes], [.hamstrings, .adductors],
               also: ["reverse lunge", "forward lunge", "db lunge", "dumbbell lunge", "kb lunge", "lateral lunge", "overhead lunge"], load: false),
-        entry("Sandbag lunge", [.quads, .glutes], [.hamstrings, .abs], also: ["sandbag walking lunge"]),
+        entry("Sandbag lunge", [.quads, .glutes], [.hamstrings, .abs], also: ["sandbag walking lunge"], counts: .meters),
         entry("Step-up", [.quads, .glutes], [.hamstrings], also: ["box step up", "db step up", "step over"], load: false),
         entry("Box jump", [.quads, .glutes], [.calves], also: ["jump squat", "squat jump", "broad jump", "box jump over"], load: false),
-        entry("Wall sit", [.quads], [.glutes], load: false),
+        entry("Wall sit", [.quads], [.glutes], load: false, counts: .seconds),
         entry("Calf raise", [.calves], also: ["standing calf raise", "seated calf raise"], load: false),
     ]
 
@@ -205,37 +208,37 @@ public enum ExerciseLibrary {
         entry("Biceps curl", [.biceps], [.forearms], also: ["curl", "barbell curl", "db curl", "hammer curl", "bicep curl", "dumbbell curl"]),
         entry("Shrug", [.traps], [.forearms]),
         entry("Rope climb", [.lats, .biceps, .forearms], load: false),
-        entry("Dead hang", [.forearms], [.lats], load: false),
+        entry("Dead hang", [.forearms], [.lats], load: false, counts: .seconds),
     ]
 
     private static let trunk: [Entry] = [
-        entry("Plank", [.abs], [.obliques], also: ["hollow hold", "dead bug", "front plank", "plank hold"], load: false),
-        entry("Side plank", [.obliques], [.abs], also: ["pallof press", "russian twist", "woodchop", "side bend"], load: false),
+        entry("Plank", [.abs], [.obliques], also: ["hollow hold", "dead bug", "front plank", "plank hold"], load: false, counts: .seconds),
+        entry("Side plank", [.obliques], [.abs], also: ["pallof press", "russian twist", "woodchop", "side bend"], load: false, counts: .seconds),
         entry("Hanging leg raise", [.abs], [.obliques, .forearms], also: ["toe to bar", "knee raise", "leg raise", "hanging knee raise"], load: false),
         entry("Sit-up", [.abs], also: ["situp", "crunch", "v up", "ab wheel", "ab rollout", "ghd sit up", "butterfly sit up"], load: false),
         entry("Mountain climber", [.abs], [.shoulders, .quads], load: false),
     ]
 
     private static let stations: [Entry] = [
-        entry("Sled push", [.quads, .glutes, .calves], [.abs, .shoulders], also: ["prowler push", "sled"]),
-        entry("Sled pull", [.lats, .upperBack, .biceps], [.quads, .glutes, .forearms, .lowerBack], also: ["rope pull", "sled drag"]),
+        entry("Sled push", [.quads, .glutes, .calves], [.abs, .shoulders], also: ["prowler push", "sled"], counts: .meters),
+        entry("Sled pull", [.lats, .upperBack, .biceps], [.quads, .glutes, .forearms, .lowerBack], also: ["rope pull", "sled drag"], counts: .meters),
         entry("Farmers carry", [.forearms, .traps], [.abs, .obliques, .calves],
-              also: ["farmer carry", "farmer walk", "farmers walk", "kb carry", "suitcase carry", "carry"]),
-        entry("Burpee broad jump", [.quads, .glutes, .chest], [.shoulders, .triceps, .abs, .calves], also: ["bbj", "broad jump burpee"], load: false),
+              also: ["farmer carry", "farmer walk", "farmers walk", "kb carry", "suitcase carry", "carry"], counts: .meters),
+        entry("Burpee broad jump", [.quads, .glutes, .chest], [.shoulders, .triceps, .abs, .calves], also: ["bbj", "broad jump burpee"], load: false, counts: .meters),
         entry("Burpee", [.chest, .quads], [.shoulders, .triceps, .abs, .glutes], also: ["bar facing burpee", "burpee over bar", "devil press"], load: false),
         entry("Wall ball", [.quads, .glutes, .shoulders], [.triceps, .abs, .calves], also: ["wall ball shot", "wallball"]),
         entry("Thruster", [.quads, .glutes, .shoulders], [.triceps, .abs], also: ["db thruster", "barbell thruster", "kb thruster"]),
         entry("Ball slam", [.lats, .abs], [.shoulders, .triceps], also: ["med ball slam", "medicine ball slam", "slam ball", "slam"]),
-        entry("Sandbag carry", [.abs, .upperBack], [.biceps, .glutes, .forearms], also: ["bear hug carry", "sandbag hold", "front carry"]),
+        entry("Sandbag carry", [.abs, .upperBack], [.biceps, .glutes, .forearms], also: ["bear hug carry", "sandbag hold", "front carry"], counts: .meters),
     ]
 
     private static let engine: [Entry] = [
-        entry("Run", [], also: ["running", "treadmill", "treadmill run", "jog", "sprint", "shuttle run", "shuttle"], resistance: false),
-        entry("Row", [], also: ["rowing", "row erg", "rower", "rowing machine", "rowerg", "erg"], resistance: false),
-        entry("SkiErg", [], also: ["ski erg", "ski"], resistance: false),
-        entry("Bike", [], also: ["assault bike", "echo bike", "air bike", "bikeerg", "bike erg", "spin bike", "airdyne", "cycling"], resistance: false),
+        entry("Run", [], also: ["running", "treadmill", "treadmill run", "jog", "sprint", "shuttle run", "shuttle"], resistance: false, counts: .meters),
+        entry("Row", [], also: ["rowing", "row erg", "rower", "rowing machine", "rowerg", "erg"], resistance: false, counts: .meters),
+        entry("SkiErg", [], also: ["ski erg", "ski"], resistance: false, counts: .meters),
+        entry("Bike", [], also: ["assault bike", "echo bike", "air bike", "bikeerg", "bike erg", "spin bike", "airdyne", "cycling"], resistance: false, counts: .meters),
         entry("Skipping", [], also: ["jump rope", "double under", "single under", "skip", "rope skip"], resistance: false),
-        entry("Battle rope", [], also: ["battle rope wave"], resistance: false),
+        entry("Battle rope", [], also: ["battle rope wave"], resistance: false, counts: .seconds),
     ]
 
     private static let index: [String: ExerciseInfo] = {

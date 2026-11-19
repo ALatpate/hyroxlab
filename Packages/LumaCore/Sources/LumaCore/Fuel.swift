@@ -60,7 +60,7 @@ public struct SupplementDose: Codable, Equatable, Sendable {
     public init(name: String, amount: Double, unit: String) { self.name = name; self.amount = amount; self.unit = unit }
 
     public var text: String {
-        let a = amount == amount.rounded() ? String(Int(amount)) : String(format: "%.1f", amount)
+        let a = amount == amount.rounded() ? String(LNum.int(amount)) : String(format: "%.1f", amount)
         let plural = amount != 1 && ["capsule", "tablet", "scoop", "softgel", "drop"].contains(unit)
         return "\(a) \(unit)\(plural ? "s" : "")"
     }
@@ -218,12 +218,12 @@ public enum FuelPlanner {
     /// Practical fuelling cues around a session.
     public static func sessionCues(massKg: Double, intensity: Intensity, durationMin: Int) -> [String] {
         var out: [String] = []
-        let pre = Int((massKg * (intensity == .hard ? 1.0 : 0.6)).rounded())
+        let pre = LNum.int((massKg * (intensity == .hard ? 1.0 : 0.6)).rounded())
         out.append("1–3 h before: about \(pre) g of carbohydrate, low in fat and fibre.")
         if durationMin >= 75 || intensity == .hard {
             out.append("During: 30–60 g of carbohydrate per hour once you pass 60 minutes, with fluids.")
         }
-        out.append("Within an hour after: \(Int((massKg * 0.3).rounded())) g of protein plus carbohydrate to refill.")
+        out.append("Within an hour after: \(LNum.int((massKg * 0.3).rounded())) g of protein plus carbohydrate to refill.")
         return out
     }
 }

@@ -250,6 +250,9 @@ jobs:
           rm -rf Payload && mkdir Payload && cp -R "$APP" Payload/
           zip -qr dry-run.ipa Payload
           echo "ipa size: $(stat -f%z dry-run.ipa) bytes"
+          # The release keeps the build's symbols beside it: say here whether there are any to keep.
+          echo "--- symbols"
+          ls -d build/dd/Build/Products/Release-iphoneos/*.dSYM 2>/dev/null || echo "::warning::the Release build left no symbols (dSYM)"
 
   # GitHub is at times short of macOS runners. A job no runner takes within fifteen minutes is
   # cancelled ("The job was not acquired by Runner of type hosted"), with nothing built. This asks

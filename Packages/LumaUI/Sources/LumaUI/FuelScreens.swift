@@ -81,7 +81,7 @@ struct FuelScreen: View {
             if totals.caffeineMg > 0 || totals.alcoholG > 0 {
                 StatGrid {
                     StatCell(label: "Caffeine", value: String(format: "%.0f", totals.caffeineMg), unit: "mg",
-                             note: "Sensible daily limit \(Int(target.caffeineLimitMg)) mg", color: totals.caffeineMg > target.caffeineLimitMg ? Luma.amber : Luma.frost)
+                             note: "Sensible daily limit \(LNum.int(target.caffeineLimitMg)) mg", color: totals.caffeineMg > target.caffeineLimitMg ? Luma.amber : Luma.frost)
                     StatCell(label: "Alcohol", value: String(format: "%.0f", totals.alcoholG), unit: "g",
                              note: totals.alcoholG > 0 ? "About \(String(format: "%.1f", totals.alcoholG / 10)) units" : nil)
                 }
@@ -136,8 +136,8 @@ struct EnergyHero: View {
             HStack(alignment: .firstTextBaseline) {
                 LumaLabel(label)
                 Spacer()
-                Text("\(Int(value.rounded()))").font(LumaFont.numeral(19, .semibold)).foregroundStyle(Luma.frost)
-                Text("/ \(Int(goal.rounded())) g").font(LumaFont.body(11.5)).foregroundStyle(Luma.smoke)
+                Text("\(LNum.int(value.rounded()))").font(LumaFont.numeral(19, .semibold)).foregroundStyle(Luma.frost)
+                Text("/ \(LNum.int(goal.rounded())) g").font(LumaFont.body(11.5)).foregroundStyle(Luma.smoke)
             }
             LumaBar(value: value, total: goal, color: color, height: 6)
         }
@@ -163,7 +163,7 @@ struct WaterCard: View {
                 LumaBar(value: totals.waterMl, total: target.waterMl, color: Luma.sky)
                 HStack(spacing: 8) {
                     ForEach([250.0, 330, 500, 750], id: \.self) { ml in
-                        LumaQuickAction(symbol: "plus", title: "\(Int(ml))", tint: Luma.sky) {
+                        LumaQuickAction(symbol: "plus", title: "\(LNum.int(ml))", tint: Luma.sky) {
                             env.logWater(ml, at: stamp())
                             LumaHaptics.success()
                         }
@@ -263,7 +263,7 @@ struct FuelEntryCard: View {
                     }
                     Spacer(minLength: 6)
                     VStack(alignment: .trailing, spacing: 0) {
-                        Text("\(Int(entry.kcal.rounded()))").font(LumaFont.numeral(26)).foregroundStyle(Luma.frost)
+                        Text("\(LNum.int(entry.kcal.rounded()))").font(LumaFont.numeral(26)).foregroundStyle(Luma.frost)
                         Text("kcal").font(LumaFont.body(11)).foregroundStyle(Luma.smoke)
                     }
                 }
@@ -279,7 +279,7 @@ struct FuelEntryCard: View {
                             if !item.quantity.isEmpty { Text(item.quantity).font(LumaFont.body(12)).foregroundStyle(Luma.smoke) }
                         }
                         Spacer()
-                        Text("\(Int(item.kcal.rounded())) kcal · P \(Int(item.proteinG.rounded())) · C \(Int(item.carbsG.rounded())) · F \(Int(item.fatG.rounded()))")
+                        Text("\(LNum.int(item.kcal.rounded())) kcal · P \(LNum.int(item.proteinG.rounded())) · C \(LNum.int(item.carbsG.rounded())) · F \(LNum.int(item.fatG.rounded()))")
                             .font(LumaFont.numeral(14, .medium)).foregroundStyle(Luma.mist)
                     }
                 }
@@ -318,7 +318,7 @@ struct FuelEntryCard: View {
     private func chip(_ letter: String, _ grams: Double, _ color: Color) -> some View {
         HStack(spacing: 3) {
             Text(letter).font(LumaFont.label(10)).foregroundStyle(color)
-            Text("\(Int(grams.rounded()))").font(LumaFont.numeral(15, .semibold)).foregroundStyle(Luma.mist)
+            Text("\(LNum.int(grams.rounded()))").font(LumaFont.numeral(15, .semibold)).foregroundStyle(Luma.mist)
         }
     }
 }
@@ -435,7 +435,7 @@ struct FuelAddSheet: View {
                         dismiss()
                     } label: {
                         LumaRow(symbol: "arrow.clockwise", symbolColor: Luma.mint, title: e.title,
-                                subtitle: "\(Int(e.kcal.rounded())) kcal · \(Int(e.proteinG.rounded())) g protein")
+                                subtitle: "\(LNum.int(e.kcal.rounded())) kcal · \(LNum.int(e.proteinG.rounded())) g protein")
                     }
                     .buttonStyle(.plain)
                 }
@@ -493,7 +493,11 @@ struct FuelAddSheet: View {
             LumaGroup {
                 ForEach(Array(doses.enumerated()), id: \.offset) { i, d in
                     LumaRow(symbol: "pills.fill", symbolColor: Luma.mint, title: d.name, subtitle: d.text) {
-                        Button { doses.remove(at: i) } label: { Image(systemName: "xmark").font(.system(size: 12, weight: .bold)).foregroundStyle(Luma.smoke) }.buttonStyle(.plain)
+                        Button { if doses.indices.contains(i) { doses.remove(at: i) } } label: {
+                            Image(systemName: "xmark").font(.system(size: 12, weight: .bold)).foregroundStyle(Luma.smoke)
+                                .frame(width: 34, height: 34).contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -536,7 +540,7 @@ struct FuelAddSheet: View {
                 } label: {
                     VStack(spacing: 4) {
                         Image(systemName: "drop.fill").foregroundStyle(Luma.sky)
-                        Text("\(Int(ml)) ml").font(LumaFont.numeral(24)).foregroundStyle(Luma.frost)
+                        Text("\(LNum.int(ml)) ml").font(LumaFont.numeral(24)).foregroundStyle(Luma.frost)
                     }
                     .frame(maxWidth: .infinity).padding(.vertical, 18).background(LumaPanel(radius: 20))
                 }
@@ -569,21 +573,29 @@ struct FuelReview: View {
                 total("Fat", entry.fatG, Luma.sky)
             }
             .padding(.vertical, 12).background(LumaPanel(radius: 18))
-            ForEach($entry.items) { $item in
+            // Each item is reached by its id. Reached by position, removing an item while its name was
+            // being typed asked for a row that was no longer there, and that stops the app.
+            ForEach(entry.items) { row in
+                let item = $entry.items.element(row)
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
-                        TextField("Item", text: $item.name).font(LumaFont.body(15.5, .semibold)).foregroundStyle(Luma.frost)
-                        Button { entry.items.removeAll { $0.id == item.id } } label: {
+                        TextField("Item", text: item.name).font(LumaFont.body(15.5, .semibold)).foregroundStyle(Luma.frost)
+                        Button {
+                            LumaKeyboard.dismiss()
+                            entry.items.removeAll { $0.id == row.id }
+                        } label: {
                             Image(systemName: "xmark").font(.system(size: 11, weight: .bold)).foregroundStyle(Luma.smoke)
+                                .frame(width: 34, height: 30).contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("Remove \(row.name)")
                     }
-                    TextField("Amount", text: $item.quantity, prompt: Text("Amount").foregroundStyle(Luma.smoke)).font(LumaFont.body(13.5)).foregroundStyle(Luma.mist)
+                    TextField("Amount", text: item.quantity, prompt: Text("Amount").foregroundStyle(Luma.smoke)).font(LumaFont.body(13.5)).foregroundStyle(Luma.mist)
                     HStack(spacing: 8) {
-                        NumberField(label: "kcal", value: $item.kcal)
-                        NumberField(label: "P g", value: $item.proteinG)
-                        NumberField(label: "C g", value: $item.carbsG)
-                        NumberField(label: "F g", value: $item.fatG)
+                        NumberField(label: "kcal", value: item.kcal)
+                        NumberField(label: "P g", value: item.proteinG)
+                        NumberField(label: "C g", value: item.carbsG)
+                        NumberField(label: "F g", value: item.fatG)
                     }
                 }
                 .padding(14).background(LumaPanel(radius: 18))
@@ -600,7 +612,7 @@ struct FuelReview: View {
 
     private func total(_ label: String, _ v: Double, _ color: Color) -> some View {
         VStack(spacing: 2) {
-            Text("\(Int(v.rounded()))").font(LumaFont.numeral(26)).foregroundStyle(color).contentTransition(.numericText())
+            Text("\(LNum.int(v.rounded()))").font(LumaFont.numeral(26)).foregroundStyle(color).contentTransition(.numericText())
             LumaLabel(label)
         }
         .frame(maxWidth: .infinity)
@@ -645,18 +657,20 @@ struct SupplementsScreen: View {
                 LumaNote("Nothing here yet. Add what you take regularly below, or log from a photo and choose “add to my stack”.")
             } else {
                 LumaGroup {
-                    ForEach($env.supplements) { $s in
+                    ForEach(env.supplements) { s in
                         HStack(spacing: 12) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(s.dose.name).font(LumaFont.body(15, .medium)).foregroundStyle(s.active ? Luma.frost : Luma.smoke)
                                 Text("\(s.dose.text) · \(s.timing.title) · taken \(takenCount(s)) of the last 7 days").font(LumaFont.body(12.5)).foregroundStyle(Luma.mist)
                             }
                             Spacer()
-                            Toggle("", isOn: $s.active).labelsHidden().tint(Luma.volt)
+                            Toggle("", isOn: $env.supplements.element(s).active).labelsHidden().tint(Luma.volt)
                             Button { env.supplements.removeAll { $0.id == s.id } } label: {
                                 Image(systemName: "trash").font(.system(size: 13)).foregroundStyle(Luma.smoke)
+                                    .frame(width: 34, height: 34).contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
+                            .accessibilityLabel("Remove \(s.dose.name)")
                         }
                         .padding(.vertical, 11).padding(.horizontal, 16)
                     }

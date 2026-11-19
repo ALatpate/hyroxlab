@@ -51,7 +51,7 @@ public struct PersonalBest: Codable, Equatable, Sendable, Identifiable {
         case 10000: return "10 km"
         case 21097: return "Half marathon"
         case 42195: return "Marathon"
-        default: return "\(Int(distanceM)) m"
+        default: return "\(LNum.int(distanceM)) m"
         }
     }
 }
@@ -99,7 +99,7 @@ public struct HXZones: Codable, Equatable, Sendable {
         HXZones(bounds: [0.0, 0.85, 0.90, 0.95, 1.0].map { $0 * lthr })
     }
     /// Age estimate when nothing better exists.
-    public static func fromAge(_ age: Int) -> HXZones { fromMaxHR(Double(208 - Int(Double(age) * 0.7))) }
+    public static func fromAge(_ age: Int) -> HXZones { fromMaxHR(Double(208 - LNum.int(Double(age) * 0.7))) }
 
     public func zone(for hr: Double) -> Int {
         var z = 1

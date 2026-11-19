@@ -191,7 +191,7 @@ private struct RunLiveBody: View {
     private var readyLine: String {
         switch c.plan.mode {
         case .free: return "GPS distance and route, a split every kilometre, and spoken cues."
-        case .intervals: return "10 min warm-up, \(c.plan.intervalCount) × \(Int(c.plan.intervalMeters)) m with \(Int(c.plan.restSeconds)) s recoveries, 10 min cool-down. The strap buzzes at each change."
+        case .intervals: return "10 min warm-up, \(c.plan.intervalCount) × \(LNum.int(c.plan.intervalMeters)) m with \(LNum.int(c.plan.restSeconds)) s recoveries, 10 min cool-down. The strap buzzes at each change."
         case .treadmill: return "Time and heart rate are recorded. Enter the treadmill's distance when you finish."
         case .session: return "Time, heart rate and strain are recorded for the whole session."
         }
@@ -275,7 +275,7 @@ private struct RunLiveBody: View {
                     Text("Split \(lap.index)").font(LumaFont.label(12)).foregroundStyle(c.lapFlash != nil ? Luma.volt : Luma.mist)
                     Spacer()
                     Text("\(LumaText.pace(lap.paceSPerKm)) /km").font(LumaFont.numeral(24)).foregroundStyle(Luma.frost)
-                    if let hr = lap.avgHR { Text("\(Int(hr)) bpm").font(LumaFont.body(13)).foregroundStyle(Luma.mist) }
+                    if let hr = lap.avgHR { Text("\(LNum.int(hr)) bpm").font(LumaFont.body(13)).foregroundStyle(Luma.mist) }
                 }
                 .padding(.horizontal, 16).padding(.vertical, 12)
                 .background(LumaPanel(tint: c.lapFlash != nil ? Luma.volt : nil, radius: 18))
@@ -427,7 +427,7 @@ struct SplitsCard: View {
                             Text(LumaText.pace(lap.paceSPerKm)).font(LumaFont.numeral(20)).foregroundStyle(lap.paceSPerKm == fastest ? Luma.volt : Luma.frost)
                             Text("/km").font(LumaFont.body(11)).foregroundStyle(Luma.smoke)
                             Spacer()
-                            if let hr = lap.avgHR { Text("\(Int(hr.rounded())) bpm").font(LumaFont.numeral(16, .medium)).foregroundStyle(Luma.mist) }
+                            if let hr = lap.avgHR { Text("\(LNum.int(hr.rounded())) bpm").font(LumaFont.numeral(16, .medium)).foregroundStyle(Luma.mist) }
                         }
                     }
                 }
@@ -526,9 +526,9 @@ private struct RaceLiveBody: View {
 
     private func segmentLine(_ p: PlannedSegment) -> String {
         var parts: [String] = []
-        if let d = p.distanceM { parts.append(d >= 1000 ? String(format: "%.0f km", d / 1000) : "\(Int(d)) m") }
+        if let d = p.distanceM { parts.append(d >= 1000 ? String(format: "%.0f km", d / 1000) : "\(LNum.int(d)) m") }
         if let r = p.reps { parts.append("\(r) reps") }
-        if let kg = p.loadKg, kg > 0 { parts.append("\(Int(kg)) kg") }
+        if let kg = p.loadKg, kg > 0 { parts.append("\(LNum.int(kg)) kg") }
         return parts.joined(separator: " · ")
     }
 

@@ -67,8 +67,11 @@ public struct SupplementTrial: Codable, Equatable, Sendable, Identifiable {
     /// Nil before the trial starts and after it ends.
     public func position(on day: String, calendar: Calendar = LDate.calendar) -> Position? {
         let offset = LDate.daysBetween(startDay, day, calendar: calendar)
-        guard offset >= 0, offset < totalDays, day <= lastDay(calendar: calendar) else { return nil }
+        // A trial with no days to a block, or fewer blocks than its length implies, has no position:
+        // dividing by nothing, or reading past the order, would stop the app.
+        guard blockDays > 0, offset >= 0, offset < totalDays, day <= lastDay(calendar: calendar) else { return nil }
         let block = offset / blockDays
+        guard block < order.count else { return nil }
         let inBlock = offset % blockDays + 1
         return Position(block: block, round: block / 2 + 1, on: order[block], dayInBlock: inBlock, counted: inBlock > washoutDays,
                         daysLeftInBlock: blockDays - inBlock)

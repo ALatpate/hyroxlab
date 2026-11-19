@@ -317,6 +317,8 @@ extension LumaEnv {
 
     /// Files what was logged from a widget or a shortcut while the app was not running.
     public func applyQuickLog() {
+        // With the records unread there is nowhere to file anything: the queue is left as it is.
+        guard storesReady else { return }
         let items = LumaQuickLog.drain()
         guard !items.isEmpty else { return }
         var added: [FuelEntry] = []
@@ -423,9 +425,9 @@ enum LumaDemoNext {
             }
             let evening = tags[day] ?? []
             if evening.contains(.alcohol) {
-                let drinks = Double(Int(rng.range(2, 4.99)))
+                let drinks = Double(LNum.int(rng.range(2, 4.99)))
                 fuel.append(FuelEntry(at: at(day, 20.8), kind: .drink, title: drinks >= 3 ? "Three pints" : "Two glasses of wine", items: [
-                    FuelItem(name: drinks >= 3 ? "Lager" : "Red wine", quantity: "\(Int(drinks)) drinks", kcal: 160 * drinks, carbsG: 8 * drinks,
+                    FuelItem(name: drinks >= 3 ? "Lager" : "Red wine", quantity: "\(LNum.int(drinks)) drinks", kcal: 160 * drinks, carbsG: 8 * drinks,
                              alcoholG: 10 * drinks)], source: .typed))
             }
             if evening.contains(.lateCaffeine) {
