@@ -6,6 +6,7 @@ import LumaKit
 public struct LumaRootView: View {
     @ObservedObject private var env: LumaEnv
     @ObservedObject private var router: LumaRouter
+    @ObservedObject private var keyboard = LumaKeyboard.shared
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var textSize
     @Namespace private var zoom
@@ -44,8 +45,17 @@ public struct LumaRootView: View {
                 .tag(LumaTab.coach)
                 .toolbar(.hidden, for: .tabBar)
             }
-            LumaTabBar(router: router)
-                .ignoresSafeArea(.keyboard, edges: .bottom)
+            // The bar floats over the pages. Left to itself it rises with the keyboard and sits on top
+            // of the box being typed in, which is what hid the coach's box and any field on a tab's
+            // page. It is held at the foot of the screen, behind the keyboard, and is out of sight and
+            // out of reach while one is up.
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+                LumaTabBar(router: router)
+            }
+            .ignoresSafeArea(.keyboard, edges: .bottom)
+            .opacity(keyboard.isUp ? 0 : 1)
+            .allowsHitTesting(!keyboard.isUp)
         }
         .overlay(alignment: .top) { celebration }
         // While the athlete's records cannot be opened, nothing behind this can be reached.

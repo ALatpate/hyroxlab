@@ -206,11 +206,15 @@ bridge implements them:
 - **The whole of a control takes the tap.** A plain button around an icon in a frame is only as wide
   as the icon's glyph unless it is given a shape (`contentShape`); a minus sign is two points tall.
   Steppers use `LumaStepButton`, which also goes on stepping while held.
-- **A field being typed in is above the keyboard.** SwiftUI moves content out of the keyboard's way
-  in most places and not in all. `lumaKeyboardRoom` measures how much of a page or sheet the keyboard
-  still covers after SwiftUI has had its turn and adds only that, and `LumaKeyboard` scrolls the
-  field into view if it is still hidden. Where SwiftUI has done the whole job both come to nothing,
-  so neither can move a screen twice.
+- **A field being typed in is above the keyboard, and nothing of Luma's sits on it.** SwiftUI moves a
+  page or a sheet out of the keyboard's way by itself. The tab bar floats over the pages, so it rose
+  with the keyboard and sat on top of the coach's box and of any field on a tab's page: it is now held
+  at the foot of the screen and is out of sight while a keyboard is up (`LumaRootView`). Two checks
+  stay behind SwiftUI. `lumaKeyboardRoom` reads where a page's foot really lies on the screen once
+  SwiftUI has had its turn and adds whatever the keyboard still covers; it does not work that out from
+  heights before and after, because the two hear of the keyboard in no fixed order and a "before"
+  taken late doubles the move. And `LumaKeyboard` scrolls the field being typed in into view if it is
+  still hidden. Where SwiftUI has done the whole job both come to nothing.
 - **A set counts what the movement is counted in.** A lift counts reps at a load; a SkiErg, a rower,
   a bike, a run or a carry counts metres, time or calories (`ExerciseInfo.counts`,
   `LiftExercise.measure`). A movement with no load is never asked for a weight, and one read with

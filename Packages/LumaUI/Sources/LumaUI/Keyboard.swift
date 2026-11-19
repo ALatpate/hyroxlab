@@ -4,12 +4,12 @@ import UIKit
 
 /// Where the keyboard is, and the field being typed in.
 ///
-/// SwiftUI moves content out of the keyboard's way by itself in most places and not in all of them:
-/// a field that grows to several lines at the foot of a screen is one it leaves covered. Luma does
-/// not replace what SwiftUI does. It measures how much of a screen the keyboard still covers after
-/// SwiftUI has had its turn and makes up the difference (`lumaKeyboardRoom`), then scrolls the field
-/// being typed in into view if it is still hidden. Where SwiftUI has done the whole job, both come to
-/// nothing.
+/// SwiftUI moves a page or a sheet out of the keyboard's way by itself. Luma does not replace that.
+/// It hides its own tab bar while a keyboard is up (the bar floats over the page, so it rose with the
+/// keyboard and sat on top of whatever was being typed in), and it keeps two checks behind SwiftUI:
+/// `lumaKeyboardRoom` looks at where a page's foot really lies on the screen once SwiftUI has had its
+/// turn and makes up whatever the keyboard still covers, and the field being typed in is scrolled
+/// into view if it is still hidden. Where SwiftUI has done the whole job, both come to nothing.
 @MainActor
 final class LumaKeyboard: ObservableObject {
     static let shared = LumaKeyboard()
@@ -17,6 +17,8 @@ final class LumaKeyboard: ObservableObject {
     /// How far the keyboard reaches above the bottom safe area of the window; 0 while it is away.
     @Published private(set) var lift: CGFloat = 0
     var isUp: Bool { lift > 0 }
+    /// Counts the times the keyboard has come to rest, up or away: a moment to look again at what it covers.
+    @Published private(set) var rested = 0
 
     /// The text field or text view being typed in.
     private weak var field: UIView?
@@ -32,7 +34,13 @@ final class LumaKeyboard: ObservableObject {
             .store(in: &bag)
         // Once the keyboard has come to rest, and whenever typing moves to another field under it.
         center.publisher(for: UIResponder.keyboardDidShowNotification)
-            .sink { [weak self] _ in self?.reveal() }
+            .sink { [weak self] _ in
+                self?.rested += 1
+                self?.reveal()
+            }
+            .store(in: &bag)
+        center.publisher(for: UIResponder.keyboardDidHideNotification)
+            .sink { [weak self] _ in self?.rested += 1 }
             .store(in: &bag)
         center.publisher(for: UITextField.textDidBeginEditingNotification)
             .merge(with: center.publisher(for: UITextView.textDidBeginEditingNotification))
@@ -114,38 +122,74 @@ final class LumaKeyboard: ObservableObject {
     }
 }
 
-/// Keeps what it wraps clear of the keyboard: whatever room SwiftUI has not already made is added at
-/// the foot. For a view whose foot sits at the foot of the screen (a page, a sheet).
+/// Keeps what it wraps clear of the keyboard: whatever of it the keyboard still covers, once SwiftUI
+/// has moved things, is added as room at its foot.
+///
+/// What is covered is read from where the view's foot actually lies on the screen, not worked out
+/// from heights before and after: SwiftUI and this both hear of the keyboard at the same moment, in
+/// no fixed order, and a "before" taken a moment late doubled the move.
 private struct LumaKeyboardRoom: ViewModifier {
     @ObservedObject private var keyboard = LumaKeyboard.shared
-    /// The height of the wrapped view while the keyboard is away, and its height now.
-    @State private var resting: CGFloat = 0
-    @State private var height: CGFloat = 0
+    @State private var extra: CGFloat = 0
+    @State private var probe = FootProbe.Box()
 
     func body(content: Content) -> some View {
         content
             .padding(.bottom, extra)
-            .background(
-                GeometryReader { geo in
-                    Color.clear
-                        .onAppear { measured(geo.size.height) }
-                        .onChange(of: geo.size.height) { _, new in measured(new) }
-                }
-            )
-            .onChange(of: keyboard.lift) { _, lift in if lift == 0 { resting = height } }
+            // Behind the padded view, so it has that view's frame: the padding is inside what it measures.
+            .background(FootProbe(box: probe) { settleSoon() })
+            .onChange(of: keyboard.lift) { _, _ in settleSoon() }
+            .onChange(of: keyboard.rested) { _, _ in settleSoon() }
     }
 
-    /// What the keyboard still covers: how far it reaches up, less the height this view has already
-    /// given up to it.
-    private var extra: CGFloat {
-        guard keyboard.lift > 0, resting > 0 else { return 0 }
-        let given = max(0, resting - height)
-        return max(0, keyboard.lift - given)
+    /// On the next turn of the run loop: after SwiftUI's own move for the keyboard has landed, and
+    /// never in the middle of a view update.
+    private func settleSoon() {
+        Task { @MainActor in settle() }
     }
 
-    private func measured(_ new: CGFloat) {
-        height = new
-        if keyboard.lift == 0 { resting = new }
+    private func settle() {
+        var covered: CGFloat = 0
+        if keyboard.lift > 0, let view = probe.view, let window = view.window {
+            let foot = view.convert(view.bounds, to: window).maxY
+            let keyboardTop = window.bounds.maxY - window.safeAreaInsets.bottom - keyboard.lift
+            covered = max(0, foot - keyboardTop)
+        }
+        guard abs(covered - extra) > 0.5 else { return }
+        withAnimation(.easeOut(duration: 0.22)) { extra = covered }
+    }
+}
+
+/// A clear view with no size of its own, placed behind another to say where that one lies on screen.
+private struct FootProbe: UIViewRepresentable {
+    final class Box {
+        weak var view: UIView?
+    }
+
+    final class Probe: UIView {
+        var onLayout: (() -> Void)?
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            onLayout?()
+        }
+    }
+
+    let box: Box
+    let onLayout: () -> Void
+
+    func makeUIView(context: Context) -> Probe {
+        let view = Probe()
+        view.isUserInteractionEnabled = false
+        view.backgroundColor = .clear
+        view.onLayout = onLayout
+        box.view = view
+        return view
+    }
+
+    func updateUIView(_ view: Probe, context: Context) {
+        view.onLayout = onLayout
+        box.view = view
     }
 }
 
