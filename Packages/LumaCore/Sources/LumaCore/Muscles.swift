@@ -299,7 +299,8 @@ public enum ExerciseLibrary {
         }
         if let best {
             return ExerciseInfo(name: shown, primary: best.info.primary, secondary: best.info.secondary, scale: nil,
-                                bodyweight: best.info.bodyweight, resistance: best.info.resistance, expectsLoad: best.info.expectsLoad)
+                                bodyweight: best.info.bodyweight, resistance: best.info.resistance, expectsLoad: best.info.expectsLoad,
+                                counts: best.info.counts)
         }
         return guess(words: Set(words), name: shown)
     }
@@ -318,13 +319,15 @@ public enum ExerciseLibrary {
 
     /// A last resort for names Luma does not know: the word that names the kind of movement.
     private static func guess(words w: Set<String>, name: String) -> ExerciseInfo? {
-        func info(_ primary: [Muscle], _ secondary: [Muscle] = [], resistance: Bool = true) -> ExerciseInfo {
+        func info(_ primary: [Muscle], _ secondary: [Muscle] = [], resistance: Bool = true, counts: SetMeasure = .reps) -> ExerciseInfo {
             ExerciseInfo(name: name, primary: primary, secondary: secondary, scale: nil, bodyweight: false, resistance: resistance,
-                         expectsLoad: false)
+                         expectsLoad: false, counts: counts)
         }
-        if !w.isDisjoint(with: ["run", "running", "jog", "sprint", "ski", "bike", "erg", "rower", "rowing", "skip", "swim"]) {
-            return info([], resistance: false)
+        if !w.isDisjoint(with: ["run", "running", "jog", "sprint", "ski", "bike", "erg", "rower", "rowing", "swim"]) {
+            // Covered ground: counted in metres.
+            return info([], resistance: false, counts: .meters)
         }
+        if w.contains("skip") { return info([], resistance: false) }
         if w.contains("squat") { return info([.quads, .glutes]) }
         if w.contains("deadlift") { return info([.hamstrings, .glutes, .lowerBack]) }
         if w.contains("lunge") { return info([.quads, .glutes], [.hamstrings]) }
@@ -338,7 +341,8 @@ public enum ExerciseLibrary {
         if w.contains("row") { return info([.upperBack, .lats], [.biceps]) }
         if w.contains("pull") || w.contains("pulldown") || w.contains("chin") { return info([.lats], [.biceps]) }
         if w.contains("press") || w.contains("jerk") { return info([.shoulders], [.triceps]) }
-        if w.contains("carry") || w.contains("hold") || w.contains("hang") { return info([.forearms], [.abs]) }
+        if w.contains("carry") { return info([.forearms], [.abs], counts: .meters) }
+        if w.contains("hold") || w.contains("hang") { return info([.forearms], [.abs], counts: .seconds) }
         if w.contains("jump") || w.contains("hop") || w.contains("bound") { return info([.quads, .glutes], [.calves]) }
         if !w.isDisjoint(with: ["plank", "crunch", "core", "ab", "abs", "hollow"]) { return info([.abs]) }
         if w.contains("tricep") { return info([.triceps]) }

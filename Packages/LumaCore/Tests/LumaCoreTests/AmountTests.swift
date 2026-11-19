@@ -15,6 +15,12 @@ final class AmountTests: XCTestCase {
         for name in ["SkiErg", "RowErg", "BikeErg"] {
             XCTAssertEqual(ExerciseLibrary.match(name)?.resistance, false, name)
         }
+        // A known movement inside a longer name keeps what it counts, and so does one only guessed at.
+        XCTAssertEqual(ExerciseLibrary.match("Heavy sled push relay")?.counts, .meters)
+        XCTAssertEqual(ExerciseLibrary.match("Curved treadmill sprint")?.counts, .meters)
+        XCTAssertEqual(ExerciseLibrary.match("Concept2 erg")?.counts, .meters)
+        XCTAssertEqual(ExerciseLibrary.match("Yoke carry")?.counts, .meters)
+        XCTAssertEqual(ExerciseLibrary.match("Ring hold")?.counts, .seconds)
     }
 
     func testAMovementReadWithNothingCountedAsksForItsAmountInItsOwnMeasure() {
