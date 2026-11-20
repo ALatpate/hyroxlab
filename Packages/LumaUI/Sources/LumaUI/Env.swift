@@ -257,8 +257,6 @@ enum LumaSheetDest: Identifiable {
     case sweatTest
     /// Set up a trial of one supplement.
     case trialSetup(String)
-    /// Glimm's wardrobe.
-    case wardrobe
 
     var id: String {
         switch self {
@@ -274,7 +272,6 @@ enum LumaSheetDest: Identifiable {
         case .weighIn: return "weigh-in"
         case .sweatTest: return "sweat-test"
         case .trialSetup(let name): return "trial-setup-\(name)"
-        case .wardrobe: return "wardrobe"
         }
     }
 }
@@ -879,10 +876,11 @@ public final class LumaEnv: ObservableObject {
             if self.isDemo {
                 self.coach.seedDemo()
                 self.stageDemoDoctor()
+                self.stageDemoGlimm()
             }
             // The weekly check is due from Sunday 00:00 and runs at the first read of the strap data after it.
             self.runDoctorIfDue()
-            self.glimmTurnDay()
+            self.glimmKeepUp()
             await self.refreshSuggestions()
         }
     }

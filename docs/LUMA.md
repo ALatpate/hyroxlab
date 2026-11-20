@@ -135,15 +135,25 @@ bridge implements them:
   wardrobe offers a cut the drawing cannot draw, or when a mood exists on one side only. The
   character is the athlete's own design. No third-party artwork.
 - **Glimm's state is the facts'; its clothes, its words and its taste are its own.** The state still
-  comes from `Buddy.look`. What it wears for that state is chosen in one place
-  (`LumaEnv.glimmOutfit`, from `GlimmState.outfit`): the outfit kept on, else the one picked today,
-  else the stylist's (`GlimmStylist.outfit`), which is fixed by the day, the setting and how often
-  another was asked for, so the app, the widgets and the Lock Screen card show the same clothes and a
-  day keeps its look. The wardrobe is 64 cuts in 16 colours, every top in 6 patterns
-  (`GlimmWardrobe`, 2,944 pieces). A like or a dislike moves a score for each colour and cut once
-  per outfit, within bounds (`GlimmTaste`); one pick in seven ignores the scores so the wardrobe does
-  not narrow to a few favourites. Glimm has no way to know the weather, and on the days the season
-  dresses it for rain or cold its lines do not claim either.
+  comes from `Buddy.look`. What it wears for that state is Glimm's pick and nobody else's: there is
+  no wardrobe screen, no button that changes, rates or holds an outfit, and no way to dress it by
+  hand. The pick is made in one place (`LumaEnv.glimmOutfit`, from `GlimmState.outfit`), and is
+  fixed by the day, the setting, how the day feels and how often it has changed its mind, so the
+  app, the widgets and the Lock Screen card show the same clothes and a day keeps its look. The
+  wardrobe is 64 cuts in 16 colours, every top in 6 patterns (`GlimmWardrobe`, 2,944 pieces), and is
+  never listed on a screen.
+- **Its taste is not set by anyone.** What pulls it towards a piece (`GlimmStylist.score`): the
+  setting the state asks for; what it has always liked (`GlimmNature`, a fixed table: its hoodies,
+  its trainers, its colours); the colour it is into for a run of nine days, which the calendar alone
+  picks (`GlimmStylist.phase`); how the day feels, louder on a charged day and gentler on a drained
+  one, by the recovery ring's own bands (`GlimmFeel`, set in `glimmKeepUp` from the same score); a
+  top worn lately counts against itself; and one pick in seven ignores all of it. Two things are
+  learnt, both from what happened and neither from a control: something kind said about its clothes
+  in a chat makes it fonder of each piece (`GlimmState.enjoyed`), and the top it trained in on the
+  day of a new best becomes its lucky one, worn to train in on some days from then on
+  (`GlimmState.noteBest`). It says why it picked what it has on (`GlimmState.why`, one reason from
+  those that hold, the same all day). Glimm has no way to know the weather, and on the days the
+  season dresses it for rain or cold its lines claim neither.
 - **Glimm's own words carry no figures.** Its lines (`GlimmVoice`) are written into the app and say
   nothing the data would have to back; a test fails on a line with a digit in it. The figure behind
   a state is the fact line beside it (`BuddyLook.line`). No line guilts, none claims Glimm watched
@@ -153,7 +163,9 @@ bridge implements them:
   the app chooses (`GlimmChat.facts`); the reason for its state carries health figures, so it goes
   only while "Share my health data with the coach" is on. What comes back is used only after
   `GlimmChat.parse` has checked it: words of a length it can say, a mood it has, a setting to dress
-  for and a colour only from the lists the app holds. Nothing else in a reply is acted on.
+  for and a colour only from the lists the app holds, and whether its clothes were admired. A
+  change of clothes in a chat is its own decision: it is told that a suggestion is its call to take
+  up or to turn down. Nothing else in a reply is acted on.
 - **Glimm remembers only what it was told to.** A reply may suggest one thing to keep; it is kept
   only on a yes, and what was written in by hand or agreed to is listed on its screen and can be
   taken out (`GlimmState.remember`). It stays in `glimm.json`, in the vault with the other records.

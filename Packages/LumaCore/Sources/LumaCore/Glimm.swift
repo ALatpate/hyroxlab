@@ -2,10 +2,11 @@ import Foundation
 
 // MARK: - Glimm
 //
-// The companion as a character: its moods, its wardrobe, the taste it learns and the small things it
-// remembers. What state it is in still comes from the facts (`Buddy.look`); this file decides how
-// that state is worn and kept. Nothing here draws: the figure is drawn from the outfit's `code` by
-// LumaKit, which knows each cut by its shape name.
+// The companion as a character: its moods, its wardrobe, a taste of its own and the small things it
+// remembers. What state it is in still comes from the facts (`Buddy.look`); how that state is worn
+// is Glimm's own choice, made here and nowhere else: nobody dresses it, and no screen shows its
+// wardrobe. Nothing here draws: the figure is drawn from the outfit's `code` by LumaKit, which knows
+// each cut by its shape name.
 
 /// The moods Glimm can show. A state of the day maps onto one (`BuddyMood.glimm`); a reply in a chat
 /// may name any of them.
@@ -287,7 +288,8 @@ public struct GlimmOutfit: Codable, Equatable, Sendable {
         return said + "."
     }
 
-    /// The outfit with one piece put on in its slot, and anything it cannot be worn with taken off.
+    /// The outfit with one piece in its slot, and a hat it cannot be worn with left off. For showing
+    /// a piece on the figure; what Glimm wears is picked whole, by `GlimmStylist.outfit`.
     public func wearing(_ item: GlimmItem) -> GlimmOutfit {
         guard item.isKnown, let slot = item.slot else { return self }
         var o = self
@@ -298,38 +300,25 @@ public struct GlimmOutfit: Codable, Equatable, Sendable {
         case .head: o.head = item
         case .accessory: o.accessory = item
         }
-        return o.tidied(keeping: slot)
-    }
-
-    /// The outfit without its hat or its extra. The other three are always worn.
-    public func without(_ slot: GlimmSlot) -> GlimmOutfit {
-        var o = self
-        if slot == .head { o.head = nil }
-        if slot == .accessory { o.accessory = nil }
-        return o
+        return o.tidied()
     }
 
     /// Things that cannot be worn together: a hat under a hood that is up, and headphones over
-    /// anything but a bare head, a headband or a visor. The piece just put on is the one kept.
-    func tidied(keeping kept: GlimmSlot? = nil) -> GlimmOutfit {
+    /// anything but a bare head, a headband or a visor. The hat is what stays off.
+    func tidied() -> GlimmOutfit {
         var o = self
         let shape: (GlimmItem?) -> String? = { $0.flatMap { GlimmWardrobe.style($0.style)?.shape } }
-        if shape(o.top) == "coat", o.head != nil {
-            // The raincoat's hood is up and no hat fits under it. A hat just put on is the wish, so the
-            // coat gives way to a hoodie of its own colour; otherwise the hat stays off.
-            if kept == .head { o.top = GlimmItem(style: "zip-hoodie", palette: o.top.palette, pattern: o.top.pattern) } else { o.head = nil }
-        }
-        if shape(o.accessory) == "headphones", let hat = shape(o.head), hat != "headband", hat != "visor" {
-            if kept == .head { o.accessory = nil } else { o.head = nil }
-        }
+        if shape(o.top) == "coat" { o.head = nil }
+        if shape(o.accessory) == "headphones", let hat = shape(o.head), hat != "headband", hat != "visor" { o.head = nil }
         return o
     }
 }
 
 // MARK: - Taste
 
-/// What Glimm has learnt about the clothes its person likes: a score for each colour and each cut,
-/// moved by a like or a dislike of an outfit, and a little by a piece picked by hand.
+/// What Glimm has grown fond of along the way: a score for each colour and each cut, raised when
+/// something kind was said about what it had on. What it liked from the start (`GlimmNature`) and
+/// the colour it is into for now (`GlimmStylist.phase`) are not kept here: they are not learnt.
 public struct GlimmTaste: Codable, Equatable, Sendable {
     /// "palette:coral" and "style:zip-hoodie" to a score between −`bound` and `bound`.
     public var scores: [String: Double] = [:]
@@ -340,7 +329,6 @@ public struct GlimmTaste: Codable, Equatable, Sendable {
 
     public static let bound = 6.0
     public static let step = 0.65
-    public static let nudge = 0.2
     public static let kept = 300
 
     public init() {}
@@ -351,8 +339,8 @@ public struct GlimmTaste: Codable, Equatable, Sendable {
         (scores["palette:" + item.palette] ?? 0) + (scores["style:" + item.style] ?? 0)
     }
 
-    /// A like or a dislike of an outfit. Saying the same thing twice changes nothing; changing one's
-    /// mind takes the first answer back before applying the second.
+    /// What was thought of an outfit. Saying the same thing twice changes nothing; a change of mind
+    /// takes the first answer back before applying the second.
     public mutating func rate(_ outfit: GlimmOutfit, like: Bool) {
         let key = outfit.key
         let value = like ? 1 : -1
@@ -370,30 +358,100 @@ public struct GlimmTaste: Codable, Equatable, Sendable {
         while order.count > GlimmTaste.kept { ratings.removeValue(forKey: order.removeFirst()) }
     }
 
-    /// A piece picked by hand says a little about what is liked.
-    public mutating func chose(_ item: GlimmItem) {
-        move("style:" + item.style, by: GlimmTaste.nudge)
-        move("palette:" + item.palette, by: GlimmTaste.nudge)
-    }
-
     private mutating func move(_ feature: String, by delta: Double) {
         let next = min(GlimmTaste.bound, max(-GlimmTaste.bound, (scores[feature] ?? 0) + delta))
         if abs(next) < 0.0001 { scores.removeValue(forKey: feature) } else { scores[feature] = next }
     }
 
-    /// The colours leant towards and away from, strongest first, by name.
-    public func colours(liked: Bool) -> [String] {
-        scores.filter { $0.key.hasPrefix("palette:") && (liked ? $0.value > 0.3 : $0.value < -0.3) }
-            .sorted { liked ? ($0.value, $1.key) > ($1.value, $0.key) : ($0.value, $0.key) < ($1.value, $1.key) }
-            .compactMap { GlimmWardrobe.palette(String($0.key.dropFirst(8)))?.name }
+    /// What it has grown fond of, strongest first, by name: colours, then cuts.
+    public var fondOf: [String] {
+        let liked = scores.filter { $0.value > 0.3 }.sorted { ($0.value, $1.key) > ($1.value, $0.key) }
+        let colours = liked.filter { $0.key.hasPrefix("palette:") }.compactMap { GlimmWardrobe.palette(String($0.key.dropFirst(8)))?.name }
+        let cuts = liked.filter { $0.key.hasPrefix("style:") }.compactMap { GlimmWardrobe.style(String($0.key.dropFirst(6)))?.name }
+        return colours + cuts
+    }
+}
+
+// MARK: - A taste of its own
+
+/// What Glimm liked before it learnt anything: colourful trainers, big hoodies, useful pockets and
+/// its thinking cardigan, in the colours it is known by. Fixed, so it has favourites from the first
+/// day and they stay its favourites.
+public enum GlimmNature {
+    static let leanings: [String: Double] = [
+        "palette:coral": 1.5, "palette:teal": 1.2, "palette:lilac": 1.2, "palette:butter": 0.8, "palette:sky": 0.5, "palette:tangerine": 0.4,
+        "palette:navy": -0.3, "palette:charcoal": -0.6,
+        "style:zip-hoodie": 1.5, "style:trainers": 1.4, "style:cloud-hoodie": 1.2, "style:joggers": 1.0, "style:crossbody": 1.0,
+        "style:high-tops": 0.9, "style:sweatshirt": 0.8, "style:cargos": 0.8, "style:cardigan": 0.8, "style:retro-shoes": 0.7,
+        "style:bomber": 0.6, "style:backpack": 0.6,
+    ]
+
+    public static func score(_ item: GlimmItem) -> Double {
+        (leanings["palette:" + item.palette] ?? 0) + (leanings["style:" + item.style] ?? 0)
     }
 
-    /// The cuts leant towards, strongest first, by name.
-    public func cuts(liked: Bool) -> [String] {
-        scores.filter { $0.key.hasPrefix("style:") && (liked ? $0.value > 0.3 : $0.value < -0.3) }
-            .sorted { liked ? ($0.value, $1.key) > ($1.value, $0.key) : ($0.value, $0.key) < ($1.value, $1.key) }
-            .compactMap { GlimmWardrobe.style(String($0.key.dropFirst(6)))?.name }
+    /// A cut it has always reached for.
+    public static func isFavourite(_ item: GlimmItem) -> Bool { (leanings["style:" + item.style] ?? 0) >= 1 }
+
+    /// The colours and the cuts it has always liked, strongest first, by name.
+    public static let favourites: (colours: [String], cuts: [String]) = {
+        let liked = leanings.filter { $0.value >= 1 }.sorted { ($0.value, $1.key) > ($1.value, $0.key) }
+        return (liked.filter { $0.key.hasPrefix("palette:") }.compactMap { GlimmWardrobe.palette(String($0.key.dropFirst(8)))?.name },
+                liked.filter { $0.key.hasPrefix("style:") }.compactMap { GlimmWardrobe.style(String($0.key.dropFirst(6)))?.name })
+    }()
+}
+
+/// How the day feels to it, which shows in what it reaches for: louder colours and more pattern on
+/// a strong day, gentler ones and plainer cloth on a low one.
+public enum GlimmFeel: String, Codable, CaseIterable, Sendable {
+    case bright, even, soft
+
+    /// From the day's recovery score, by the bands the recovery ring uses; even when there is none.
+    public init(recovery score: Double?) {
+        guard let score else { self = .even; return }
+        switch RecoveryBand.of(score) {
+        case .high: self = .bright
+        case .moderate: self = .even
+        case .low: self = .soft
+        }
     }
+
+    static let loud: Set<String> = ["coral", "teal", "butter", "cobalt", "tangerine", "cherry"]
+    static let gentle: Set<String> = ["lilac", "sky", "rose", "sage", "cream", "mint"]
+
+    /// What the feeling adds to a colour's pull.
+    func pull(_ palette: String) -> Double {
+        switch self {
+        case .bright: return GlimmFeel.loud.contains(palette) ? 1 : (GlimmFeel.gentle.contains(palette) ? 0 : -0.5)
+        case .soft: return GlimmFeel.gentle.contains(palette) ? 1 : (GlimmFeel.loud.contains(palette) ? -0.5 : 0)
+        case .even: return 0
+        }
+    }
+
+    /// How often, out of 1, a top comes with a pattern.
+    var patterned: Double {
+        switch self {
+        case .bright: return 0.62
+        case .even: return 0.5
+        case .soft: return 0.3
+        }
+    }
+}
+
+/// Why Glimm has on what it has on.
+public enum GlimmWhy: Hashable, Sendable {
+    /// It changed its mind today.
+    case changed
+    /// The top it had on to train in on the day of a new best.
+    case lucky
+    /// The day asked for it: training, bed, a celebration, the kitchen, rain, cold, sun, getting out, work.
+    case setting(GlimmContext)
+    /// The colour it is into for now, by palette id.
+    case phase(String)
+    /// One of the cuts it has always liked, by style id.
+    case favourite(String)
+    /// It felt like it.
+    case fancy
 }
 
 // MARK: - Getting dressed
@@ -459,12 +517,49 @@ public enum GlimmStylist {
         }
     }
 
-    /// How well a piece suits: the setting first, then what has been learnt, what was worn lately,
-    /// and the time of year.
+    // MARK: What it likes
+
+    /// The days a phase lasts.
+    public static let phaseDays = 9
+    /// What being in a phase adds to a colour's pull.
+    public static let phasePull = 2.4
+    /// How often, out of 1, it trains in its lucky top once it has one.
+    public static let luckyShare = 0.4
+
+    /// The colour Glimm is into for now. Phases come and go with the calendar alone, a few days at a
+    /// time: it has one from the first day, and nobody sets it.
+    public static func phase(day: String) -> GlimmPalette {
+        let run = (dayNumber(day) ?? 0) / phaseDays
+        var rng = SeededRNG(seed: seed("phase|\(run)"))
+        let all = GlimmWardrobe.palettes
+        return all[LNum.int((rng.unit() * Double(all.count)).rounded(.down)) % all.count]
+    }
+
+    /// A day's place in the run of days, from its "YYYY-MM-DD" key (1970-01-01 is 0): the same
+    /// wherever it is worked out, with no calendar or time zone in it.
+    static func dayNumber(_ day: String) -> Int? {
+        let f = day.split(separator: "-").compactMap { Int($0) }
+        guard f.count == 3, (1...12).contains(f[1]), (1...31).contains(f[2]) else { return nil }
+        let y = f[1] <= 2 ? f[0] - 1 : f[0]
+        let era = (y >= 0 ? y : y - 399) / 400
+        let yearOfEra = y - era * 400
+        let dayOfYear = (153 * ((f[1] + 9) % 12) + 2) / 5 + f[2] - 1
+        let dayOfEra = yearOfEra * 365 + yearOfEra / 4 - yearOfEra / 100 + dayOfYear
+        return era * 146_097 + dayOfEra - 719_468
+    }
+
+    /// How much Glimm likes a piece for itself, whatever the day asks for: what it has always liked,
+    /// what it has grown fond of, and the colour it is into for now.
+    public static func liking(_ item: GlimmItem, taste: GlimmTaste, phase: String?) -> Double {
+        GlimmNature.score(item) + taste.score(item) + (item.palette == phase ? phasePull : 0)
+    }
+
+    /// How well a piece suits: the setting first, then its own liking, how the day feels, what was
+    /// worn lately, and the time of year.
     public static func score(_ item: GlimmItem, style: GlimmStyle, context: GlimmContext, taste: GlimmTaste, recentTops: [String], month: Int,
-                             prefer: String? = nil) -> Double {
+                             prefer: String? = nil, phase: String? = nil, feel: GlimmFeel = .even) -> Double {
         var s: Double = style.context == context ? 5 : (style.context == .everyday ? 1 : 0)
-        s += taste.score(item)
+        s += liking(item, taste: taste, phase: phase) + feel.pull(item.palette)
         if style.slot == .top, recentTops.contains(item.style + "__" + item.palette) { s -= 4 }
         if [.everyday, .focus, .relax, .adventure].contains(context) {
             let lean: Double = [11, 12, 1, 2].contains(month) ? 0.5 : ([6, 7, 8].contains(month) ? -0.5 : 0)
@@ -474,11 +569,14 @@ public enum GlimmStylist {
         return s
     }
 
-    /// An outfit for a setting. The same day, setting and `salt` always give the same outfit, so the
-    /// app and its widgets agree and a day keeps its look; asking for another raises the salt.
+    /// An outfit for a setting, picked whole by Glimm. The same day, setting, feeling and `salt`
+    /// always give the same outfit, so the app and its widgets agree and a day keeps its look; a
+    /// change of mind raises the salt. `lucky` is its lucky top, by item id: on some training days
+    /// it is simply what goes on.
     public static func outfit(context: GlimmContext, taste: GlimmTaste = GlimmTaste(), recentTops: [String] = [], day: String, salt: Int = 0, month: Int,
-                              prefer: String? = nil) -> GlimmOutfit {
+                              prefer: String? = nil, feel: GlimmFeel = .even, lucky: String? = nil) -> GlimmOutfit {
         var rng = SeededRNG(seed: seed("\(day)|\(context.rawValue)|\(salt)"))
+        let into = phase(day: day).id
         var picked: [GlimmSlot: GlimmItem] = [:]
         for slot in GlimmSlot.allCases {
             // A hat and an extra are not worn every time, and never to bed.
@@ -496,7 +594,8 @@ public enum GlimmStylist {
             for style in styles {
                 for palette in GlimmWardrobe.palettes {
                     let item = GlimmItem(style: style.id, palette: palette.id)
-                    let s = score(item, style: style, context: context, taste: taste, recentTops: recentTops, month: month, prefer: prefer)
+                    let s = score(item, style: style, context: context, taste: taste, recentTops: recentTops, month: month, prefer: prefer,
+                                  phase: into, feel: feel)
                     candidates.append((item, exp(min(10, s) / 2.1)))
                 }
             }
@@ -511,12 +610,17 @@ public enum GlimmStylist {
                 }
             }
             if slot == .top {
-                // Plain most of the time; a pattern is a treat.
+                // Plain much of the time; a pattern is a treat, and more of one on a bright day.
                 let roll = rng.unit()
-                if roll >= 0.5 {
+                let plain = 1 - feel.patterned
+                if roll >= plain {
                     let marked = GlimmWardrobe.patterns.filter { $0 != "plain" }
-                    choice.pattern = marked[LNum.int(((roll - 0.5) * 2 * Double(marked.count)).rounded(.down)) % marked.count]
+                    choice.pattern = marked[LNum.int(((roll - plain) / (1 - plain) * Double(marked.count)).rounded(.down)) % marked.count]
                 }
+                // Its lucky top is for training in. The roll is made either way, so having one changes
+                // nothing else about the day's kit.
+                let fate = rng.unit()
+                if context == .training, prefer == nil, fate < luckyShare, let piece = lucky.flatMap({ GlimmItem(id: $0) }), piece.slot == .top { choice = piece }
             }
             picked[slot] = choice
         }
@@ -563,16 +667,20 @@ public struct GlimmTurn: Codable, Equatable, Sendable {
 /// Everything Glimm keeps between one day and the next.
 public struct GlimmState: Codable, Equatable, Sendable {
     public var taste = GlimmTaste()
-    /// An outfit kept on until it is let go.
-    public var lock: GlimmOutfit?
-    /// What was picked for a setting today, by hand or by asking for another, by `GlimmContext` name.
+    /// What it changed into today, when it changed its mind, by `GlimmContext` name.
     public var chosen: [String: GlimmOutfit] = [:]
-    /// How many times another outfit was asked for today, by setting.
+    /// How many times it has changed its mind today, by setting.
     public var salts: [String: Int] = [:]
-    /// The day `chosen` and `salts` hold for.
+    /// The day `chosen`, `salts` and `feel` hold for.
     public var day = ""
     /// The tops of the last few days, as "style__palette", so they are not worn again at once.
     public var recentTops: [String] = []
+    /// How today feels to it, once the day's recovery is known.
+    public var feel = GlimmFeel.even
+    /// Its lucky top, by item id: the one it had on to train in on the day of a new best.
+    public var lucky: String?
+    /// The day the lucky top was last made so.
+    public var luckyDay: String?
     public var memories: [GlimmMemory] = []
     /// The lines said lately, by id, so one is not said twice running.
     public var said: [String] = []
@@ -587,43 +695,52 @@ public struct GlimmState: Codable, Equatable, Sendable {
 
     public init() {}
 
-    enum CodingKeys: String, CodingKey { case taste, lock, chosen, salts, day, recentTops, memories, said, chat, quiet }
+    // An outfit could once be kept on by hand ("lock"). It is no longer read or written: what it
+    // wears is its own choice, and a file that still holds one is read as if it did not.
+    enum CodingKeys: String, CodingKey { case taste, chosen, salts, day, recentTops, feel, lucky, luckyDay, memories, said, chat, quiet }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         taste = try c.decodeIfPresent(GlimmTaste.self, forKey: .taste) ?? GlimmTaste()
-        lock = try c.decodeIfPresent(GlimmOutfit.self, forKey: .lock)
         chosen = try c.decodeIfPresent([String: GlimmOutfit].self, forKey: .chosen) ?? [:]
         salts = try c.decodeIfPresent([String: Int].self, forKey: .salts) ?? [:]
         day = try c.decodeIfPresent(String.self, forKey: .day) ?? ""
         recentTops = try c.decodeIfPresent([String].self, forKey: .recentTops) ?? []
+        feel = (try? c.decodeIfPresent(GlimmFeel.self, forKey: .feel)) ?? .even
+        lucky = try c.decodeIfPresent(String.self, forKey: .lucky)
+        luckyDay = try c.decodeIfPresent(String.self, forKey: .luckyDay)
         memories = try c.decodeIfPresent([GlimmMemory].self, forKey: .memories) ?? []
         said = try c.decodeIfPresent([String].self, forKey: .said) ?? []
         chat = try c.decodeIfPresent([GlimmTurn].self, forKey: .chat) ?? []
         quiet = try c.decodeIfPresent(Bool.self, forKey: .quiet) ?? false
-        // A piece the wardrobe no longer holds is not kept on.
-        if let kept = lock, !kept.isValid { lock = nil }
+        // A piece the wardrobe no longer holds is not worn.
         chosen = chosen.filter { $0.value.isValid }
     }
 
     /// Whether two states would dress it the same: everything `outfit(for:day:month:)` reads. What it
     /// has said or been told does not change its clothes.
     public func dressesAs(_ other: GlimmState) -> Bool {
-        taste == other.taste && lock == other.lock && chosen == other.chosen && salts == other.salts && day == other.day
-            && recentTops == other.recentTops
+        taste == other.taste && chosen == other.chosen && salts == other.salts && day == other.day && recentTops == other.recentTops
+            && feel == other.feel && lucky == other.lucky
     }
 
-    /// What Glimm wears for a setting on a day: the outfit kept on, else the one picked today, else
-    /// the stylist's.
+    /// What Glimm wears for a setting on a day. Its own pick, always: what it changed into today when
+    /// it changed its mind, else what it chose for the day. A day still to come is dressed as it will
+    /// be once the day has turned.
     public func outfit(for context: GlimmContext, day: String, month: Int) -> GlimmOutfit {
-        if let lock { return lock }
         if day == self.day, let picked = chosen[context.rawValue] { return picked }
-        let salt = day == self.day ? (salts[context.rawValue] ?? 0) : 0
-        return GlimmStylist.outfit(context: context, taste: taste, recentTops: recentTops, day: day, salt: salt, month: month)
+        if !self.day.isEmpty, day > self.day {
+            var ahead = self
+            ahead.turn(to: day, month: month)
+            return ahead.outfit(for: context, day: day, month: month)
+        }
+        let today = day == self.day
+        return GlimmStylist.outfit(context: context, taste: taste, recentTops: recentTops, day: day, salt: today ? (salts[context.rawValue] ?? 0) : 0,
+                                   month: month, feel: today ? feel : .even, lucky: lucky)
     }
 
-    /// A new day: what was picked yesterday no longer holds, and yesterday's top goes on the list of
-    /// what was worn lately. Does nothing on the same day.
+    /// A new day: yesterday's changes of mind no longer hold, how the day feels is not known yet, and
+    /// yesterday's top goes on the list of what was worn lately. Does nothing on the same day.
     public mutating func turn(to day: String, month: Int) {
         guard day != self.day else { return }
         if !self.day.isEmpty {
@@ -632,48 +749,59 @@ public struct GlimmState: Codable, Equatable, Sendable {
         }
         chosen = [:]
         salts = [:]
+        feel = .even
         self.day = day
     }
 
-    /// Another outfit for a setting, kept for the rest of the day. `prefer` is a colour asked for.
+    /// A change of mind: another outfit for a setting, worn for the rest of the day. `prefer` is a
+    /// colour it has taken a fancy to.
     @discardableResult
     public mutating func another(for context: GlimmContext, day: String, month: Int, prefer: String? = nil) -> GlimmOutfit {
         turn(to: day, month: month)
         let before = outfit(for: context, day: day, month: month)
         var salt = (salts[context.rawValue] ?? 0) + 1
-        var next = GlimmStylist.outfit(context: context, taste: taste, recentTops: recentTops, day: day, salt: salt, month: month, prefer: prefer)
-        // The same clothes again would not be another outfit.
+        let (taste, recentTops, feel, lucky) = (self.taste, self.recentTops, self.feel, self.lucky)
+        let pick: (Int) -> GlimmOutfit = { salt in
+            GlimmStylist.outfit(context: context, taste: taste, recentTops: recentTops, day: day, salt: salt, month: month, prefer: prefer, feel: feel,
+                                lucky: lucky)
+        }
+        var next = pick(salt)
+        // The same clothes again would not be a change.
         var tries = 0
         while next == before, tries < 6 {
             salt += 1
             tries += 1
-            next = GlimmStylist.outfit(context: context, taste: taste, recentTops: recentTops, day: day, salt: salt, month: month, prefer: prefer)
+            next = pick(salt)
         }
         salts[context.rawValue] = salt
         chosen[context.rawValue] = next
-        if lock != nil { lock = next }
         return next
     }
 
-    /// One piece put on by hand, for the rest of the day; a little is learnt from the pick.
-    @discardableResult
-    public mutating func wear(_ item: GlimmItem, for context: GlimmContext, day: String, month: Int) -> GlimmOutfit {
+    /// A new best came today: the top it trains in today is its lucky one from now on.
+    public mutating func noteBest(day: String, month: Int) {
         turn(to: day, month: month)
-        let next = outfit(for: context, day: day, month: month).wearing(item)
-        chosen[context.rawValue] = next
-        if lock != nil { lock = next }
-        taste.chose(item)
-        return next
+        guard luckyDay != day else { return }
+        lucky = outfit(for: .training, day: day, month: month).top.id
+        luckyDay = day
     }
 
-    /// The hat or the extra taken off, for the rest of the day.
-    @discardableResult
-    public mutating func takeOff(_ slot: GlimmSlot, for context: GlimmContext, day: String, month: Int) -> GlimmOutfit {
-        turn(to: day, month: month)
-        let next = outfit(for: context, day: day, month: month).without(slot)
-        chosen[context.rawValue] = next
-        if lock != nil { lock = next }
-        return next
+    /// Something kind was said about what it has on: it grows a little fonder of each piece.
+    public mutating func enjoyed(_ outfit: GlimmOutfit) { taste.rate(outfit, like: true) }
+
+    /// Why it has on what it has on for a setting. A change of mind and a lucky top are always the
+    /// reason; otherwise one of the reasons that hold, the same one all day.
+    public func why(_ outfit: GlimmOutfit, for context: GlimmContext, day: String) -> GlimmWhy {
+        if day == self.day, chosen[context.rawValue] != nil { return .changed }
+        if context == .training, outfit.top.id == lucky { return .lucky }
+        var reasons: [GlimmWhy] = []
+        if context != .everyday { reasons.append(.setting(context)) }
+        let into = GlimmStylist.phase(day: day).id
+        if outfit.items.contains(where: { $0.palette == into }) { reasons.append(.phase(into)) }
+        if let piece = outfit.items.first(where: { GlimmNature.isFavourite($0) }) { reasons.append(.favourite(piece.style)) }
+        guard !reasons.isEmpty else { return .fancy }
+        var rng = SeededRNG(seed: GlimmStylist.seed("why|\(day)|\(context.rawValue)"))
+        return reasons[LNum.int((rng.unit() * Double(reasons.count)).rounded(.down)) % reasons.count]
     }
 
     /// Something to remember, as its person wrote it or agreed to it. Trimmed, never twice, and the

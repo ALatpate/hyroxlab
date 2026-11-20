@@ -4,10 +4,11 @@ import LumaKit
 
 // MARK: - Glimm in the app
 //
-// Its state still comes from the facts (`buddyLook`). This file is the rest of it: what it wears for
-// that state, what it says, what it learns from a like or a pick, what it was asked to remember, and
-// the chat that runs on the athlete's own key. Everything that is kept goes through `glimm`; the
-// stage holds only the moment.
+// Its state still comes from the facts (`buddyLook`). This file is the rest of it: what it chooses
+// to wear for that state, what it says, what it was asked to remember, and the chat that runs on the
+// athlete's own key. Nothing here lets anyone dress it: its clothes are its own pick, and the only
+// changes are the ones it makes. Everything that is kept goes through `glimm`; the stage holds only
+// the moment.
 
 /// A gesture asked for, from a moment: a twirl into new clothes, a wave.
 struct GlimmCue: Equatable {
@@ -87,13 +88,38 @@ extension LumaEnv {
         return look.mood.rawValue + "~" + glimmOutfit(for: look.mood, at: now).code
     }
 
-    /// A new day: yesterday's picks no longer hold. Called after each reload; does nothing on the same day.
-    func glimmTurnDay(now: Date = Date()) {
+    /// Why it has on what it has on in a state, at a moment.
+    func glimmWhy(for mood: BuddyMood, at date: Date) -> GlimmWhy {
+        glimm.why(glimmOutfit(for: mood, at: date), for: glimmContext(for: mood, at: date), day: glimmClock(date).day)
+    }
+
+    /// The colour it is into for now, by name.
+    func glimmPhase(at date: Date = Date()) -> String { GlimmStylist.phase(day: glimmClock(date).day).name }
+
+    /// Keeps Glimm up with the day. Called after each reload: a new day turns its clothes over; once
+    /// the day's recovery is in, it knows how the day feels; and a new best makes the top it trains in
+    /// its lucky one. Each does nothing when there is nothing new.
+    func glimmKeepUp(now: Date = Date()) {
         guard storesReady else { return }
         let c = glimmClock(now)
-        guard glimm.day != c.day else { return }
         var g = glimm
         g.turn(to: c.day, month: c.month)
+        let facts = buddyFacts(now: now)
+        // The same score, by the same bands, that makes the day charged, steady or drained.
+        if let score = facts.recovery { g.feel = GlimmFeel(recovery: score) }
+        if Buddy.look(facts, at: now).mood == .celebrating { g.noteBest(day: c.day, month: c.month) }
+        if g != glimm { glimm = g }
+    }
+
+    /// The demo's Glimm has a little behind it, so every line of its taste has something to show:
+    /// kind words about an outfit, and a new best today.
+    func stageDemoGlimm(now: Date = Date()) {
+        guard isDemo, glimm.lucky == nil else { return }
+        let c = glimmClock(now)
+        var g = glimm
+        g.turn(to: c.day, month: c.month)
+        g.enjoyed(GlimmStylist.outfit(context: .rain, day: "2026-11-01", month: 11))
+        g.noteBest(day: c.day, month: c.month)
         glimm = g
     }
 
@@ -128,64 +154,33 @@ extension LumaEnv {
 
     // MARK: Its clothes
 
-    /// Changes what it wears for the state it is in, and plays the change.
-    private func glimmChange(_ mood: BuddyMood, saying moment: GlimmMoment?, _ change: (inout GlimmState, GlimmContext, String, Int) -> Void) {
+    /// Glimm changes its mind: other clothes for the state it is in, dressed for `setting` when it
+    /// names one, in a colour it fancies when it names one. Only a reply of its own calls this; there
+    /// is no button for it.
+    private func glimmChangeMind(_ mood: BuddyMood, to setting: GlimmContext?, fancying colour: String?) {
         guard storesReady else { return }
         let now = Date()
         let c = glimmClock(now)
         let context = glimmContext(for: mood, at: now)
         let before = glimmOutfit(for: mood, at: now).code
         var g = glimm
-        change(&g, context, c.day, c.month)
+        let target = setting ?? context
+        let next = g.another(for: target, day: c.day, month: c.month, prefer: colour)
+        // Dressed for something other than the moment: it is worn now all the same.
+        if target != context { g.chosen[context.rawValue] = next }
         glimm = g
         let after = glimmOutfit(for: mood, at: now).code
         if after != before { glimmStage.cue = GlimmCue(name: "twirl", at: now, from: before) }
-        if let moment { glimmSay(moment) }
         LumaHaptics.select()
     }
 
-    func glimmAnother(_ mood: BuddyMood, prefer: String? = nil, in setting: GlimmContext? = nil) {
-        glimmChange(mood, saying: .outfitNew) { g, context, day, month in
-            let target = setting ?? context
-            let next = g.another(for: target, day: day, month: month, prefer: prefer)
-            // Asked to dress for something other than the moment: it is worn now all the same.
-            if target != context { g.chosen[context.rawValue] = next }
-        }
-    }
-
-    func glimmWear(_ item: GlimmItem, _ mood: BuddyMood) {
-        glimmChange(mood, saying: .outfitWore) { g, context, day, month in g.wear(item, for: context, day: day, month: month) }
-    }
-
-    func glimmTakeOff(_ slot: GlimmSlot, _ mood: BuddyMood) {
-        glimmChange(mood, saying: nil) { g, context, day, month in g.takeOff(slot, for: context, day: day, month: month) }
-    }
-
-    /// A like or a dislike of what it has on. A dislike also changes it.
-    func glimmRate(_ mood: BuddyMood, like: Bool) {
-        guard storesReady else { return }
+    /// Its clothes changed while its screen was open, because the day moved on: it turns into the
+    /// new ones and says so. A change it has just made itself has already been played.
+    func glimmNoticeChange(from before: String) {
         let now = Date()
-        let worn = glimmOutfit(for: mood, at: now)
-        var g = glimm
-        g.taste.rate(worn, like: like)
-        glimm = g
-        if like {
-            glimmStage.cue = GlimmCue(name: "cheer", at: now)
-            glimmSay(.outfitLiked)
-            LumaHaptics.select()
-        } else {
-            glimmChange(mood, saying: .outfitDisliked) { g, context, day, month in g.another(for: context, day: day, month: month) }
-        }
-    }
-
-    /// Keeps on what it is wearing, whatever the day, or lets it choose again.
-    func glimmKeep(_ on: Bool, _ mood: BuddyMood) {
-        guard storesReady else { return }
-        var g = glimm
-        g.lock = on ? glimmOutfit(for: mood, at: Date()) : nil
-        glimm = g
-        glimmSay(on ? .outfitKept : .outfitFreed)
-        LumaHaptics.select()
+        if let cue = glimmStage.cue, cue.name == "twirl", now.timeIntervalSince(cue.at) < 2 { return }
+        glimmStage.cue = GlimmCue(name: "twirl", at: now, from: before)
+        if !glimmStage.thinking { glimmSay(.outfitNew) }
     }
 
     // MARK: What it remembers
@@ -215,13 +210,6 @@ extension LumaEnv {
         glimmSay(on ? .quietOn : .quietOff, always: true)
     }
 
-    func glimmForgetTaste() {
-        guard storesReady else { return }
-        var g = glimm
-        g.taste = GlimmTaste()
-        glimm = g
-    }
-
     func glimmClearChat() {
         guard storesReady else { return }
         var g = glimm
@@ -235,7 +223,8 @@ extension LumaEnv {
     var glimmCanTalk: Bool { coach.hasKey }
 
     /// Sends one message to Glimm and plays its answer: its words, its mood, a change of clothes if it
-    /// was asked for one, and a suggestion of something to remember, which waits for a yes.
+    /// decides on one, a compliment taken to heart, and a suggestion of something to remember, which
+    /// waits for a yes.
     func glimmSend(_ text: String, look: BuddyLook) {
         let message = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !message.isEmpty, !glimmStage.thinking, storesReady else { return }
@@ -250,8 +239,10 @@ extension LumaEnv {
         glimm = g
         let mood = look.mood.glimm
         let said = now.formatted(.dateTime.weekday(.wide)) + " " + ["morning", "afternoon", "evening"][GlimmVoice.part(ofDay: glimmClock(now).hour)]
-        let facts = GlimmChat.facts(name: profile.name, look: look, shareHealth: profile.shareHealthWithCoach, outfit: glimmOutfit(for: look.mood, at: now),
-                                    memories: glimm.memories, clock: said, taste: glimm.taste)
+        let worn = glimmOutfit(for: look.mood, at: now)
+        let facts = GlimmChat.facts(name: profile.name, look: look, shareHealth: profile.shareHealthWithCoach, outfit: worn,
+                                    why: glimmWhy(for: look.mood, at: now), into: glimmPhase(at: now), memories: glimm.memories, clock: said,
+                                    taste: glimm.taste)
         let request = GlimmChat.request(message: message, mood: mood, context: "companion screen", facts: facts)
         let messages = GlimmChat.messages(history: history, request: request, mood: mood)
         glimmStage.thinking = true
@@ -267,13 +258,16 @@ extension LumaEnv {
             }
             var g = self.glimm
             g.addTurn(mine: false, text: reply.text)
+            // Something kind about what it had on when the message was sent: it grows fonder of it.
+            if reply.complimented { g.enjoyed(worn) }
             self.glimm = g
             self.glimmStage.line = GlimmLine(id: "chat", text: reply.text)
             self.glimmStage.show(reply.mood)
             if let setting = reply.outfit {
-                self.glimmAnother(look.mood, prefer: reply.colour, in: setting)
-                // The reply's own words stay up; the change of clothes says enough.
-                self.glimmStage.line = GlimmLine(id: "chat", text: reply.text)
+                // Its own decision: the reply's words stay up, and the change of clothes says the rest.
+                self.glimmChangeMind(look.mood, to: setting, fancying: reply.colour)
+            } else if reply.complimented {
+                self.glimmStage.cue = GlimmCue(name: "shy", at: Date())
             }
             if let keep = reply.remember, !self.glimm.memories.contains(where: { $0.text.lowercased() == keep.lowercased() }) {
                 self.glimmStage.proposal = keep

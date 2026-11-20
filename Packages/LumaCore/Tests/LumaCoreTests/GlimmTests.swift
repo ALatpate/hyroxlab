@@ -1,7 +1,7 @@
 import XCTest
 @testable import LumaCore
 
-/// Glimm: the wardrobe, getting dressed, the taste it learns, what it keeps and what it says.
+/// Glimm: the wardrobe, how it dresses itself, a taste of its own, what it keeps and what it says.
 final class GlimmTests: XCTestCase {
     private func days(_ n: Int) -> [String] { LDate.range(ending: "2026-11-21", count: n) }
 
@@ -94,18 +94,14 @@ final class GlimmTests: XCTestCase {
                 if extra == "headphones", let hat { XCTAssertTrue(["headband", "visor"].contains(hat), "headphones over a \(hat)") }
             }
         }
-        // By hand: the piece just put on is the one kept.
-        var o = GlimmOutfit.signature.wearing(GlimmItem(style: "raincoat", palette: "butter"))
-        o = o.wearing(GlimmItem(style: "beanie", palette: "plum"))
+        // A piece shown on the figure leaves off a hat it cannot be worn with.
+        var o = GlimmOutfit.signature.wearing(GlimmItem(style: "beanie", palette: "plum"))
         XCTAssertEqual(o.head?.style, "beanie")
-        XCTAssertEqual(o.top.style, "zip-hoodie", "the raincoat gives way to the hat")
-        XCTAssertEqual(o.top.palette, "butter")
-        o = o.wearing(GlimmItem(style: "headphones", palette: "navy"))
-        XCTAssertNil(o.head, "the beanie gives way to the headphones")
-        o = o.wearing(GlimmItem(style: "sunhat", palette: "cream"))
-        XCTAssertNil(o.accessory)
-        XCTAssertEqual(o.without(.head).head, nil)
-        // A piece from the wrong shelf changes nothing.
+        o = o.wearing(GlimmItem(style: "raincoat", palette: "butter"))
+        XCTAssertNil(o.head, "no hat under a hood that is up")
+        o = GlimmOutfit.signature.wearing(GlimmItem(style: "sunhat", palette: "cream")).wearing(GlimmItem(style: "headphones", palette: "navy"))
+        XCTAssertNil(o.head, "the hat gives way to the headphones")
+        // A piece the wardrobe does not hold changes nothing.
         XCTAssertEqual(GlimmOutfit.signature.wearing(GlimmItem(style: "nothing", palette: "coral")), .signature)
     }
 
@@ -137,9 +133,132 @@ final class GlimmTests: XCTestCase {
         }
     }
 
-    // MARK: Taste
+    // MARK: A taste of its own
 
-    func testALikeIsLearntOnceAndCanBeTakenBack() {
+    func testItHasFavouritesFromTheFirstDay() {
+        XCTAssertGreaterThan(GlimmNature.score(GlimmItem(style: "zip-hoodie", palette: "coral")), GlimmNature.score(GlimmItem(style: "everyday-tee", palette: "charcoal")) + 2)
+        XCTAssertTrue(GlimmNature.isFavourite(GlimmItem(style: "trainers", palette: "navy")))
+        XCTAssertFalse(GlimmNature.isFavourite(GlimmItem(style: "wellies", palette: "coral")))
+        XCTAssertEqual(GlimmNature.favourites.colours.first, "Coral")
+        XCTAssertEqual(GlimmNature.favourites.cuts.first, "Zip hoodie")
+        // Every piece it is said to like is one the wardrobe holds.
+        for key in GlimmNature.leanings.keys {
+            let name = String(key.split(separator: ":").last ?? "")
+            XCTAssertTrue(key.hasPrefix("palette:") ? GlimmWardrobe.palette(name) != nil : GlimmWardrobe.style(name) != nil, key)
+        }
+        // With nothing learnt and nobody asked, its big hoodie is what it most often takes it easy in.
+        let tops = days(240).map { GlimmStylist.outfit(context: .relax, day: $0, month: 4).top.style }
+        XCTAssertGreaterThan(tops.filter { $0 == "zip-hoodie" }.count, tops.filter { $0 == "lounge-top" }.count)
+    }
+
+    func testAPhaseLastsAFewDaysAndShowsInWhatItWears() {
+        XCTAssertEqual(GlimmStylist.dayNumber("1970-01-01"), 0)
+        XCTAssertEqual(GlimmStylist.dayNumber("1969-12-31"), -1)
+        XCTAssertEqual(GlimmStylist.dayNumber("2000-03-01"), 11017)
+        XCTAssertEqual(GlimmStylist.dayNumber("2024-02-29"), 19782)
+        XCTAssertEqual(GlimmStylist.dayNumber("2026-11-20"), 20777)
+        XCTAssertNil(GlimmStylist.dayNumber("someday"))
+        XCTAssertNil(GlimmStylist.dayNumber("2026-13-01"))
+        // What a phase adds to a colour is the same for every piece in it.
+        let tee = GlimmItem(style: "everyday-tee", palette: "sage")
+        let cut = GlimmWardrobe.style("everyday-tee")!
+        XCTAssertEqual(GlimmStylist.score(tee, style: cut, context: .everyday, taste: GlimmTaste(), recentTops: [], month: 4, phase: "sage")
+                       - GlimmStylist.score(tee, style: cut, context: .everyday, taste: GlimmTaste(), recentTops: [], month: 4, phase: "rose"),
+                       GlimmStylist.phasePull, accuracy: 0.0001)
+        // The run that holds 2026-11-20 began on 2026-11-15 (day 20772, which is 9 × 2308).
+        XCTAssertEqual(GlimmStylist.phase(day: "2026-11-15"), GlimmStylist.phase(day: "2026-11-23"))
+        let all = days(270)
+        var runs: [Int: Set<String>] = [:]
+        for day in all { runs[(GlimmStylist.dayNumber(day) ?? 0) / GlimmStylist.phaseDays, default: []].insert(GlimmStylist.phase(day: day).id) }
+        XCTAssertTrue(runs.values.allSatisfy { $0.count == 1 }, "one colour for the whole of a run")
+        XCTAssertGreaterThanOrEqual(Set(all.map { GlimmStylist.phase(day: $0).id }).count, 8, "and many colours over the months")
+        // The colour it is into is on its top far more often than one colour in sixteen would be.
+        let into = all.filter { GlimmStylist.outfit(context: .everyday, day: $0, month: 4).top.palette == GlimmStylist.phase(day: $0).id }
+        XCTAssertGreaterThan(Double(into.count) / Double(all.count), 0.085)
+    }
+
+    func testTheDaysFeelShowsInItsClothes() {
+        // The bands are the recovery ring's own: charged is bright, drained is soft.
+        XCTAssertEqual(GlimmFeel(recovery: 80), .bright)
+        XCTAssertEqual(GlimmFeel(recovery: 67), .bright)
+        XCTAssertEqual(GlimmFeel(recovery: 66.9), .even)
+        XCTAssertEqual(GlimmFeel(recovery: 34), .even)
+        XCTAssertEqual(GlimmFeel(recovery: 33.9), .soft)
+        XCTAssertEqual(GlimmFeel(recovery: nil), .even)
+        func tops(_ feel: GlimmFeel) -> [GlimmItem] { days(300).map { GlimmStylist.outfit(context: .everyday, day: $0, month: 4, feel: feel).top } }
+        func share(_ items: [GlimmItem], _ test: (GlimmItem) -> Bool) -> Double { Double(items.filter(test).count) / Double(items.count) }
+        let bright = tops(.bright), soft = tops(.soft)
+        XCTAssertGreaterThan(share(bright) { GlimmFeel.loud.contains($0.palette) }, share(soft) { GlimmFeel.loud.contains($0.palette) } + 0.1)
+        XCTAssertGreaterThan(share(soft) { GlimmFeel.gentle.contains($0.palette) }, share(bright) { GlimmFeel.gentle.contains($0.palette) } + 0.1)
+        XCTAssertGreaterThan(share(bright) { $0.pattern != "plain" }, share(soft) { $0.pattern != "plain" } + 0.15)
+        // An even day is dressed as it always was: the feeling adds nothing to it.
+        XCTAssertEqual(GlimmStylist.outfit(context: .everyday, day: "2026-11-20", month: 11, feel: .even), GlimmStylist.outfit(context: .everyday, day: "2026-11-20", month: 11))
+    }
+
+    func testTheTopItTrainedInOnTheDayOfANewBestIsItsLuckyOne() {
+        var state = GlimmState()
+        state.turn(to: "2026-11-20", month: 11)
+        XCTAssertNil(state.lucky)
+        let kit = state.outfit(for: .training, day: "2026-11-20", month: 11)
+        state.noteBest(day: "2026-11-20", month: 11)
+        XCTAssertEqual(state.lucky, kit.top.id)
+        XCTAssertEqual(state.why(kit, for: .training, day: "2026-11-20"), .lucky)
+        // The day's kit is the same with a lucky top as without: only the top can differ, and today it is the lucky one.
+        XCTAssertEqual(state.outfit(for: .training, day: "2026-11-20", month: 11).bottom, kit.bottom)
+        // From then on it trains in it on some days, not all.
+        let after = LDate.range(ending: "2027-03-10", count: 100)
+        let worn = after.filter { GlimmStylist.outfit(context: .training, day: $0, month: 1, lucky: state.lucky).top.id == state.lucky }.count
+        XCTAssertGreaterThan(worn, 25)
+        XCTAssertLessThan(worn, 60)
+        // It is for training in: a training top does not turn up at bedtime.
+        if GlimmWardrobe.style(kit.top.style)?.context == .training {
+            XCTAssertFalse(after.contains { GlimmStylist.outfit(context: .sleep, day: $0, month: 1, lucky: state.lucky).top.id == state.lucky })
+        }
+        // A second best on the same day changes nothing; one on a later day can.
+        let first = state
+        state.noteBest(day: "2026-11-20", month: 11)
+        XCTAssertEqual(state, first)
+        state.noteBest(day: "2026-11-22", month: 11)
+        XCTAssertEqual(state.luckyDay, "2026-11-22")
+    }
+
+    func testItSaysWhyItPickedWhatItHasOn() {
+        var state = GlimmState()
+        state.turn(to: "2026-11-20", month: 11)
+        let into = GlimmStylist.phase(day: "2026-11-20").id
+        let other = GlimmWardrobe.palettes.map { $0.id }.first { $0 != into } ?? "navy"
+        // Nothing it has always liked, not the colour it is into, on an ordinary day: it just felt like it.
+        let plain = GlimmOutfit(top: GlimmItem(style: "everyday-tee", palette: other), bottom: GlimmItem(style: "jeans", palette: other),
+                                feet: GlimmItem(style: "court-shoes", palette: other))
+        XCTAssertEqual(state.why(plain, for: .everyday, day: "2026-11-20"), .fancy)
+        // The colour it is into, and nothing else to say: that is the reason.
+        let phased = GlimmOutfit(top: GlimmItem(style: "everyday-tee", palette: into), bottom: plain.bottom, feet: plain.feet)
+        XCTAssertEqual(state.why(phased, for: .everyday, day: "2026-11-20"), .phase(into))
+        // An old favourite.
+        let fav = GlimmOutfit(top: GlimmItem(style: "zip-hoodie", palette: other), bottom: plain.bottom, feet: plain.feet)
+        XCTAssertEqual(state.why(fav, for: .everyday, day: "2026-11-20"), .favourite("zip-hoodie"))
+        // A setting with nothing else to say is the reason, and the same reason all day.
+        XCTAssertEqual(state.why(plain, for: .training, day: "2026-11-20"), .setting(.training))
+        XCTAssertEqual(state.why(fav, for: .relax, day: "2026-11-20"), state.why(fav, for: .relax, day: "2026-11-20"))
+        XCTAssertTrue([GlimmWhy.setting(.relax), .favourite("zip-hoodie")].contains(state.why(fav, for: .relax, day: "2026-11-20")))
+        // A change of mind is always the reason for what it changed into.
+        let changed = state.another(for: .everyday, day: "2026-11-20", month: 11)
+        XCTAssertEqual(state.why(changed, for: .everyday, day: "2026-11-20"), .changed)
+        // Every reason has words, with the colour or the piece in them.
+        for seed in 0..<6 {
+            let phase = GlimmVoice.line(.outfit(.phase("butter")), seed: UInt64(seed)).text
+            XCTAssertTrue(phase.contains("butter"), phase)
+            XCTAssertFalse(phase.contains("{"), phase)
+            let piece = GlimmVoice.line(.outfit(.favourite("zip-hoodie")), seed: UInt64(seed)).text
+            XCTAssertTrue(piece.contains("zip hoodie"), piece)
+            XCTAssertFalse(piece.contains("{"), piece)
+        }
+        XCTAssertEqual(GlimmVoice.worn(.fancy, outfit: plain, day: "2026-11-20"), GlimmVoice.worn(.fancy, outfit: plain, day: "2026-11-20"))
+        XCTAssertEqual(GlimmWhy.phase("butter").told, "it is in a butter phase")
+        XCTAssertTrue(GlimmWhy.setting(.rain).told.contains("without knowing the weather"))
+    }
+
+    func testWhatIsAdmiredIsLearntOnceAndCanBeTakenBack() {
         var taste = GlimmTaste()
         let look = GlimmOutfit.signature
         taste.rate(look, like: true)
@@ -164,7 +283,13 @@ final class GlimmTests: XCTestCase {
             keen.rate(o, like: true)
         }
         XCTAssertLessThanOrEqual(keen.scores.values.max() ?? 0, GlimmTaste.bound)
-        XCTAssertEqual(keen.colours(liked: true).first, "Lilac")
+        XCTAssertEqual(keen.fondOf.first, "Lilac")
+        // Something kind said about what it has on is how it grows fond of it.
+        var state = GlimmState()
+        state.enjoyed(look)
+        XCTAssertEqual(state.taste.rating(of: look), 1)
+        XCTAssertTrue(state.taste.fondOf.contains("Coral"))
+        XCTAssertTrue(state.taste.fondOf.contains("Zip hoodie"))
     }
 
     func testWhatIsLikedIsWornMoreOften() {
@@ -193,30 +318,30 @@ final class GlimmTests: XCTestCase {
         // Another setting is not touched by it.
         XCTAssertEqual(state.outfit(for: .training, day: "2026-11-20", month: 11), GlimmStylist.outfit(context: .training, day: "2026-11-20", month: 11))
 
-        let worn = state.wear(GlimmItem(style: "beanie", palette: "plum"), for: .everyday, day: "2026-11-20", month: 11)
-        XCTAssertEqual(worn.head?.style, "beanie")
-        XCTAssertEqual(state.taste.scores["style:beanie"] ?? 0, GlimmTaste.nudge, accuracy: 0.0001)
-        XCTAssertNil(state.takeOff(.head, for: .everyday, day: "2026-11-20", month: 11).head)
-
+        // Tomorrow is dressed, today, as it will be once the day has turned: the widgets are told ahead.
+        state.feel = .bright
+        let ahead = state.outfit(for: .everyday, day: "2026-11-21", month: 11)
         state.turn(to: "2026-11-21", month: 11)
         XCTAssertTrue(state.chosen.isEmpty)
+        XCTAssertEqual(state.feel, .even, "how a new day feels is not known until its score is in")
         XCTAssertEqual(state.recentTops.count, 1, "yesterday's top is remembered so it is not worn again at once")
-        XCTAssertNotEqual(state.outfit(for: .everyday, day: "2026-11-21", month: 11), second)
+        XCTAssertEqual(state.outfit(for: .everyday, day: "2026-11-21", month: 11), ahead)
+        XCTAssertNotEqual(ahead, second)
 
-        // What it says or is told changes no clothes; a pick does.
+        // What it says or is told changes no clothes; a change of mind, a feeling or a lucky top can.
         var chatty = state
         chatty.noteSaid("state.steady#0")
         chatty.remember("Likes the lilac trainers.", source: "told")
         XCTAssertTrue(chatty.dressesAs(state))
-        var picked = state
-        picked.another(for: .everyday, day: "2026-11-21", month: 11)
-        XCTAssertFalse(picked.dressesAs(state))
-
-        // An outfit kept on is worn whatever the day or the setting, until it is let go.
-        state.lock = second
-        XCTAssertEqual(state.outfit(for: .sleep, day: "2026-11-25", month: 11), second)
-        state.lock = nil
-        XCTAssertNotEqual(state.outfit(for: .sleep, day: "2026-11-25", month: 11), second)
+        var changed = state
+        changed.another(for: .everyday, day: "2026-11-21", month: 11)
+        XCTAssertFalse(changed.dressesAs(state))
+        var feeling = state
+        feeling.feel = .soft
+        XCTAssertFalse(feeling.dressesAs(state))
+        var lucky = state
+        lucky.noteBest(day: "2026-11-21", month: 11)
+        XCTAssertFalse(lucky.dressesAs(state))
     }
 
     func testOnlyWhatIsNewIsRememberedAndItCanBeForgotten() throws {
@@ -238,16 +363,21 @@ final class GlimmTests: XCTestCase {
         let data = try JSONEncoder().encode(state)
         XCTAssertEqual(try JSONDecoder().decode(GlimmState.self, from: data), state)
         XCTAssertEqual(try JSONDecoder().decode(GlimmState.self, from: Data("{}".utf8)), GlimmState())
-        let odd = #"{"lock":{"top":{"style":"cape","palette":"coral","pattern":"plain"},"bottom":{"style":"joggers","palette":"teal","pattern":"plain"},"feet":{"style":"trainers","palette":"lilac","pattern":"plain"}}}"#
-        XCTAssertNil(try JSONDecoder().decode(GlimmState.self, from: Data(odd.utf8)).lock, "a piece the wardrobe does not hold is not kept on")
+        // A file from the build that let an outfit be kept on by hand still reads, and the outfit is not held to.
+        let old = #"{"day":"2026-11-20","lock":{"top":{"style":"zip-hoodie","palette":"coral","pattern":"plain"},"bottom":{"style":"joggers","palette":"teal","pattern":"plain"},"feet":{"style":"trainers","palette":"lilac","pattern":"plain"}}}"#
+        let read = try JSONDecoder().decode(GlimmState.self, from: Data(old.utf8))
+        XCTAssertEqual(read.day, "2026-11-20")
+        XCTAssertEqual(read.outfit(for: .sleep, day: "2026-11-20", month: 11), GlimmStylist.outfit(context: .sleep, day: "2026-11-20", month: 11))
+        XCTAssertFalse(String(decoding: try JSONEncoder().encode(read), as: UTF8.self).contains("lock"))
     }
 
     // MARK: Its voice
 
     func testEveryMomentHasWordsAndNoneStatesAFigure() {
         var moments: [GlimmMoment] = BuddyMood.allCases.map { .state($0) }
-        moments += [.greeting(0), .greeting(1), .greeting(2), .back, .outfitNew, .outfitLiked, .outfitDisliked, .outfitKept, .outfitFreed, .outfitWore,
-                    .remembered, .forgot, .quietOn, .quietOff, .noKey, .chatFailed]
+        moments += [.greeting(0), .greeting(1), .greeting(2), .back, .outfitNew, .complimented, .remembered, .forgot, .quietOn, .quietOff, .noKey, .chatFailed]
+        moments += [.outfit(.changed), .outfit(.lucky), .outfit(.phase("butter")), .outfit(.favourite("zip-hoodie")), .outfit(.fancy)]
+        moments += GlimmContext.allCases.map { .outfit(.setting($0)) }
         moments += ["leaf", "head", "cheek", "belly", "feet", "hand", "hug"].map { .tap($0) }
         for moment in moments {
             XCTAssertNotNil(GlimmVoice.lines[moment.key], moment.key)
@@ -283,6 +413,9 @@ final class GlimmTests: XCTestCase {
     func testAReplyIsCheckedBeforeItIsUsed() {
         let good = GlimmChat.parse(#"{"text":"Trainers on. Shall we?","mood":"focused","outfit":"training","colour":"teal","remember":" Prefers morning sessions. "}"#, fallback: .steady)
         XCTAssertEqual(good, GlimmReply(text: "Trainers on. Shall we?", mood: .focused, remember: "Prefers morning sessions.", outfit: .training, colour: "teal"))
+        // Kind words about its clothes are noted only when it says so plainly.
+        XCTAssertEqual(GlimmChat.parse(#"{"text":"Oh, thank you.","mood":"joyful","complimented":true}"#, fallback: .steady)?.complimented, true)
+        XCTAssertEqual(GlimmChat.parse(#"{"text":"Oh, thank you.","mood":"joyful","complimented":"yes"}"#, fallback: .steady)?.complimented, false)
         // Wrapped in a fence, or with words around it.
         XCTAssertEqual(GlimmChat.parse("```json\n{\"text\":\"Hello.\",\"mood\":\"joyful\"}\n```", fallback: .steady)?.text, "Hello.")
         // A mood it does not have, a setting that is not one, a colour with no outfit: left out, not guessed.
@@ -304,14 +437,21 @@ final class GlimmTests: XCTestCase {
         let look = BuddyLook(mood: .drained, title: "Drained", line: "Recovery 24%. Take it easy.", energy: 0.24)
         var state = GlimmState()
         for i in 0..<20 { state.remember("fact \(i)", source: "told", now: Date(timeIntervalSince1970: 1_795_000_000 + Double(i))) }
-        let shared = GlimmChat.facts(name: "Alex", look: look, shareHealth: true, outfit: .signature, memories: state.memories, clock: "Thursday evening",
-                                     taste: GlimmTaste())
+        let shared = GlimmChat.facts(name: "Alex", look: look, shareHealth: true, outfit: .signature, why: .setting(.relax), into: "Butter",
+                                     memories: state.memories, clock: "Thursday evening", taste: GlimmTaste())
         XCTAssertEqual(shared.count, GlimmChat.factLimit)
         XCTAssertTrue(shared.contains { $0.contains("Recovery 24%") })
         XCTAssertTrue(shared.contains { $0.contains("fact 19") }, "the newest memories go first")
-        let held = GlimmChat.facts(name: "Alex", look: look, shareHealth: false, outfit: .signature, memories: [], clock: "Thursday evening", taste: GlimmTaste())
+        var fond = GlimmTaste()
+        fond.rate(.signature, like: true)
+        let held = GlimmChat.facts(name: "Alex", look: look, shareHealth: false, outfit: .signature, why: .setting(.relax), into: "Butter", memories: [],
+                                   clock: "Thursday evening", taste: fond)
         XCTAssertFalse(held.contains { $0.contains("24") || $0.contains("Drained") }, "no reading leaves the phone without leave")
+        // What it has on is told as its own pick, with its reason; so is what it likes.
         XCTAssertTrue(held.contains { $0.contains("coral zip hoodie") })
+        XCTAssertTrue(held.contains { $0.contains("picked these clothes itself") && $0.contains("it dressed for taking it easy") })
+        XCTAssertTrue(held.contains { $0.contains("into butter") && $0.contains("always liked coral") && $0.contains("grown fond of") })
+        XCTAssertTrue(held.allSatisfy { $0.count < GlimmChat.factLength }, "nothing is cut short")
 
         let request = GlimmChat.request(message: "hello", mood: .steady, context: "companion", facts: shared)
         let json = JSONValue.parse(request)
@@ -325,6 +465,7 @@ final class GlimmTests: XCTestCase {
         let messages = GlimmChat.messages(history: history, request: request, mood: .steady)
         XCTAssertEqual(messages.map { $0.role }, ["user", "assistant", "user"])
         XCTAssertTrue(GlimmChat.system.contains("Return ONLY a JSON object"))
+        XCTAssertTrue(GlimmChat.system.contains("You choose your own clothes"))
         for mood in GlimmMood.allCases { XCTAssertTrue(GlimmChat.system.contains(mood.rawValue)) }
     }
 }

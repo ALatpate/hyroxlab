@@ -354,7 +354,6 @@ struct LumaSheetView: View {
         case .weighIn: WeighInSheet()
         case .sweatTest: SweatTestSheet()
         case .trialSetup(let name): TrialSetupSheet(supplement: name)
-        case .wardrobe: WardrobeSheet()
         }
     }
 }
@@ -449,7 +448,6 @@ enum LumaRoute {
         case "dev.glimm.wear": r.open(.today, .dev(5))
         case "dev.glimm.motion": r.open(.today, .dev(6))
         case "today.buddy": r.open(.today, .buddy)
-        case "sheet.wardrobe": r.open(.today, .buddy); r.sheet = .wardrobe
         case "today.drivers": r.open(.today, .drivers)
         case "today.dose": r.open(.today, .dose)
         case "today.reviews": r.open(.today, .reviews)
