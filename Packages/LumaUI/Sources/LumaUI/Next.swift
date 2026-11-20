@@ -17,10 +17,12 @@ struct LumaExtras: Codable, Equatable {
     var bestLift: String?
     var bestKg: Double?
     var bestAt: Date?
+    /// A notification when Luma Doctor's weekly check is done. Off until switched on.
+    var doctorNotify = false
 
     init() {}
 
-    enum CodingKeys: String, CodingKey { case buddyName, buddyOnToday, reminders, easeSettled, bestLift, bestKg, bestAt }
+    enum CodingKeys: String, CodingKey { case buddyName, buddyOnToday, reminders, easeSettled, bestLift, bestKg, bestAt, doctorNotify }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -31,6 +33,7 @@ struct LumaExtras: Codable, Equatable {
         bestLift = try c.decodeIfPresent(String.self, forKey: .bestLift)
         bestKg = try c.decodeIfPresent(Double.self, forKey: .bestKg)
         bestAt = try c.decodeIfPresent(Date.self, forKey: .bestAt)
+        doctorNotify = try c.decodeIfPresent(Bool.self, forKey: .doctorNotify) ?? false
     }
 
     var reminderKinds: Set<ReminderKind> { Set(reminders.compactMap { ReminderKind(rawValue: $0) }) }

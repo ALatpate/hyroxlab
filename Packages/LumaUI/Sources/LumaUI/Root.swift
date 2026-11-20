@@ -322,6 +322,7 @@ struct LumaDestinationView: View {
         case .about: AboutScreen()
         case .dataCheck: DataCheckScreen()
         case .backups: BackupsScreen()
+        case .doctor: DoctorScreen()
         case .buddy: BuddyScreen()
         case .trials: TrialsScreen()
         case .trial(let id): TrialScreen(id: id)
@@ -422,6 +423,7 @@ enum LumaRoute {
         case "you.about": r.open(.today, .about)
         case "you.datacheck": r.open(.today, .dataCheck)
         case "you.backups": r.open(.today, .backups)
+        case "today.doctor": r.open(.today, .doctor)
         case "sheet.go": r.sheet = .go
         case "sheet.you": r.sheet = .you
         case "sheet.checkin": r.sheet = .checkIn(today)

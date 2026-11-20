@@ -35,6 +35,9 @@ struct RecoveryScreen: View {
                               message: "Recovery is scored each morning from the night's HRV, resting heart rate and sleep. Wear the strap to bed with Luma running in the background.")
                 }
             }
+            // The weekly check: the same nightly rules as the early-warning check above, counted over a week.
+            LumaSection(title: "Weekly check")
+            DoctorCard()
             LumaSection(title: "History")
             MetricHistoryCard(metric: .recovery, style: .bars, barColor: { Luma.recovery($0) })
             WeekdayCard(metric: .recovery)

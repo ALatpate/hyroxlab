@@ -220,6 +220,8 @@ public enum LumaDest: Hashable {
     case dataCheck
     /// The copies kept of what the athlete has logged, and going back to one.
     case backups
+    /// Luma Doctor: the weekly check of the athlete's numbers against their own usual range.
+    case doctor
     /// The companion: why it looks the way it does, its build, and its day ahead.
     case buddy
     /// Supplement trials, and one trial.
@@ -483,6 +485,11 @@ public final class LumaEnv: ObservableObject {
     @Published var sweatTests: [SweatTest] { didSet { if !adopting { disk.save(sweatTests, "sweat-tests.json"); refreshNext() } } }
     @Published var reviews: [WeeklyReview] { didSet { if !adopting { disk.save(reviews, "reviews.json") } } }
     @Published var extras: LumaExtras { didSet { if !adopting, extras != oldValue { disk.save(extras, "extras.json"); refreshNext(); onGlanceChange?() } } }
+    /// Luma Doctor's log: the weekly checks and any asked for by hand, newest first.
+    @Published var doctorReports: [DoctorReport] { didSet { if !adopting, doctorReports != oldValue { disk.save(doctorReports, "doctor.json") } } }
+    /// The written read of a check is being fetched.
+    @Published private(set) var doctorWriting = false
+    private var doctorReadTriedAt: Date?
     /// What those records and the logs add up to. Rebuilt with `progress`, so every screen that shows a
     /// figure from it shows the same one.
     @Published var next = LumaNext()
@@ -498,6 +505,8 @@ public final class LumaEnv: ObservableObject {
     public var onGlanceChange: (() -> Void)?
     /// Asks iOS for leave to show notifications; true when it is given. Set by the app.
     public var requestNotifications: (() async -> Bool)?
+    /// Shows a notification now: an id, a title and a line. Set by the app.
+    public var postNotice: ((String, String, String) -> Void)?
 
     private var reloadTask: Task<Void, Never>?
     private var profileWork: Task<Void, Never>?
@@ -530,6 +539,7 @@ public final class LumaEnv: ObservableObject {
         sweatTests = disk.load([SweatTest].self, "sweat-tests.json") ?? []
         reviews = disk.load([WeeklyReview].self, "reviews.json") ?? []
         extras = disk.load(LumaExtras.self, "extras.json") ?? LumaExtras()
+        doctorReports = disk.load([DoctorReport].self, "doctor.json") ?? []
         benchmarks = disk.load(Benchmarks.self, "benchmarks.json") ?? Benchmarks()
         dismissedStretches = SessionSuggestions.prune(Set(disk.load([String].self, "stretches-dismissed.json") ?? []),
                                                       now: Date().timeIntervalSince1970)
@@ -618,6 +628,7 @@ public final class LumaEnv: ObservableObject {
         sweatTests = disk.load([SweatTest].self, "sweat-tests.json") ?? []
         reviews = disk.load([WeeklyReview].self, "reviews.json") ?? []
         extras = disk.load(LumaExtras.self, "extras.json") ?? LumaExtras()
+        doctorReports = disk.load([DoctorReport].self, "doctor.json") ?? []
         benchmarks = disk.load(Benchmarks.self, "benchmarks.json") ?? Benchmarks()
         dismissedStretches = SessionSuggestions.prune(Set(disk.load([String].self, "stretches-dismissed.json") ?? []),
                                                       now: Date().timeIntervalSince1970)
@@ -705,6 +716,117 @@ public final class LumaEnv: ObservableObject {
         return done
     }
 
+    // MARK: Luma Doctor
+
+    /// The newest check in the log.
+    var doctorLatest: DoctorReport? { doctorReports.first }
+
+    /// The check of the seven days ending `weekEnd`, from what Luma holds now. Nights only part
+    /// recorded are left out, as everywhere else, and the load is the Load screen's own.
+    private func doctorCheck(weekEnd: String, scheduled: Bool, now: Date) -> DoctorReport {
+        let partial = Set(nightMarks.map { $0.day })
+        let whole: [LDay] = partial.isEmpty ? days : days.map { partial.contains($0.day) ? $0.withoutNight : $0 }
+        let loads = Dictionary(analysis.load.days.map { ($0.day, $0.load) }, uniquingKeysWith: { first, _ in first })
+        return Doctor.check(days: whole, sleeps: sleeps, loads: loads, partial: partial, weekEnd: weekEnd, scheduled: scheduled, now: now)
+    }
+
+    private func keepDoctor(_ report: DoctorReport) {
+        var all = doctorReports.filter { $0.id != report.id }
+        all.append(report)
+        all.sort { $0.ranAt > $1.ranAt }
+        doctorReports = Array(all.prefix(Doctor.kept))
+    }
+
+    private func changeDoctor(_ id: String, _ change: (inout DoctorReport) -> Void) {
+        guard let i = doctorReports.firstIndex(where: { $0.id == id }) else { return }
+        var all = doctorReports
+        change(&all[i])
+        doctorReports = all
+    }
+
+    /// Runs the weekly check when one is due: from Sunday 00:00, for the week that ended the day
+    /// before, at the first moment after that the strap data has been read. Not while the athlete's
+    /// records are unread, and not for a week Luma holds nothing of.
+    func runDoctorIfDue(now: Date = Date()) {
+        guard !isDemo, storesReady, loaded else { return }
+        if let week = DoctorSchedule.due(now: now, reports: doctorReports),
+           days.contains(where: { $0.day <= week && $0.day >= LDate.adding(-6, to: week) }) {
+            let report = doctorCheck(weekEnd: week, scheduled: true, now: now)
+            keepDoctor(report)
+            if extras.doctorNotify {
+                let line = report.headline
+                let said = line.prefix(1).lowercased() + String(line.dropFirst())
+                postNotice?("luma.doctor." + report.id, "Luma Doctor", "This week's check: \(said).")
+            }
+            writeDoctorRead(for: report.id)
+            return
+        }
+        // A read that could not be fetched (no network, or the key out of reach while the phone was
+        // locked) is asked for again, at most every half hour.
+        if let latest = doctorLatest, latest.scheduled, latest.read == nil,
+           doctorReadTriedAt.map({ now.timeIntervalSince($0) > 1800 }) ?? true {
+            writeDoctorRead(for: latest.id)
+        }
+    }
+
+    /// A check asked for by hand: the seven days ending today.
+    func runDoctorNow() {
+        guard !isDemo else { return }
+        let report = doctorCheck(weekEnd: today, scheduled: false, now: Date())
+        keepDoctor(report)
+        writeDoctorRead(for: report.id, asked: true)
+    }
+
+    /// Whether a written read can be had: a key is connected and health data may be shared with the model.
+    var doctorCanWrite: Bool { coach.hasKey && profile.shareHealthWithCoach }
+
+    /// Has the written read of one check fetched. It is written by the most capable model the key
+    /// reaches, whatever the coach is set to (`CoachEngine.doctorRead`), and only with leave to share
+    /// health data: the findings are health data.
+    func writeDoctorRead(for id: String, asked: Bool = false) {
+        guard !isDemo, !doctorWriting, doctorCanWrite, let report = doctorReports.first(where: { $0.id == id }) else { return }
+        guard asked || report.read == nil else { return }
+        doctorReadTriedAt = Date()
+        doctorWriting = true
+        let partial = Set(nightMarks.map { $0.day })
+        let whole: [LDay] = partial.isEmpty ? days : days.map { partial.contains($0.day) ? $0.withoutNight : $0 }
+        Task { [weak self] in
+            guard let self else { return }
+            defer { self.doctorWriting = false }
+            do {
+                let written = try await self.coach.doctorRead(report, days: whole)
+                self.changeDoctor(id) { $0.read = written.text; $0.readModel = written.model; $0.readAt = Date(); $0.readNote = nil }
+            } catch {
+                let said = (error as? LocalizedError)?.errorDescription ?? "The written read could not be fetched."
+                self.changeDoctor(id) { $0.readNote = said }
+            }
+        }
+    }
+
+    /// The gallery's log: the last four weeks of the demo data, checked by the same rules, each with
+    /// a read worded from its own findings (the gallery has no model to ask).
+    private func stageDemoDoctor() {
+        guard doctorReports.isEmpty, !days.isEmpty else { return }
+        let end = DoctorSchedule.weekEnd(asOf: Date())
+        var staged: [DoctorReport] = []
+        for back in 0..<4 {
+            let week = LDate.adding(-7 * back, to: end)
+            let ran = (LDate.startOfDay(LDate.adding(1, to: week)) ?? Date()).addingTimeInterval(140)
+            var report = doctorCheck(weekEnd: week, scheduled: true, now: ran)
+            let notable = report.outside + report.watching
+            if notable.isEmpty {
+                report.read = "A steady week. Everything that could be checked sat inside your own usual range. Nothing here asks for a change: keep the bedtime and the load as they are, and next week's check will say if anything moves."
+            } else {
+                let seen = notable.prefix(2).map { "\($0.title): \($0.line)" }.joined(separator: " ")
+                report.read = "\(report.headline). \(seen) One week like this is usually training, sleep or a late night showing in the numbers. Keep the next few days easy and see whether it settles. If it carries into next week, or you feel unwell, it is sensible to see a doctor."
+            }
+            report.readModel = "Claude Fable 5.2"
+            report.readAt = ran.addingTimeInterval(45)
+            staged.append(report)
+        }
+        doctorReports = staged
+    }
+
     // MARK: Strap data
 
     public var today: String { analysis.today }
@@ -734,7 +856,12 @@ public final class LumaEnv: ObservableObject {
             self.loaded = true
             self.refreshPlan()
             self.refreshAnalysis()
-            if self.isDemo { self.coach.seedDemo() }
+            if self.isDemo {
+                self.coach.seedDemo()
+                self.stageDemoDoctor()
+            }
+            // The weekly check is due from Sunday 00:00 and runs at the first read of the strap data after it.
+            self.runDoctorIfDue()
             await self.refreshSuggestions()
         }
     }

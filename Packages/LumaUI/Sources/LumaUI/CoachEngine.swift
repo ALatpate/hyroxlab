@@ -413,6 +413,38 @@ public final class CoachEngine: ObservableObject {
         return AIStreamAccumulator(response: json)
     }
 
+    // MARK: Luma Doctor
+
+    /// The written read of a weekly check, with the name of the model that wrote it.
+    ///
+    /// It is written by the most capable model this key reaches, whatever model the coach is set to:
+    /// the service is asked which models the key has, they are ordered by strength
+    /// (`AIModel.byStrength`), and the strongest is asked. A model the key turns out not to reach is
+    /// passed over for the next. Called only with leave to share health data.
+    func doctorRead(_ report: DoctorReport, days: [LDay]) async throws -> (text: String, model: String) {
+        guard let key = env.secrets.coachKey(), !key.isEmpty else { throw CoachError.noKey }
+        if models.isEmpty { try await loadModels() }
+        let ranked = AIModel.byStrength(models)
+        guard !ranked.isEmpty else { throw CoachError.message("Could not get the list of models for this key. Check the key and your connection.") }
+        let ask = DoctorPrompt.ask(report, days: days, shareDays: true)
+        var last: CoachError = .message("No model answered.")
+        for model in ranked.prefix(4) {
+            // Room for the model's own thinking as well as the answer: the strongest models always think.
+            let request = AIRequest(model: model.id, system: DoctorPrompt.system, messages: [AIMessage.user(ask)], maxTokens: 16_000, stream: false)
+            do {
+                let reply = try await complete(request, key: key)
+                if let text = DoctorPrompt.tidy(reply.text) { return (text, model.name) }
+                last = .message("The reply was empty.")
+            } catch let CoachError.api(status, message) where status == 404 || status == 403 || (status == 400 && message.lowercased().contains("model")) {
+                last = .api(status: status, message: message)
+            }
+        }
+        throw last
+    }
+
+    /// The name of the model that would write the read, when the list of models is already in hand.
+    var doctorModelName: String? { AIModel.byStrength(models).first?.name }
+
     // MARK: Models
 
     /// The model to use: the athlete's choice if it is still offered, otherwise the newest Sonnet-line model.

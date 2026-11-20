@@ -200,6 +200,8 @@ final class LumaBridge: ObservableObject, LumaDeviceControl {
         env.onGlanceChange = { [weak self] in self?.publishGlance() }
         // Reminders ask iOS for leave the first time one is switched on.
         env.requestNotifications = { await LumaReminders.requestAuthorization() }
+        // A result that has just come in (Luma Doctor's weekly check), shown at once.
+        env.postNotice = { id, title, body in LumaReminders.post(id: id, title: title, body: body) }
         // Something was logged by a shortcut or Siri while the app is running: file it now.
         NotificationCenter.default.publisher(for: LumaQuickIntents.changed)
             .receive(on: DispatchQueue.main)

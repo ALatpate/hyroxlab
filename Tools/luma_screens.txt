@@ -72,3 +72,7 @@
 94-type-profile|you.profile|0|demo|5|Your goals, in your own words|
 95-type-onboarding|cover.onboarding.1|0|demo|5|First name|
 96-type-hand|sheet.workouts.hand|0|demo|5|Exercise, e.g. Back squat|
+99-doctor|today.doctor|0|demo|5
+99b-doctor-b|today.doctor|640|demo|5
+99c-doctor-c|today.doctor|1280|demo|5
+81b-recovery-b|today.recovery|620|demo|5

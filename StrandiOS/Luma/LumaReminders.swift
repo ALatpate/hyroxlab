@@ -20,6 +20,21 @@ enum LumaReminders {
         }
     }
 
+    /// Shows one notification now, if the athlete has given leave for notifications. Used for a result
+    /// that has just come in (Luma Doctor's weekly check); a second one with the same id replaces the first.
+    static func post(id: String, title: String, body: String) {
+        let center = UNUserNotificationCenter.current()
+        center.getNotificationSettings { settings in
+            guard settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional else { return }
+            let content = UNMutableNotificationContent()
+            content.title = title
+            content.body = body
+            content.sound = .default
+            content.threadIdentifier = "luma.doctor"
+            center.add(UNNotificationRequest(identifier: id, content: content, trigger: nil))
+        }
+    }
+
     /// Makes the pending reminders equal to `planned`. A reminder keeps its id from one plan to the
     /// next, so planning again replaces it; one whose reason has gone is no longer in the plan and is removed.
     static func sync(_ planned: [PlannedReminder]) {
