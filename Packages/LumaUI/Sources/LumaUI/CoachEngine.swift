@@ -549,6 +549,20 @@ public final class CoachEngine: ObservableObject {
         return read
     }
 
+    /// Reads a picture of a results page into a race for the athlete to check. Nothing is saved, and
+    /// a time that could not be read is left empty for them to type.
+    func readRace(photos: [Data]) async throws -> RaceEntry {
+        let nothing = "No times could be read from that picture. Try one that shows the splits, or type them."
+        let acc = try await askOnce(system: CoachPrompt.raceExtraction, tool: CoachTools.raceTool(name: "submit_race"),
+                                    text: "Read this race result.", photos: photos, maxTokens: 2048)
+        guard let call = acc.toolCalls.first(where: { $0.name == "submit_race" }) else {
+            throw CoachError.message(acc.text.isEmpty ? nothing : acc.text)
+        }
+        let entry = CoachTools.raceEntry(call.input, format: env.profile.format, sex: env.profile.sex, now: Date())
+        if entry.runs.allSatisfy({ $0 == nil }), entry.stations.allSatisfy({ $0 == nil }), entry.finishS == nil { throw CoachError.message(nothing) }
+        return entry
+    }
+
     private func extract(kind: String, tool: AITool, text: String, photos: [Data]) async throws -> AIStreamAccumulator {
         try await askOnce(system: CoachPrompt.extraction(kind: kind), tool: tool, text: text, photos: photos, maxTokens: 4096)
     }

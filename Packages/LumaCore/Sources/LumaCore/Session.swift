@@ -119,13 +119,16 @@ public struct HXSession: Codable, Equatable, Sendable, Identifiable {
     public var targetFinishS: Double?
     public var rpe: Int?
     public var note: String?
+    /// The official race this was, when it was typed in from its results page (`RaceEntry`); nil for
+    /// a session recorded here.
+    public var event: String?
 
     public init(id: UUID = UUID(), kind: HXSessionKind, format: RaceFormat, sex: Sex, startedAt: Date,
                 endedAt: Date? = nil, segments: [HXSegment] = [], targetFinishS: Double? = nil,
-                rpe: Int? = nil, note: String? = nil) {
+                rpe: Int? = nil, note: String? = nil, event: String? = nil) {
         self.id = id; self.kind = kind; self.format = format; self.sex = sex; self.startedAt = startedAt
         self.endedAt = endedAt; self.segments = segments; self.targetFinishS = targetFinishS
-        self.rpe = rpe; self.note = note
+        self.rpe = rpe; self.note = note; self.event = event
     }
 
     public var totalMs: Int64? {

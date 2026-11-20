@@ -13,6 +13,16 @@
 26b-progress-f|train.progress|3080|demo|5
 26c-progress-g|train.progress|3700|demo|5
 27-progress-sparse|train.progress|0|sparse|5
+27b-hyrox|train.readiness|0|demo|5
+27c-hyrox-b|train.readiness|900|demo|5
+27d-race-report|train.session|0|demo|5
+27e-race-report-b|train.session|520|demo|5
+27f-race-add|sheet.race|0|demo|5
+27g-race-filled|sheet.race.filled|0|demo|5
+27h-race-filled-b|sheet.race.filled|1150|demo|5
+27i-race-check|sheet.race.check|1150|demo|5
+27j-race-live|cover.race|0|demo|6
+27k-share|dev.share|0|demo|5
 28-workouts|sheet.workouts|0|demo|5
 29-workouts-review|sheet.workouts.review|0|demo|5
 30-workouts-review-b|sheet.workouts.review|560|demo|5

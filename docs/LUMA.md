@@ -112,6 +112,26 @@ bridge implements them:
   points, the right half written down and the left its mirror image. No third-party artwork.
 - **Race predictions come from one resolver** (`RaceReadiness.assess`), and the live race screen takes
   its targets from the same model (`RaceReadiness.targets`).
+- **An earlier effort is raced by the same sums as the target.** `RacePace.lead` gives the seconds
+  ahead of any set of segment times, the prediction's targets or the last effort of the same shape
+  (`RaceGhost`), worked out from the plan and the clock each time, so undoing a changeover undoes it
+  in both. An effort is raced only when it is the same kind of session in the same format with every
+  planned segment timed: one that was ended early has nothing to race past the point it stopped.
+- **An official race is a session like any other.** A race run elsewhere is typed in from its results
+  page, or read from a picture of it and then checked (`RaceEntry`, `CoachTools.raceEntry`), and kept
+  as an `HXSession` with its `event` named: a full race in its format, every segment timed, the
+  roxzone shared evenly over its transitions because a results page gives only their total. So the
+  bests, the prediction, the comparison and the coach read it as they read a simulation. It is kept
+  only when it adds up (`RaceEntry.problems`): sixteen times within what a kilometre and a station
+  can take, and the splits within three seconds of the finish time when both are given. A time the
+  reading did not get is left empty for the athlete to type, never worked out. Taking a session
+  away, or correcting a race, works the bests out afresh from the sessions still kept
+  (`Benchmarks.rebuilt`): a best does not outlive the session it came from.
+- **Two efforts are set side by side only when they are the same shape** (`RaceComparison`): the same
+  kind of session in the same format, runs by their order, stations by station, the roxzone as one
+  line. Each line is what it took then and the difference; this effort's own times are in the cards
+  above it and are not written again. The picture that is sent (`RaceShareCard`) is drawn from the
+  report its screen shows, and leaves the phone only through the share sheet the athlete opens.
 - **The companion has one set of rules, and no figures of its own.** Its state is resolved in one
   place (`Buddy.look`) from facts every one of which some screen already shows (`LumaEnv.buddyFacts`
   reads them from where that screen does), in a fixed order: what is happening now, then how the body
@@ -343,8 +363,11 @@ Screen card's real cadence have to be checked on a phone with a strap, as do Hea
 sideload signature and a real coach request. Reading workouts from photos is a coach request: the
 gallery has no coach, so it opens the checking step on a read made up for it (`sheet.workouts.review`,
 and `sheet.workouts.hand` for a workout typed in by hand),
-and how well real boards and screens are read is only known from a phone. The weekly review is a coach
-request too; the gallery shows one worded from the demo week's own figures.
+and how well real boards and screens are read is only known from a phone. Reading a results page is
+one as well: the gallery opens the form on a race made up for it (`sheet.race.filled`, and
+`sheet.race.check` for one that does not add up yet), and whether a real page is read right is only
+known from a phone. The weekly review is a coach request too; the gallery shows one worded from the
+demo week's own figures.
 
 Only a phone shows how the companion's widget really behaves: how promptly iOS draws each entry of its
 timeline on the Lock Screen, whether the tap is answered within a second, and what it costs the

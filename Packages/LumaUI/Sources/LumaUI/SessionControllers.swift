@@ -384,12 +384,16 @@ final class RaceController: ObservableObject {
     @Published private(set) var started = false
     @Published private(set) var finished: HXSession?
     @Published private(set) var aheadBehind: Double?
+    /// Seconds ahead (+) or behind (−) of the last effort of this shape, when there is one.
+    @Published private(set) var ghostLead: Double?
     @Published var wallBallReps = 0
+
+    /// The last finished effort of this shape: the same session, in the same format, every segment timed.
+    let ghost: RaceGhost?
 
     private var timer: AnyCancellable?
     private var segmentHR: [Double] = []
     private var targets: [Int: Double] = [:]
-    private var cumulativeTarget = 0.0
     private var halfwaySpoken = false
     private var ticks = 0
 
@@ -407,6 +411,7 @@ final class RaceController: ObservableObject {
         }
         let clock = RaceClock()
         self.clock = clock
+        ghost = RaceGhost.efforts(like: kind, format: format, sex: sex, plan: plan, in: env.sessions).first
         recorder = SplitRecorder(session: HXSession(kind: kind, format: format, sex: sex, startedAt: Date()), plan: plan, clock: clock)
         voice.enabled = env.profile.voiceCues
         buildTargets(plan)
@@ -418,6 +423,12 @@ final class RaceController: ObservableObject {
     var index: Int { max(0, recorder.currentIndex) }
     var progress: Double { plan.isEmpty ? 0 : Double(index) / Double(plan.count) }
     var currentTarget: Double? { current.flatMap { targets[$0.id] } }
+    /// What the current segment took last time.
+    var currentGhost: Double? { current.flatMap { ghost?.segments[$0.id] } }
+    /// What the effort being raced is called: the official race it was, else "last time".
+    var ghostName: String { ghost?.event ?? "last time" }
+    /// The segments already behind, in order.
+    private var done: [PlannedSegment] { Array(plan.prefix(index)) }
     var canUseStrapTap: Bool { env.live.strap.secure }
 
     func start() {
@@ -444,13 +455,18 @@ final class RaceController: ObservableObject {
         recorder.advance(hr: summary, reps: reps)
         segmentHR.removeAll(); wallBallReps = 0; halfwaySpoken = false
         env.upsert(recorder.session)
-        if let c = closed, let t = targets[c.id] { cumulativeTarget += t }
         LumaHaptics.success()
         if recorder.isFinished {
             complete()
         } else {
             env.device?.cue()
-            voice.say(cue(current))
+            // After a run or a station, where this stands against last time; a roxzone says nothing new.
+            var words = cue(current)
+            if let ghost, let c = closed, c.kind == .run || c.kind == .station {
+                let lead = ghost.lead(done: done, current: current, segmentElapsed: 0, elapsed: Double(recorder.elapsedMs) / 1000)
+                if abs(lead) >= 1 { words += " \(LNum.int(abs(lead).rounded())) seconds \(lead >= 0 ? "ahead of" : "behind") \(ghostName)." }
+            }
+            voice.say(words)
         }
     }
 
@@ -503,14 +519,16 @@ final class RaceController: ObservableObject {
             hr = env.live.strap.liveHeartRate()
             if let h = hr { segmentHR.append(Double(h)) }
         }
+        // Both leads are worked out from the plan each time, so an undone changeover is undone here too.
         if let cur = current, let target = targets[cur.id] {
-            aheadBehind = (cumulativeTarget + min(segment, target)) - elapsed
+            aheadBehind = RacePace.lead(over: targets, done: done, current: cur, segmentElapsed: segment, elapsed: elapsed)
             if cur.kind == .run, !halfwaySpoken, segment >= target * 0.5 {
                 halfwaySpoken = true
                 let delta = aheadBehind ?? 0
                 voice.say("Halfway. \(LNum.int(abs(delta))) seconds \(delta >= 0 ? "ahead" : "behind").")
             }
         }
+        ghostLead = ghost.map { $0.lead(done: done, current: current, segmentElapsed: segment, elapsed: elapsed) }
     }
 
     /// Per-segment targets: the athlete's own bests with their measured race fatigue, the same
@@ -544,7 +562,6 @@ final class RaceController: ObservableObject {
             let t = (targets[cur.id] ?? 60) * rng.range(0.9, 1.04)
             clock.offsetMs += Int64(t * 1000)
             recorder.advance(hr: HRSummary(avg: 161, max: 170, min: 150, sampleCount: LNum.int(t), expectedCount: LNum.int(t), source: .wristOptical))
-            cumulativeTarget += targets[cur.id] ?? 0
         }
         clock.offsetMs += 96_000
         env.upsert(recorder.session)

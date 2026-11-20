@@ -2,6 +2,17 @@ import SwiftUI
 import LumaCore
 import LumaKit
 
+/// Development only: the picture of an effort as it is sent, at its real size.
+private struct DevShareCard: View {
+    @EnvironmentObject private var env: LumaEnv
+
+    var body: some View {
+        if let session = env.sessions.first(where: { $0.isComplete }) {
+            RaceShareCard(session: session).clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+    }
+}
+
 /// Development only: lays the widget and Lock Screen designs out at their real sizes so the
 /// screenshot harness can photograph them. Reached through the `dev.*` launch routes, never from the app.
 struct DevWidgetsScreen: View {
@@ -21,6 +32,7 @@ struct DevWidgetsScreen: View {
                     case 4: glimmMoods
                     case 5: glimmWear
                     case 6: glimmMotion
+                    case 7: DevShareCard()
                     default: homeB
                     }
                 }
