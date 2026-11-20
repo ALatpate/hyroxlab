@@ -72,15 +72,30 @@ final class GlimmTests: XCTestCase {
             if let extra = kit.accessory { XCTAssertTrue(["watch", "pin"].contains(GlimmWardrobe.style(extra.style)!.shape)) }
 
             let night = GlimmStylist.outfit(context: .sleep, day: day, month: 7)
-            XCTAssertTrue(["pyjama", "lounge", "crew"].contains(GlimmWardrobe.style(night.top.style)!.shape))
+            XCTAssertEqual(night.top.style, "pyjamas")
+            XCTAssertEqual(night.bottom.style, "sleep-pants")
             XCTAssertEqual(GlimmWardrobe.style(night.feet.style)!.shape, "slipper")
             XCTAssertNil(night.head)
             XCTAssertNil(night.accessory)
 
-            // By day, night clothes stay at home.
-            let plain = GlimmStylist.outfit(context: .everyday, day: day, month: 7)
-            XCTAssertFalse(plain.items.contains { ["pyjama", "sleep", "slipper"].contains(GlimmWardrobe.style($0.style)!.shape) })
+            // Night clothes, party clothes and a chef's coat are for their own occasions: on any other
+            // day they would say something about the day that is not so.
+            for context in [GlimmContext.everyday, .focus, .relax, .training, .rain, .cold, .sun, .adventure] {
+                let worn = GlimmStylist.outfit(context: context, day: day, month: 7)
+                XCTAssertFalse(worn.items.contains { GlimmStylist.occasions.contains(GlimmWardrobe.style($0.style)!.context) }, "\(context.rawValue) on \(day)")
+            }
+            // And on the occasion they are what it wears.
+            XCTAssertEqual(GlimmStylist.outfit(context: .celebration, day: day, month: 7).top.style, "varsity")
+            XCTAssertEqual(GlimmStylist.outfit(context: .cooking, day: day, month: 7).top.style, "chef-coat")
         }
+        // A new best nearly always gets the hat as well.
+        let hats = days(80).filter { GlimmStylist.outfit(context: .celebration, day: $0, month: 7).head?.style == "partyhat" }
+        XCTAssertGreaterThan(hats.count, 60)
+        // For a setting that is not an occasion, what was made for it is worn most days and not all.
+        let work = days(200).map { GlimmStylist.outfit(context: .focus, day: $0, month: 4).top.style }
+        let cardigans = work.filter { $0 == "cardigan" }.count
+        XCTAssertGreaterThan(cardigans, 90)
+        XCTAssertLessThan(cardigans, 170)
     }
 
     func testWhatCannotBeWornTogetherIsNot() {
@@ -237,8 +252,10 @@ final class GlimmTests: XCTestCase {
         // An old favourite.
         let fav = GlimmOutfit(top: GlimmItem(style: "zip-hoodie", palette: other), bottom: plain.bottom, feet: plain.feet)
         XCTAssertEqual(state.why(fav, for: .everyday, day: "2026-11-20"), .favourite("zip-hoodie"))
-        // A setting with nothing else to say is the reason, and the same reason all day.
-        XCTAssertEqual(state.why(plain, for: .training, day: "2026-11-20"), .setting(.training))
+        // A setting with nothing else to say is the reason, and the same reason all day; but only when
+        // something it has on was made for the setting.
+        XCTAssertEqual(state.why(plain, for: .training, day: "2026-11-20"), .setting(.training), "the court shoes are training shoes")
+        XCTAssertEqual(state.why(plain, for: .rain, day: "2026-11-20"), .fancy, "nothing here is for rain, so rain is not the reason")
         XCTAssertEqual(state.why(fav, for: .relax, day: "2026-11-20"), state.why(fav, for: .relax, day: "2026-11-20"))
         XCTAssertTrue([GlimmWhy.setting(.relax), .favourite("zip-hoodie")].contains(state.why(fav, for: .relax, day: "2026-11-20")))
         // A change of mind is always the reason for what it changed into.

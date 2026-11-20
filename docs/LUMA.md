@@ -142,6 +142,12 @@ bridge implements them:
   app, the widgets and the Lock Screen card show the same clothes and a day keeps its look. The
   wardrobe is 64 cuts in 16 colours, every top in 6 patterns (`GlimmWardrobe`, 2,944 pieces), and is
   never listed on a screen.
+- **Its clothes say nothing about the day that is not so.** Party clothes, a chef's coat and night
+  clothes are worn on their own occasion and on no other day, and always then
+  (`GlimmStylist.occasions`): a medal on an ordinary morning would read as a new best. For any other
+  setting a piece made for it is taken outright a little under half the time and leant towards the
+  rest (`GlimmStylist.dressing`), so it mostly looks dressed for what it is doing and not always the
+  same. When it gives the setting as its reason, something it has on was made for that setting.
 - **Its taste is not set by anyone.** What pulls it towards a piece (`GlimmStylist.score`): the
   setting the state asks for; what it has always liked (`GlimmNature`, a fixed table: its hoodies,
   its trainers, its colours); the colour it is into for a run of nine days, which the calendar alone

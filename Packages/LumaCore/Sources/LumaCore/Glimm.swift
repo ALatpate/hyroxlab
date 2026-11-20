@@ -493,17 +493,28 @@ public enum GlimmStylist {
         }
     }
 
-    /// Whether a cut may be worn for a setting at all: nothing warm or loose to train in, and night
-    /// clothes at night.
+    /// The settings whose clothes are for that setting alone: party clothes for a new best, a chef's
+    /// coat for the kitchen, night clothes for bed. Worn on any other day they would say something
+    /// about the day that is not so.
+    public static let occasions: Set<GlimmContext> = [.celebration, .cooking, .sleep]
+
+    /// How often, out of 1, a piece is taken from those made for the setting when there are any: every
+    /// time for an occasion, and a little under half the time otherwise, the rest being its own idea
+    /// (which still leans towards the setting).
+    public static func dressing(_ context: GlimmContext) -> Double { occasions.contains(context) ? 1 : 0.45 }
+
+    /// Whether a cut may be worn for a setting at all: an occasion's clothes on that occasion only,
+    /// nothing warm or loose to train in, and night clothes at night.
     public static func allowed(_ style: GlimmStyle, in context: GlimmContext) -> Bool {
+        if occasions.contains(style.context), style.context != context { return false }
         switch context {
         case .training:
             if style.warmth > 2 { return false }
             if style.slot == .head { return ["headband", "visor", "cap"].contains(style.shape) }
             if style.slot == .accessory { return ["watch", "pin"].contains(style.shape) }
             if style.slot == .feet { return ["runners", "court", "trail", "retro"].contains(style.shape) }
-            if style.slot == .bottom { return style.shape != "skirt" && style.shape != "sleep" && style.shape != "jeans" }
-            return style.shape != "pyjama"
+            if style.slot == .bottom { return style.shape != "skirt" && style.shape != "jeans" }
+            return true
         case .sleep:
             switch style.slot {
             case .top: return ["pyjama", "lounge", "crew"].contains(style.shape)
@@ -512,8 +523,7 @@ public enum GlimmStylist {
             case .head, .accessory: return false
             }
         default:
-            // Night clothes and slippers stay at home.
-            return !["pyjama", "sleep", "slipper"].contains(style.shape)
+            return true
         }
     }
 
@@ -579,10 +589,10 @@ public enum GlimmStylist {
         let into = phase(day: day).id
         var picked: [GlimmSlot: GlimmItem] = [:]
         for slot in GlimmSlot.allCases {
-            // A hat and an extra are not worn every time, and never to bed.
+            // A hat and an extra are not worn every time, and never to bed. A new best nearly always gets both.
             if slot == .head || slot == .accessory {
                 if context == .sleep { continue }
-                let bare = slot == .head ? 0.45 : 0.3
+                let bare = context == .celebration ? 0.12 : (slot == .head ? 0.45 : 0.3)
                 if rng.unit() < bare { continue }
             }
             var styles = GlimmWardrobe.styles(in: slot).filter { allowed($0, in: context) }
@@ -590,23 +600,28 @@ public enum GlimmStylist {
                 if slot == .head || slot == .accessory { continue }
                 styles = GlimmWardrobe.styles(in: slot)
             }
-            var candidates: [(GlimmItem, Double)] = []
+            var candidates: [(item: GlimmItem, weight: Double, fits: Bool)] = []
             for style in styles {
                 for palette in GlimmWardrobe.palettes {
                     let item = GlimmItem(style: style.id, palette: palette.id)
                     let s = score(item, style: style, context: context, taste: taste, recentTops: recentTops, month: month, prefer: prefer,
                                   phase: into, feel: feel)
-                    candidates.append((item, exp(min(10, s) / 2.1)))
+                    candidates.append((item, exp(min(10, s) / 2.1), style.context == context))
                 }
             }
             guard !candidates.isEmpty else { continue }
-            var choice = candidates[LNum.int((rng.unit() * Double(candidates.count)).rounded(.down)) % candidates.count].0
+            // Much of what it wears for a setting is made for it; the rest is its own idea. The roll is
+            // made either way, so the day's other pieces do not hang on whether anything fits.
+            let dress = rng.unit()
+            let fitting = candidates.filter { $0.fits }
+            let pool = (!fitting.isEmpty && dress < dressing(context)) ? fitting : candidates
+            var choice = pool[LNum.int((rng.unit() * Double(pool.count)).rounded(.down)) % pool.count].item
             if rng.unit() >= exploring {
-                let total = candidates.reduce(0) { $0 + $1.1 }
+                let total = pool.reduce(0) { $0 + $1.weight }
                 var ticket = rng.unit() * max(total, 0.001)
-                for (item, weight) in candidates {
-                    ticket -= weight
-                    if ticket <= 0 { choice = item; break }
+                for candidate in pool {
+                    ticket -= candidate.weight
+                    if ticket <= 0 { choice = candidate.item; break }
                 }
             }
             if slot == .top {
@@ -795,7 +810,8 @@ public struct GlimmState: Codable, Equatable, Sendable {
         if day == self.day, chosen[context.rawValue] != nil { return .changed }
         if context == .training, outfit.top.id == lucky { return .lucky }
         var reasons: [GlimmWhy] = []
-        if context != .everyday { reasons.append(.setting(context)) }
+        // The setting is a reason only when something it has on was made for it.
+        if context != .everyday, outfit.items.contains(where: { GlimmWardrobe.style($0.style)?.context == context }) { reasons.append(.setting(context)) }
         let into = GlimmStylist.phase(day: day).id
         if outfit.items.contains(where: { $0.palette == into }) { reasons.append(.phase(into)) }
         if let piece = outfit.items.first(where: { GlimmNature.isFavourite($0) }) { reasons.append(.favourite(piece.style)) }

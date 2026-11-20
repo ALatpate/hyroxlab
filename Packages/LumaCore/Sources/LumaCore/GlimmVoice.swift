@@ -259,10 +259,10 @@ public enum GlimmVoice {
         ],
         "outfit.why.cooking": [
             "Dressed for the kitchen. Somebody has to believe in lunch.",
-            "Apron energy. I'm here to supervise.",
+            "Chef's whites. I'm here to supervise.",
         ],
         "outfit.why.rain": [
-            "Raincoat, just in case. I can't see a window from here.",
+            "Dressed for rain, just in case. I can't see a window from here.",
             "Dressed for puddles, real or imagined.",
         ],
         "outfit.why.cold": [
@@ -278,7 +278,7 @@ public enum GlimmVoice {
             "Dressed for getting things done. Ask me later how it went.",
         ],
         "outfit.why.adventure": [
-            "Pockets everywhere. Today feels like a tiny adventure.",
+            "Dressed for a tiny adventure. Today feels like one.",
             "Out-and-about clothes. Somewhere needs exploring.",
         ],
         "outfit.why.phase": [
