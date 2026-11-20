@@ -102,6 +102,66 @@ class GlimmSpecTests(unittest.TestCase):
                     self.assertTrue(0 <= at <= 1, name)
                     words(pose)
 
+    def test_every_colour_named_is_a_colour(self):
+        """A token that names nothing is drawn magenta so that it shows; this finds it before a phone does."""
+        s = spec()
+        known = set(s["colors"]) | {"c", "c2"}
+        token = re.compile(r"^(#[0-9A-Fa-f]{6}|[A-Za-z][A-Za-z0-9]*)([+-]\d+)?(@\d+)?$")
+        seen = []
+
+        def colour(value, where):
+            seen.append(value)
+            m = token.match(value)
+            self.assertIsNotNone(m, f"{where}: {value!r} is not a colour token")
+            if not m.group(1).startswith("#"):
+                self.assertIn(m.group(1), known, f"{where}: {value!r} names no colour")
+
+        def fill(value, where):
+            if value is None:
+                return
+            if isinstance(value, str):
+                colour(value, where)
+            else:
+                self.assertIn(value[0], ("lin", "rad"), where)
+                colour(value[1], where)
+                colour(value[2], where)
+
+        def options(o, where):
+            if "s" in o:
+                colour(o["s"][0], where)
+            if isinstance(o.get("ol"), list):
+                colour(o["ol"][0], where)
+            for k in o.get("kids", []):
+                fill(k[6] if len(k) > 6 else None, where)
+                options(k[7] if len(k) > 7 else {}, where)
+
+        def element(el, where):
+            fill(el[7] if len(el) > 7 else None, where)
+            options(el[8] if len(el) > 8 else {}, where)
+
+        for i, el in enumerate(s["body"] + s["leaf"]):
+            element(el, f"body {i}")
+        for table in ("tops", "bottoms", "feet", "heads", "accs"):
+            for name, cut in s[table].items():
+                where = f"{table}.{name}"
+                for key in ("sc", "c2", "inner"):
+                    if isinstance(cut.get(key), str):
+                        colour(cut[key], where)
+                if isinstance(cut.get("cuff"), str):
+                    colour(cut["cuff"], where)
+                for key in ("kids", "thighKids", "shinKids"):
+                    options({"kids": cut.get(key, [])}, where)
+                for el in cut.get("over", []) + cut.get("parts", []):
+                    element(el, where)
+        for name, held in s["held"].items():
+            for el in held:
+                element(el, f"held.{name}")
+        for name, marks in s["props"].items():
+            for mark in marks:
+                fill(mark[4] if len(mark) > 4 else None, f"props.{name}")
+                options(mark[5] if len(mark) > 5 else {}, f"props.{name}")
+        self.assertGreater(len(seen), 300)
+
     def test_every_touch_has_an_answer_and_words(self):
         s = spec()
         zones = set(re.findall(r'return (?:[^"\n]*\? )?"([a-z]+)"', RIG.read_text(encoding="utf-8").split("static func zone")[1]))

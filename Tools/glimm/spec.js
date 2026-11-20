@@ -48,7 +48,12 @@ const collar = (c = 'c+12') => ['torso', 'path', 5.2, -23.2, 9, 5.8, 0, c, { d: 
 const neckRoll = (c = 'c+8') => ['torso', 'rr', 0, -24, 23, 5.4, 0, c, { r: 2.6, z: Z.neck }];
 
 // Shoes, in the foot's frame: the ankle is the origin, the toe points outwards, the ground is at y 6.6.
-const sole = (c = 'sole', h = 3.6) => ['foot', 'rr', 2.2, 6.6 - h / 2 - 0.1, 16.4, h, 0, c, { r: h / 2 - 0.2, ol: [c + '-38', 0.5] }];
+// A colour token made darker: "c-20" by 38 is "c-58", never "c-20-38", which names no colour.
+const darker = (token, by) => {
+  const m = /^(#[0-9A-Fa-f]{6}|[A-Za-z][A-Za-z0-9]*)([+-]\d+)?$/.exec(token);
+  return m[1] + '-' + Math.min(90, by - parseInt(m[2] || '0', 10));
+};
+const sole = (c = 'sole', h = 3.6) => ['foot', 'rr', 2.2, 6.6 - h / 2 - 0.1, 16.4, h, 0, c, { r: h / 2 - 0.2, ol: [darker(c, 38), 0.5] }];
 const UPPER = 'M 0.04 1 L 0.04 0.42 C 0.04 0.12 0.2 0 0.4 0 C 0.6 0 0.66 0.3 0.8 0.44 C 0.94 0.56 1 0.74 0.98 1 Z';
 const upper = (kids = [], h = 7.6, y = 0) => ['foot', 'path', 1.7, 6.6 - 3.2 - h / 2 + y, 14.6, h, 0, ['lin', 'c+8', 'c-8', 90], { d: UPPER, dz: 0.5, kids }];
 const laces = [['rr', -1.8, -0.2, 5.4, 1.05, -18, 'white@88'], ['rr', -1.3, 1.5, 5.4, 1.05, -18, 'white@88']];
