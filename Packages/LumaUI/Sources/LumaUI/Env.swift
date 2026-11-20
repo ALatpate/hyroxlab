@@ -494,10 +494,12 @@ public final class LumaEnv: ObservableObject {
     @Published var glimm: GlimmState {
         didSet {
             guard glimm != oldValue else { return }
-            glimmStage.outfits = [:]
+            // Only a change to what it wears reaches the widgets: a line it said changes no clothes.
+            let dressed = !glimm.dressesAs(oldValue)
+            if dressed { glimmStage.outfits = [:] }
             if !adopting {
                 disk.save(glimm, "glimm.json")
-                onGlanceChange?()
+                if dressed { onGlanceChange?() }
             }
         }
     }

@@ -606,6 +606,13 @@ public struct GlimmState: Codable, Equatable, Sendable {
         chosen = chosen.filter { $0.value.isValid }
     }
 
+    /// Whether two states would dress it the same: everything `outfit(for:day:month:)` reads. What it
+    /// has said or been told does not change its clothes.
+    public func dressesAs(_ other: GlimmState) -> Bool {
+        taste == other.taste && lock == other.lock && chosen == other.chosen && salts == other.salts && day == other.day
+            && recentTops == other.recentTops
+    }
+
     /// What Glimm wears for a setting on a day: the outfit kept on, else the one picked today, else
     /// the stylist's.
     public func outfit(for context: GlimmContext, day: String, month: Int) -> GlimmOutfit {

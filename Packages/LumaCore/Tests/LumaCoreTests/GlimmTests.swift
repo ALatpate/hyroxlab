@@ -203,6 +203,15 @@ final class GlimmTests: XCTestCase {
         XCTAssertEqual(state.recentTops.count, 1, "yesterday's top is remembered so it is not worn again at once")
         XCTAssertNotEqual(state.outfit(for: .everyday, day: "2026-11-21", month: 11), second)
 
+        // What it says or is told changes no clothes; a pick does.
+        var chatty = state
+        chatty.noteSaid("state.steady#0")
+        chatty.remember("Likes the lilac trainers.", source: "told")
+        XCTAssertTrue(chatty.dressesAs(state))
+        var picked = state
+        picked.another(for: .everyday, day: "2026-11-21", month: 11)
+        XCTAssertFalse(picked.dressesAs(state))
+
         // An outfit kept on is worn whatever the day or the setting, until it is let go.
         state.lock = second
         XCTAssertEqual(state.outfit(for: .sleep, day: "2026-11-25", month: 11), second)
