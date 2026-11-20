@@ -21,11 +21,11 @@
       "versions": [
         {
           "version": "12.1.0",
-          "buildVersion": "16",
-          "date": "2026-11-17",
-          "localizedDescription": "Build 16. A companion, a new look, and twelve new reads of your data. Glim: a small companion on Today and as a new Lock Screen and Home Screen widget (add \"Companion\"). It is charged, steady or drained with your recovery, asleep in your usual night, thirsty when water is behind, in session when you train, and it celebrates a new best. Its build follows your own strength levels, part by part. Tap it for a wave. Open it to see why it looks the way it does. New type: tall, narrow titles and figures, and text that follows your iPhone's text size. Motion: a tile opens into its screen, muscles fill in, rows shimmer while photos are read, a banner for a new best, ticks that draw themselves, and a heart that beats at your real rate (and is still when there is no live reading). New analysis: supplement trials (blocks on and off, a fair answer); how much and how late (caffeine, alcohol, last meal, bedtime against the next morning, with your own caffeine cut-off); food against the work, day by day; a weight log with what you really burn; a kept weekly review; what goes with your stronger weeks; one model of what moves your recovery, with tomorrow's likely score; each lift's history and stalled lifts; your own sweat rate; an offer to ease off after two low mornings. Log without opening Luma: a water button on the Fuel widget, and \"Log water in Luma\" for Siri. Reminders, all off until you switch them on: Settings, Reminders.",
-          "downloadURL": "https://github.com/ALatpate/hyroxlab/releases/download/build-16/Luma.ipa",
-          "size": 26566547,
+          "buildVersion": "17",
+          "date": "2026-11-20",
+          "localizedDescription": "Build 17. Your records are safe, and typing works. Fixed: Luma could be started by the strap while the phone was locked, find it could not open your records, take them for empty, ask for your details again and save over what you had logged. It now waits until it can read them and never saves over what it has not read. New: a copy of everything you log is kept for each of the last 14 days. Settings, Your data, Copies of your records: go back to a day if anything goes missing, and undo it if you change your mind. Typing: the box you are typing in stays above the keyboard, on the coach and in every form. Sending a message puts the keyboard away and the box goes back to one line. SkiErg, RowErg, BikeErg, runs and carries: a box for distance, time or calories when you check a workout read from a photo, when you add one by hand, and in a live session. No weight is asked for. The minus and plus buttons take the whole button, keep going while held, and a figure can be typed by tapping it (year, height, body mass). Fixed: removing a food item, a set or an exercise could stop the app. Data check now shows how your records were read and what iOS reports when the app stops.",
+          "downloadURL": "https://github.com/ALatpate/hyroxlab/releases/download/build-17/Luma.ipa",
+          "size": 26446285,
           "minOSVersion": "17.0"
         }
       ],
