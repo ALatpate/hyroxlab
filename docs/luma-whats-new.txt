@@ -1,11 +1,11 @@
-Glimm dresses itself.
-The wardrobe and the outfit buttons are gone. Nobody dresses Glimm and nothing rates its clothes: it
-picks for what the day is (training, a slow evening, bed) and for how the day feels, brighter on a
-charged day and softer on a drained one.
-Its taste is its own. It has favourites it comes back to, it goes through phases with a colour, and
-the top it trained in on the day of a new best becomes its lucky one.
-It says why it picked what it has on, in its own words: open Glimm, under "What it picked".
-When the day moves on while you are looking, it turns into its new clothes by itself.
-Talk with it: suggest an outfit or a colour and it decides for itself. Say something kind about its
-clothes and it grows fond of them. Its replies read more like a friend's and less like an assistant's.
-If you skipped build 18: Luma Doctor is in Recovery, Weekly check, and Glimm has its new look.
+Race your last time, keep your races, share a result.
+Race your last time: a live HYROX session shows how far ahead or behind your last effort of the same
+kind you are, beside the target, and the voice says it after each run and station.
+Races: HYROX, Races, Add a race. Type the splits from your results page (4.35 for 4:35) or take a
+picture of the page and Luma copies the times for you to check. A race is kept once it adds up, and
+then it feeds your station bests and the prediction like a simulation.
+Side by side: a race report sets the effort beside the one before it: the whole difference, where
+the most time was won and lost, and every run and station.
+Share: Race report, Share this result makes a picture of the result with its splits.
+Fixed: after Undo in a live race the ahead or behind figure counted the undone segment twice.
+Fixed: deleting a session now takes its station bests with it.

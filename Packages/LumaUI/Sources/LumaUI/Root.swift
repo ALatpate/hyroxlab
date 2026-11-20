@@ -350,6 +350,7 @@ struct LumaSheetView: View {
         case .routine: RoutineSheet()
         case .coachSetup: CoachSetupSheet()
         case .manualWorkout: ManualWorkoutSheet()
+        case .raceEntry(let id): RaceEntrySheet(editing: id)
         case .workoutPhotos(let day): WorkoutPhotoSheet(day: day)
         case .weighIn: WeighInSheet()
         case .sweatTest: SweatTestSheet()
@@ -440,6 +441,9 @@ enum LumaRoute {
             LumaLaunch.page = Int(String(name.last ?? "0")) ?? 0
             r.cover = .onboarding
         case "sheet.manual": r.tab = .train; r.sheet = .manualWorkout
+        case "sheet.race": r.tab = .train; r.sheet = .raceEntry(nil)
+        case "sheet.race.filled": r.tab = .train; LumaLaunch.page = 1; r.sheet = .raceEntry(nil)
+        case "sheet.race.check": r.tab = .train; LumaLaunch.page = 2; r.sheet = .raceEntry(nil)
         case "dev.lock": r.open(.today, .dev(0))
         case "dev.home": r.open(.today, .dev(1))
         case "dev.home2": r.open(.today, .dev(2))
@@ -447,6 +451,7 @@ enum LumaRoute {
         case "dev.glimm": r.open(.today, .dev(4))
         case "dev.glimm.wear": r.open(.today, .dev(5))
         case "dev.glimm.motion": r.open(.today, .dev(6))
+        case "dev.share": r.open(.today, .dev(7))
         case "today.buddy": r.open(.today, .buddy)
         case "today.drivers": r.open(.today, .drivers)
         case "today.dose": r.open(.today, .dose)

@@ -516,6 +516,9 @@ private struct RaceLiveBody: View {
                 }
             }
             .scrollIndicators(.hidden)
+            if let ghost = c.ghost {
+                LumaNote("You are racing \(ghost.event ?? "your last time"): \(LumaText.duration(ghost.totalS)) on \(ghost.startedAt.formatted(date: .abbreviated, time: .omitted)). The screen and the voice say how far ahead or behind you are as you go.")
+            }
             if !c.canUseStrapTap {
                 LumaNote("The strap is not paired securely, so double-tap is unavailable. Use the Next button.")
             }
@@ -560,6 +563,11 @@ private struct RaceLiveBody: View {
                 Text("\(LumaText.duration(abs(d))) \(d >= 0 ? "ahead of" : "behind") your target")
                     .font(LumaFont.body(14, .semibold)).foregroundStyle(d >= 0 ? Luma.volt : Luma.amber)
             }
+            if let d = c.ghostLead {
+                Text("\(LumaText.duration(abs(d))) \(d >= 0 ? "ahead of" : "behind") \(c.ghostName)")
+                    .font(LumaFont.body(14, .semibold)).foregroundStyle(d >= 0 ? Luma.volt : Luma.amber)
+                    .lineLimit(1).minimumScaleFactor(0.8).padding(.horizontal, Luma.gutter)
+            }
             Spacer(minLength: 6)
 
             if let cur = c.current {
@@ -575,6 +583,7 @@ private struct RaceLiveBody: View {
                         VStack(alignment: .trailing, spacing: 0) {
                             Text(LumaText.duration(c.segment)).font(LumaFont.numeral(40)).foregroundStyle(Luma.frost)
                             if let t = c.currentTarget { Text("target \(LumaText.duration(t))").font(LumaFont.body(12)).foregroundStyle(Luma.smoke) }
+                            if let g = c.currentGhost { Text("last \(LumaText.duration(g))").font(LumaFont.body(12)).foregroundStyle(Luma.smoke) }
                         }
                     }
                     if let t = c.currentTarget { LumaBar(value: min(c.segment, t), total: t, color: c.segment > t ? Luma.amber : Luma.volt, height: 6) }

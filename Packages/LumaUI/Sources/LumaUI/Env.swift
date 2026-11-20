@@ -257,6 +257,8 @@ enum LumaSheetDest: Identifiable {
     case sweatTest
     /// Set up a trial of one supplement.
     case trialSetup(String)
+    /// Add an official race, or correct the one with this id.
+    case raceEntry(UUID?)
 
     var id: String {
         switch self {
@@ -272,6 +274,7 @@ enum LumaSheetDest: Identifiable {
         case .weighIn: return "weigh-in"
         case .sweatTest: return "sweat-test"
         case .trialSetup(let name): return "trial-setup-\(name)"
+        case .raceEntry(let id): return "race-entry-\(id?.uuidString ?? "new")"
         }
     }
 }
@@ -603,6 +606,8 @@ public final class LumaEnv: ObservableObject {
                           PersonalBest(distanceM: 5000, seconds: 1480), PersonalBest(distanceM: 10000, seconds: 3105)]
             env.upsert(LumaDemoContent.simulation(daysAgo: 37, runPace: 334, stationFactor: 1.09))
             env.upsert(LumaDemoContent.simulation(daysAgo: 9, runPace: 319))
+            // An official race from before both simulations, so the race book has one to show.
+            env.saveRace(RaceEntrySheet.demoEntry(format: env.profile.format, sex: env.profile.sex))
             LumaDemoNext.stage(env, source: source)
         }
         return env
@@ -1126,6 +1131,28 @@ public final class LumaEnv: ObservableObject {
     func delete(_ s: HXSession) {
         sessions.removeAll { $0.id == s.id }
         disk.remove("session-\(s.id.uuidString).json")
+        // Its bests go with it: the bests are what the sessions still kept give.
+        benchmarks = Benchmarks.rebuilt(from: sessions)
+        disk.save(benchmarks, "benchmarks.json")
+    }
+
+    /// Keeps an official race typed in from its results page, or the correction of one: as a session
+    /// like any other, so the bests, the prediction and the comparisons read it. The bests are worked
+    /// out afresh, because a correction can take one away as well as set one. With `logToo` the race
+    /// also goes into the training log as a HYROX session of its length, for a race the strap did not see.
+    @discardableResult
+    func saveRace(_ entry: RaceEntry, replacing id: UUID? = nil, logToo: Bool = false) -> HXSession? {
+        guard let session = entry.session(id: id ?? UUID()) else { return nil }
+        if let i = sessions.firstIndex(where: { $0.id == session.id }) { sessions[i] = session } else { sessions.append(session) }
+        sessions.sort { $0.startedAt > $1.startedAt }
+        disk.save(session, "session-\(session.id.uuidString).json")
+        benchmarks = Benchmarks.rebuilt(from: sessions)
+        disk.save(benchmarks, "benchmarks.json")
+        if logToo, let total = session.totalS {
+            let start = session.startedAt.timeIntervalSince1970
+            saveWorkout(LWorkout(start: start, end: start + total, sport: "HYROX", source: "manual", distanceM: 8000, notes: session.title))
+        }
+        return session
     }
 
     var unfinishedSession: HXSession? { sessions.first { !$0.isComplete && Date().timeIntervalSince($0.startedAt) < 6 * 3600 } }

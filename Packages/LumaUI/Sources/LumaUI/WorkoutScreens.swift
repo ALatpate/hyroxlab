@@ -145,13 +145,18 @@ struct WorkoutScreen: View {
 struct SessionReportScreen: View {
     let id: UUID
     @EnvironmentObject private var env: LumaEnv
+    @EnvironmentObject private var router: LumaRouter
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         LumaDetailScreen(title: "Race report", tone: .run) {
             if let s = env.sessions.first(where: { $0.id == id }) {
                 SessionReportView(session: s)
-                Button("Delete this session") {
+                if s.isComplete { RaceShareButton(session: s) }
+                if s.isOfficialRace {
+                    Button("Correct the times") { router.sheet = .raceEntry(s.id) }.buttonStyle(LumaSecondaryButtonStyle())
+                }
+                Button(s.isOfficialRace ? "Delete this race" : "Delete this session") {
                     env.delete(s)
                     dismiss()
                 }
@@ -172,10 +177,15 @@ struct SessionReportView: View {
         let report = RaceAnalytics.report(session, benchmarks: env.benchmarks)
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 4) {
-                LumaLabel("\(session.kind.title) · \(session.startedAt.formatted(date: .abbreviated, time: .shortened))")
+                // A race typed in has a day and no clock time worth showing; a session recorded here has both.
+                LumaLabel(session.isOfficialRace
+                          ? "Official race · \(session.format.title) · \(session.startedAt.formatted(date: .abbreviated, time: .omitted))"
+                          : "\(session.kind.title) · \(session.startedAt.formatted(date: .abbreviated, time: .shortened))")
+                if let event = session.event { Text(event).font(LumaFont.title(26)).foregroundStyle(Luma.frost).lineLimit(2).minimumScaleFactor(0.7) }
                 Text(report.totalS.map { LumaText.duration($0) } ?? "In progress").font(LumaFont.numeral(88, .heavy)).foregroundStyle(Luma.frost)
                     .minimumScaleFactor(0.6).lineLimit(1)
             }
+            if let before = RaceComparison.withPrevious(session, in: env.sessions) { RaceCompareCard(comparison: before) }
             LumaCard {
                 VStack(alignment: .leading, spacing: 12) {
                     LumaLabel("Where the time went")
@@ -266,7 +276,8 @@ struct RaceReadinessScreen: View {
 
     var body: some View {
         let ready = RaceReadiness.assess(benchmarks: env.benchmarks, sessions: env.sessions, sex: env.profile.sex, personalBests: env.runPBs)
-        let sims = env.sessions.filter { $0.kind.isHyrox }
+        let races = env.sessions.filter { $0.isOfficialRace }
+        let sims = env.sessions.filter { $0.kind.isHyrox && !$0.isOfficialRace }
         LumaDetailScreen(title: "HYROX", tone: .run) {
             Text("Which race are you ready for?").font(LumaFont.title(26)).foregroundStyle(Luma.frost)
             LumaNote("An indicative read from your own station benchmarks, simulations and running. It sharpens with every session you record in race mode.")
@@ -283,6 +294,28 @@ struct RaceReadinessScreen: View {
                         Text(best.map { LumaText.duration($0) } ?? "Not yet").font(LumaFont.numeral(20)).foregroundStyle(best == nil ? Luma.smoke : Luma.frost)
                     }
                 }
+            }
+            LumaSection(title: "Races")
+            if races.isEmpty {
+                LumaCard {
+                    LumaEmpty(symbol: "medal.fill", title: "No official race yet",
+                              message: "Add a race from its results page: type the splits, or take a picture of the page and Luma copies them for you to check. It is then set beside your simulations, station by station.",
+                              action: "Add a race") { router.sheet = .raceEntry(nil) }
+                }
+            } else {
+                LumaGroup {
+                    ForEach(races) { s in
+                        Button { router.push(.session(s.id)) } label: {
+                            LumaRow(symbol: "medal.fill", symbolColor: Luma.amber, title: s.title,
+                                    subtitle: "\(s.startedAt.formatted(date: .abbreviated, time: .omitted)) · \(s.format.title)", chevron: true) {
+                                Text(s.totalS.map { LumaText.duration($0) } ?? "–").font(LumaFont.numeral(20)).foregroundStyle(Luma.frost)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                Button { router.sheet = .raceEntry(nil) } label: { Label("Add a race", systemImage: "plus").frame(maxWidth: .infinity) }
+                    .buttonStyle(LumaSecondaryButtonStyle())
             }
             LumaSection(title: "Simulations")
             if sims.isEmpty {

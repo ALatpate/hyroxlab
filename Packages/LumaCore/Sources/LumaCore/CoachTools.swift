@@ -426,7 +426,8 @@ public enum CoachTools {
                     }, uniquingKeysWith: { x, _ in x })),
                     "best_1k_run_s": .rounded(w.benchmarks.bestRun1kS?.seconds, 0),
                     "simulations": .array(w.sessions.filter { $0.kind.isHyrox && $0.isComplete }.prefix(8).map { s -> JSONValue in
-                        ["date": .string(LDate.key(s.startedAt, calendar: calendar)), "kind": .string(s.kind.title), "total_s": .rounded(s.totalS, 0),
+                        ["date": .string(LDate.key(s.startedAt, calendar: calendar)), "kind": .string(s.event.map { "Official race: " + $0 } ?? s.kind.title),
+                         "total_s": .rounded(s.totalS, 0),
                          "run_splits_s": .array(s.runs.compactMap { $0.durationS }.map { .rounded($0, 0) }),
                          "stations_s": .object(Dictionary(s.stations.compactMap { seg -> (String, JSONValue)? in
                             guard let st = seg.station, let d = seg.durationS else { return nil }
