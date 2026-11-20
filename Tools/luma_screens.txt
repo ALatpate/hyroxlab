@@ -14,9 +14,9 @@
 26c-progress-g|train.progress|3700|demo|5
 27-progress-sparse|train.progress|0|sparse|5
 27b-hyrox|train.readiness|0|demo|5
-27c-hyrox-b|train.readiness|900|demo|5
+27c-hyrox-b|train.readiness|1040|demo|5
 27d-race-report|train.session|0|demo|5
-27e-race-report-b|train.session|520|demo|5
+27e-race-report-b|train.session|1500|demo|5
 27f-race-add|sheet.race|0|demo|5
 27g-race-filled|sheet.race.filled|0|demo|5
 27h-race-filled-b|sheet.race.filled|1150|demo|5

@@ -185,7 +185,8 @@ struct SessionReportView: View {
                 Text(report.totalS.map { LumaText.duration($0) } ?? "In progress").font(LumaFont.numeral(88, .heavy)).foregroundStyle(Luma.frost)
                     .minimumScaleFactor(0.6).lineLimit(1)
             }
-            if let before = RaceComparison.withPrevious(session, in: env.sessions) { RaceCompareCard(comparison: before) }
+            let before = RaceComparison.withPrevious(session, in: env.sessions)
+            if let before { RaceCompareCard(comparison: before) }
             LumaCard {
                 VStack(alignment: .leading, spacing: 12) {
                     LumaLabel("Where the time went")
@@ -256,6 +257,7 @@ struct SessionReportView: View {
                     }
                 }
             }
+            if let before { RaceCompareLines(comparison: before) }
         }
     }
 
@@ -283,18 +285,6 @@ struct RaceReadinessScreen: View {
             LumaNote("An indicative read from your own station benchmarks, simulations and running. It sharpens with every session you record in race mode.")
             ForEach(ready) { r in ReadinessCard(readiness: r) }
 
-            LumaSection(title: "Station benchmarks")
-            StationRadarCard()
-            LumaGroup {
-                ForEach(Station.allCases) { st in
-                    let load = st.loadKg(format: env.profile.format, sex: env.profile.sex)
-                    let best = env.benchmarks.bestStationS(st, loadKg: load)
-                    LumaRow(symbol: st.symbol, symbolColor: best == nil ? Luma.smoke : Luma.volt, title: st.title,
-                            subtitle: load > 0 ? st.measure.label + " · \(LNum.int(load)) kg" : st.measure.label) {
-                        Text(best.map { LumaText.duration($0) } ?? "Not yet").font(LumaFont.numeral(20)).foregroundStyle(best == nil ? Luma.smoke : Luma.frost)
-                    }
-                }
-            }
             LumaSection(title: "Races")
             if races.isEmpty {
                 LumaCard {
@@ -316,6 +306,20 @@ struct RaceReadinessScreen: View {
                 }
                 Button { router.sheet = .raceEntry(nil) } label: { Label("Add a race", systemImage: "plus").frame(maxWidth: .infinity) }
                     .buttonStyle(LumaSecondaryButtonStyle())
+            }
+
+
+            LumaSection(title: "Station benchmarks")
+            StationRadarCard()
+            LumaGroup {
+                ForEach(Station.allCases) { st in
+                    let load = st.loadKg(format: env.profile.format, sex: env.profile.sex)
+                    let best = env.benchmarks.bestStationS(st, loadKg: load)
+                    LumaRow(symbol: st.symbol, symbolColor: best == nil ? Luma.smoke : Luma.volt, title: st.title,
+                            subtitle: load > 0 ? st.measure.label + " · \(LNum.int(load)) kg" : st.measure.label) {
+                        Text(best.map { LumaText.duration($0) } ?? "Not yet").font(LumaFont.numeral(20)).foregroundStyle(best == nil ? Luma.smoke : Luma.frost)
+                    }
+                }
             }
             LumaSection(title: "Simulations")
             if sims.isEmpty {

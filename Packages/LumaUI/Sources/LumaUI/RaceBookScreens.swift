@@ -234,9 +234,8 @@ struct RaceEntrySheet: View {
 
 // MARK: - Set beside the effort before
 
-/// An effort against the one before it of the same shape: the whole difference, where the most time
-/// was won and lost, and every line. The times of this effort are in the cards above; here each line
-/// is what it took then and the difference.
+/// An effort against the one before it of the same shape, in a few words: the whole difference, and
+/// where the most time was won and lost.
 struct RaceCompareCard: View {
     let comparison: RaceComparison
 
@@ -253,17 +252,6 @@ struct RaceCompareCard: View {
                 }
                 if !c.won.isEmpty { most("Won most", c.won, Luma.volt) }
                 if !c.lost.isEmpty { most("Lost most", c.lost, Luma.amber) }
-                Rectangle().fill(Luma.line).frame(height: 1)
-                ForEach(c.lines) { line in
-                    HStack(spacing: 8) {
-                        Text(line.label).font(LumaFont.body(14, .medium)).foregroundStyle(Luma.frost).lineLimit(1).minimumScaleFactor(0.8)
-                        Spacer(minLength: 6)
-                        Text("then \(LumaText.duration(line.thenS))").font(LumaFont.body(12.5)).foregroundStyle(Luma.smoke)
-                        Text(RaceCompareCard.signed(line.deltaS)).font(LumaFont.numeral(17, .semibold))
-                            .foregroundStyle(abs(line.deltaS) < 0.5 ? Luma.mist : (line.deltaS < 0 ? Luma.volt : Luma.amber))
-                            .frame(width: 62, alignment: .trailing)
-                    }
-                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -281,6 +269,31 @@ struct RaceCompareCard: View {
     static func signed(_ delta: Double) -> String {
         if abs(delta) < 0.5 { return "level" }
         return (delta < 0 ? "−" : "+") + LumaText.duration(abs(delta))
+    }
+}
+
+/// The same comparison line by line: every run, every station and the roxzone. This effort's own
+/// times are in the cards above; here each line is what it took then and the difference.
+struct RaceCompareLines: View {
+    let comparison: RaceComparison
+
+    var body: some View {
+        LumaCard {
+            VStack(alignment: .leading, spacing: 11) {
+                LumaLabel("Line by line against \(comparison.thenEvent ?? "last time")")
+                ForEach(comparison.lines) { line in
+                    HStack(spacing: 8) {
+                        Text(line.label).font(LumaFont.body(14, .medium)).foregroundStyle(Luma.frost).lineLimit(1).minimumScaleFactor(0.8)
+                        Spacer(minLength: 6)
+                        Text("then \(LumaText.duration(line.thenS))").font(LumaFont.body(12.5)).foregroundStyle(Luma.smoke)
+                        Text(RaceCompareCard.signed(line.deltaS)).font(LumaFont.numeral(17, .semibold))
+                            .foregroundStyle(abs(line.deltaS) < 0.5 ? Luma.mist : (line.deltaS < 0 ? Luma.volt : Luma.amber))
+                            .frame(width: 62, alignment: .trailing)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 }
 
