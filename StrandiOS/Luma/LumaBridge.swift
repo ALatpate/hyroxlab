@@ -33,6 +33,9 @@ final class LumaBridge: ObservableObject, LumaDeviceControl {
     private var onScreen = false
     private var ticker: Timer?
     private var lastGlance: LumaGlance?
+    /// The companion as the Lock Screen card carries it, and the minute it was worked out in: the card
+    /// is refreshed with every reading, and the companion's state changes with the minute at most.
+    private var glimmTag: (minute: Int, tag: String)?
 
     init(model: AppModel, health: HealthKitBridge, liveActivity: LiveActivityController) {
         self.model = model
@@ -503,6 +506,7 @@ final class LumaBridge: ObservableObject, LumaDeviceControl {
         env.applyQuickLog()
         let glance = env.glance()
         lastGlance = glance
+        glimmTag = nil
         if LumaGlanceStore.save(glance) { WidgetCenter.shared.reloadAllTimelines() }
         liveActivity?.refresh()
         // Reminders are planned from the same numbers. Nothing is planned, or cleared, before the strap
@@ -520,6 +524,8 @@ final class LumaBridge: ObservableObject, LumaDeviceControl {
                 state.recovery = kept.recovery
                 state.sleep = kept.sleepScore
                 state.strainText = kept.strainText
+                // The companion as it was last planned for this hour of the day.
+                if let moment = kept.buddy?.moments.last(where: { $0.at <= Date() }) { state.glimm = moment.kind + "~" + (moment.outfit ?? "") }
             }
             return
         }
@@ -530,6 +536,13 @@ final class LumaBridge: ObservableObject, LumaDeviceControl {
         state.sleep = current ? glance.sleepScore : nil
         state.strainText = current ? glance.strainText : nil
         if let bpm = state.bpm ?? state.lastBpm { state.zone = env.profile.zones().zone(for: Double(bpm)) }
+        let now = Date()
+        let minute = LNum.int(now.timeIntervalSince1970 / 60)
+        if glimmTag?.minute != minute {
+            // Its state and its clothes come from where the companion's own screen takes them.
+            glimmTag = (minute, env.glimmTag(now: now))
+        }
+        state.glimm = glimmTag?.tag
         guard let session = recorder.session else { return }
         state.session = session.title
         if let start = session.movingStart {

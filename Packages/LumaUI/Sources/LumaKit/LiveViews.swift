@@ -20,13 +20,27 @@ public struct LumaLiveState: Equatable, Sendable {
     /// Moving time while the session is paused (the clock stands still).
     public var pausedElapsed: TimeInterval?
     public var distanceKm: Double?
+    /// The companion: its state and its clothes as the app chose them; nil when the app sent none.
+    public var glimm: BuddyKind?
+    public var glimmOutfit: String
 
     public init(bpm: Int? = nil, lastBpm: Int? = nil, lastAt: Date? = nil, zone: Int? = nil, connected: Bool = true, recovery: Int? = nil,
                 strainText: String? = nil, sleepScore: Int? = nil, session: String? = nil, sessionStart: Date? = nil,
-                pausedElapsed: TimeInterval? = nil, distanceKm: Double? = nil) {
+                pausedElapsed: TimeInterval? = nil, distanceKm: Double? = nil, glimm: String? = nil) {
         self.bpm = bpm; self.lastBpm = lastBpm; self.lastAt = lastAt; self.zone = zone; self.connected = connected
         self.recovery = recovery; self.strainText = strainText; self.sleepScore = sleepScore; self.session = session
         self.sessionStart = sessionStart; self.pausedElapsed = pausedElapsed; self.distanceKm = distanceKm
+        // "state~clothes", as the app wrote it.
+        let parts = (glimm ?? "").split(separator: "~", maxSplits: 1, omittingEmptySubsequences: false).map(String.init)
+        self.glimm = parts.first.flatMap { BuddyKind(rawValue: $0) }
+        self.glimmOutfit = parts.count > 1 ? parts[1] : ""
+    }
+
+    /// Which of its stills the companion stands in. It moves on with the readings, so the card is a
+    /// little different each time it is looked at: its own pose, then one of the mood's small variations.
+    public var glimmBeat: Int {
+        guard let lastAt else { return 0 }
+        return BuddyTimeline.beats[whole((lastAt.timeIntervalSince1970 / 40).rounded(.down)) % BuddyTimeline.beats.count]
     }
 
     /// The number to draw: the live reading, else the last one the strap delivered.
@@ -92,34 +106,42 @@ public struct LumaLiveCard: View {
     public init(state: LumaLiveState) { self.state = state }
 
     public var body: some View {
-        HStack(alignment: .center, spacing: 12) {
+        // With the companion on the card the figures draw in a little, so everything still fits a
+        // three-figure heart rate on the narrowest phone.
+        let roomy = state.glimm == nil
+        HStack(alignment: .center, spacing: roomy ? 12 : 8) {
+            if let kind = state.glimm {
+                GlimmFigure(kind: kind, outfit: state.glimmOutfit, beat: state.glimmBeat, energy: Double(state.recovery ?? 60) / 100)
+                    .frame(width: 56, height: 67)
+            }
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 5) {
                     Image(systemName: "heart.fill").font(.system(size: 10, weight: .bold)).foregroundStyle(state.isLive ? state.zoneColor : Luma.smoke)
                     Text(state.session ?? "Heart rate").font(LumaFont.label(10)).foregroundStyle(Luma.mist).lineLimit(1)
                 }
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text(state.shownBpm.map { "\($0)" } ?? "–").font(LumaFont.numeral(52, .heavy))
+                    Text(state.shownBpm.map { "\($0)" } ?? "–").font(LumaFont.numeral(roomy ? 52 : 44, .heavy))
                         .foregroundStyle(state.isLive ? Luma.frost : Luma.mist).contentTransition(.numericText())
                     Text("bpm").font(LumaFont.body(13, .semibold)).foregroundStyle(Luma.mist)
                 }
                 LiveStatusLine(state: state)
             }
-            Spacer(minLength: 6)
+            .layoutPriority(1)
+            Spacer(minLength: 4)
             if state.hasSession {
                 VStack(alignment: .trailing, spacing: 2) {
-                    LiveSessionClock(state: state, size: 38).frame(maxWidth: 150, alignment: .trailing)
+                    LiveSessionClock(state: state, size: roomy ? 38 : 32).frame(maxWidth: roomy ? 150 : 124, alignment: .trailing)
                     Text(sessionDetail).font(LumaFont.body(12.5, .medium)).foregroundStyle(Luma.mist).lineLimit(1)
                 }
             } else {
-                HStack(spacing: 14) {
+                HStack(spacing: roomy ? 14 : 8) {
                     ringStat
-                    LiveStat(label: "Strain", value: state.strainText, color: Luma.ember)
-                    LiveStat(label: "Sleep", value: state.sleepScore.map { "\($0)%" }, color: Luma.dusk)
+                    LiveStat(label: "Strain", value: state.strainText, color: Luma.ember, size: roomy ? 24 : 20)
+                    LiveStat(label: "Sleep", value: state.sleepScore.map { "\($0)%" }, color: Luma.dusk, size: roomy ? 24 : 20)
                 }
             }
         }
-        .padding(.horizontal, 18)
+        .padding(.horizontal, roomy ? 18 : 14)
         .padding(.vertical, 14)
         .background(LumaLiveBackdrop(color: state.isLive ? state.zoneColor : Luma.smoke))
     }
@@ -150,10 +172,11 @@ struct LiveStat: View {
     let label: String
     let value: String?
     let color: Color
+    var size: CGFloat = 24
 
     var body: some View {
         VStack(spacing: 3) {
-            Text(value ?? "–").font(LumaFont.numeral(24)).foregroundStyle(value == nil ? Luma.smoke : Luma.frost)
+            Text(value ?? "–").font(LumaFont.numeral(size)).foregroundStyle(value == nil ? Luma.smoke : Luma.frost)
                 .frame(height: 42)
             HStack(spacing: 3) {
                 Circle().fill(color).frame(width: 4, height: 4)

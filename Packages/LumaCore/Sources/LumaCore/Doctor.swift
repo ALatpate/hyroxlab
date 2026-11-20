@@ -193,7 +193,9 @@ public enum Doctor {
             let said = values.isEmpty ? "No night this week has a reading." : "Only \(values.count) of 7 nights have a reading, too few to judge a week by."
             return DoctorFinding(id: "skinTempDev", title: title, level: .noData, figure: "–", usual: usual, line: said, series: series)
         }
-        let figure = LFormat.signed(mid, decimals: 1) + " °C"
+        // To the tenth it is shown at, so a week a hair under its baseline reads +0.0 and not −0.0.
+        let tenth = (mid * 10).rounded() / 10
+        let figure = LFormat.signed(tenth == 0 ? 0 : tenth, decimals: 1) + " °C"
         let level: DoctorLevel = flagged >= 3 ? .outside : (flagged == 2 ? .watch : .steady)
         let line: String
         switch level {

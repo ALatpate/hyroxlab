@@ -218,7 +218,6 @@ struct BuddyEntry: TimelineEntry {
     let date: Date
     let frame: BuddyFrame
     let name: String
-    let shape: BuddyShape
 }
 
 /// The companion's timeline: its states for the next few hours as the app worked them out, a shift of
@@ -226,7 +225,7 @@ struct BuddyEntry: TimelineEntry {
 struct BuddyProvider: TimelineProvider {
     private static let sample = BuddyEntry(date: Date(), frame: BuddyFrame(date: Date(), kind: .charged, title: "Charged",
                                                                            line: "Recovery 74%. Good to push today.", energy: 0.74),
-                                           name: "Glim", shape: BuddyShape(levels: [2.6, 2.4, 2.8, 2.2, 2.5, 3.2]))
+                                           name: "Glimm")
 
     func placeholder(in context: Context) -> BuddyEntry { BuddyProvider.sample }
 
@@ -243,10 +242,9 @@ struct BuddyProvider: TimelineProvider {
     private func entries(from now: Date) -> [BuddyEntry] {
         LumaGlanceStore.suiteName = WidgetSnapshot.suiteName
         let buddy = LumaGlanceStore.load()?.buddy
-        let shape = BuddyShape(levels: buddy?.levels ?? [])
-        let name = buddy?.name ?? "Glim"
+        let name = buddy?.name ?? "Glimm"
         return BuddyTimeline.frames(buddy, from: now, poke: LumaQuickLog.lastPoke).map {
-            BuddyEntry(date: $0.date, frame: $0, name: name, shape: shape)
+            BuddyEntry(date: $0.date, frame: $0, name: name)
         }
     }
 }
@@ -263,7 +261,7 @@ struct BuddyWidgetBody: View {
             LumaBuddyWidgetView(frame: entry.frame, name: entry.name, family: family.luma) {
                 // A tap on the figure is answered by the figure; a tap anywhere else opens Luma.
                 Button(intent: PokeBuddyIntent()) {
-                    BuddyFigure(frame: entry.frame, shape: entry.shape, style: lock ? .vibrant : .color(spark: spark))
+                    GlimmFigure(frame: entry.frame, ink: lock ? .mono : .color)
                 }
                 .buttonStyle(.plain)
             }
@@ -281,7 +279,7 @@ struct LumaBuddyWidget: Widget {
             BuddyWidgetBody(entry: entry)
         }
         .configurationDisplayName("Companion")
-        .description("A small companion whose state follows your day and whose build follows your lifts. Tap it for a wave.")
+        .description("Glimm, whose state follows your day and who dresses for it. Tap it for a wave.")
         .supportedFamilies([.accessoryCircular, .accessoryRectangular, .accessoryInline, .systemSmall, .systemMedium])
     }
 }
@@ -294,7 +292,7 @@ extension NOOPActivityAttributes.ContentState {
     func luma(stale: Bool) -> LumaLiveState {
         LumaLiveState(bpm: stale ? nil : bpm, lastBpm: lastBpm ?? bpm, lastAt: lastAt, zone: zone, connected: bonded, recovery: recovery,
                       strainText: strainText ?? effort.map { String($0) }, sleepScore: sleep, session: session, sessionStart: sessionStart,
-                      pausedElapsed: pausedElapsed, distanceKm: distanceM.map { $0 / 1000 })
+                      pausedElapsed: pausedElapsed, distanceKm: distanceM.map { $0 / 1000 }, glimm: glimm)
     }
 }
 

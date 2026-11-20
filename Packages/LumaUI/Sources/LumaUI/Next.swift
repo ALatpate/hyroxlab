@@ -7,7 +7,7 @@ import LumaKit
 /// Settings and marks that belong to the companion, the reminders and the ease-off offer, kept in one
 /// small file. Every field is optional on the way in, so a file from an earlier build still loads.
 struct LumaExtras: Codable, Equatable {
-    var buddyName = "Glim"
+    var buddyName = "Glimm"
     var buddyOnToday = true
     /// The reminders that are switched on (`ReminderKind` raw values). None until the athlete picks some.
     var reminders: [String] = []
@@ -26,7 +26,9 @@ struct LumaExtras: Codable, Equatable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        buddyName = try c.decodeIfPresent(String.self, forKey: .buddyName) ?? "Glim"
+        buddyName = try c.decodeIfPresent(String.self, forKey: .buddyName) ?? "Glimm"
+        // "Glim" was the name it came with before it had one of its own; a name the athlete gave is kept.
+        if buddyName == "Glim" { buddyName = "Glimm" }
         buddyOnToday = try c.decodeIfPresent(Bool.self, forKey: .buddyOnToday) ?? true
         reminders = try c.decodeIfPresent([String].self, forKey: .reminders) ?? []
         easeSettled = try c.decodeIfPresent([UUID].self, forKey: .easeSettled) ?? []
@@ -40,7 +42,7 @@ struct LumaExtras: Codable, Equatable {
 
     var name: String {
         let trimmed = buddyName.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "Glim" : trimmed
+        return trimmed.isEmpty ? "Glimm" : trimmed
     }
 
     var best: BuddyBest? {
@@ -217,11 +219,13 @@ extension LumaEnv {
     /// The companion's look right now.
     func buddyLook(now: Date = Date()) -> BuddyLook { Buddy.look(buddyFacts(now: now), at: now) }
 
-    /// The companion as the widgets get it: its name, its build and every state from now on.
+    /// The companion as the widgets get it: its name and every state from now on, each with what it
+    /// wears then. The clothes are chosen here, so the app and its widgets show the same outfit.
     func buddyGlance(now: Date) -> LumaGlance.Buddy {
         let moments = Buddy.schedule(buddyFacts(now: now), from: now)
         return LumaGlance.Buddy(name: extras.name, levels: next.build.levels, moments: moments.map {
-            LumaGlance.Buddy.Moment(at: $0.at, kind: $0.look.mood.rawValue, title: $0.look.title, line: $0.look.line, energy: $0.look.energy ?? -1)
+            LumaGlance.Buddy.Moment(at: $0.at, kind: $0.look.mood.rawValue, title: $0.look.title, line: $0.look.line, energy: $0.look.energy ?? -1,
+                                    outfit: glimmOutfit(for: $0.look.mood, at: max($0.at, now)).code)
         })
     }
 

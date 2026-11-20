@@ -26,9 +26,14 @@
 52-buddy-c|today.buddy|1320|demo|5
 53-buddy-d|today.buddy|1980|demo|5
 54-buddy-lock|dev.buddy|0|demo|5
-55-buddy-builds|dev.buddy.builds|0|demo|5
-56-buddy-builds-b|dev.buddy.builds|640|demo|5
-57-buddy-builds-c|dev.buddy.builds|1180|demo|5
+55-glimm-moods|dev.glimm|0|demo|5
+56-glimm-moods-b|dev.glimm|700|demo|5
+57-glimm-moods-c|dev.glimm|1400|demo|5
+57b-glimm-wear|dev.glimm.wear|0|demo|5
+57c-glimm-wear-b|dev.glimm.wear|700|demo|5
+57d-glimm-motion|dev.glimm.motion|0|demo|5
+57e-wardrobe|sheet.wardrobe|0|demo|5
+57f-wardrobe-b|sheet.wardrobe|420|demo|5
 60-dose|today.dose|0|demo|5
 61-dose-b|today.dose|700|demo|5
 62-drivers|today.drivers|0|demo|5

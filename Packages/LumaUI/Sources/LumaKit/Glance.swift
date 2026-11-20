@@ -70,9 +70,12 @@ public struct LumaGlance: Codable, Equatable, Sendable {
             public var line: String
             /// 0…1 from the recovery score; negative when there is no score.
             public var energy: Double
+            /// What Glimm wears from this moment, as "top|bottom|feet|head|accessory" (`GlimmRig`).
+            /// Nil in a glance written by an older build: the everyday look is drawn.
+            public var outfit: String?
 
-            public init(at: Date, kind: String, title: String, line: String, energy: Double) {
-                self.at = at; self.kind = kind; self.title = title; self.line = line; self.energy = energy
+            public init(at: Date, kind: String, title: String, line: String, energy: Double, outfit: String? = nil) {
+                self.at = at; self.kind = kind; self.title = title; self.line = line; self.energy = energy; self.outfit = outfit
             }
         }
 

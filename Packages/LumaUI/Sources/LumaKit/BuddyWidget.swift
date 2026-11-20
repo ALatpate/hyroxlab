@@ -9,15 +9,18 @@ import WidgetKit
 public struct BuddyFrame: Equatable, Sendable {
     public var date: Date
     public var kind: BuddyKind
-    /// Which still variation of the pose (`BuddyPose.make`).
+    /// Which still of the mood (`GlimmRig.pose`): 0 is the mood's own pose, 1 to 3 its small
+    /// variations, 10 and 11 the two steps of the answer to a tap.
     public var beat: Int
     public var title: String
     public var line: String
     /// 0…1; negative when there is no recovery score.
     public var energy: Double
+    /// What Glimm is wearing, as the app chose it; empty for the everyday look.
+    public var outfit: String
 
-    public init(date: Date, kind: BuddyKind, beat: Int = 0, title: String, line: String, energy: Double = -1) {
-        self.date = date; self.kind = kind; self.beat = beat; self.title = title; self.line = line; self.energy = energy
+    public init(date: Date, kind: BuddyKind, beat: Int = 0, title: String, line: String, energy: Double = -1, outfit: String = "") {
+        self.date = date; self.kind = kind; self.beat = beat; self.title = title; self.line = line; self.energy = energy; self.outfit = outfit
     }
 }
 
@@ -31,8 +34,8 @@ public enum BuddyTimeline {
     /// How long after a tap its reaction is still worth playing.
     public static let pokeWindow: TimeInterval = 4
 
-    /// The still variations it moves through, one per shift.
-    static let beats = [0, 2, 0, 3]
+    /// The stills it moves through, one per shift: its own pose, then one of the mood's small variations.
+    static let beats = [0, 1, 0, 2, 0, 3]
 
     private static func beat(at date: Date) -> Int {
         let slot = whole((date.timeIntervalSince1970 / shiftEvery).rounded(.down))
@@ -45,7 +48,7 @@ public enum BuddyTimeline {
             return BuddyFrame(date: date, kind: .waiting, beat: beat ?? 0, title: "Waiting", line: "Open Luma to bring today's numbers in.")
         }
         return BuddyFrame(date: date, kind: kind, beat: beat ?? BuddyTimeline.beat(at: date), title: moment.title, line: moment.line,
-                          energy: moment.energy)
+                          energy: moment.energy, outfit: moment.outfit ?? "")
     }
 
     /// Frames from `now` for the next `hours`: every change of state, a shift of weight every few
@@ -76,10 +79,10 @@ public enum BuddyTimeline {
 
 // MARK: - Widget views
 
-public extension BuddyFigure {
-    /// The figure for a widget frame: still, in the pose the frame names.
-    init(frame: BuddyFrame, shape: BuddyShape, style: BuddyStyle) {
-        self.init(kind: frame.kind, shape: shape, style: style, beat: frame.beat, energy: frame.energy < 0 ? 0.5 : frame.energy)
+public extension GlimmFigure {
+    /// The figure for a widget frame: still, in the pose and the clothes the frame names.
+    init(frame: BuddyFrame, ink: GlimmInk) {
+        self.init(kind: frame.kind, outfit: frame.outfit, ink: ink, beat: frame.beat, energy: frame.energy < 0 ? 0.5 : frame.energy)
     }
 }
 
@@ -150,12 +153,12 @@ public struct LumaBuddyWidgetView<Figure: View>: View {
     }
 }
 
-public extension LumaBuddyWidgetView where Figure == BuddyFigure {
-    /// The widget with the plain figure, for previews and the design gallery.
-    init(frame: BuddyFrame, name: String, family: LumaWidgetFamily, shape: BuddyShape, spark: Color = Luma.volt) {
+public extension LumaBuddyWidgetView where Figure == GlimmFigure {
+    /// The widget with the figure alone, for previews and the design gallery.
+    init(frame: BuddyFrame, name: String, family: LumaWidgetFamily) {
         let lock = family == .circular || family == .rectangular || family == .inline
         self.init(frame: frame, name: name, family: family) {
-            BuddyFigure(frame: frame, shape: shape, style: lock ? .vibrant : .color(spark: spark))
+            GlimmFigure(frame: frame, ink: lock ? .mono : .color)
         }
     }
 }

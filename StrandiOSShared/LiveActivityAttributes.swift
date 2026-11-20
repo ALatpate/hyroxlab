@@ -29,6 +29,9 @@ public struct NOOPActivityAttributes: ActivityAttributes {
         public var sessionStart: Date?
         public var pausedElapsed: Double?
         public var distanceM: Double?
+        /// The companion on the card: the state it is in and what it is wearing, as the app chose
+        /// them ("steady~top|bottom|feet|head|accessory"). Nil from an older build: no companion is drawn.
+        public var glimm: String?
 
         public init(bpm: Int?, recovery: Int?, bonded: Bool, effort: Int? = nil) {
             self.bpm = bpm

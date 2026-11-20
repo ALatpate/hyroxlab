@@ -43,6 +43,10 @@ final class DoctorTests: XCTestCase {
         }
         XCTAssertEqual(report.headline, "Everything checked is in your usual range")
         XCTAssertEqual(finding(report, "restingHR")?.series.count, 28)
+        // A week a hair either side of its baseline is shown as zero, never as minus zero.
+        var nearly = steady()
+        for i in nearly.indices { nearly[i].skinTempDev = -0.02 }
+        XCTAssertEqual(finding(check(nearly), "skinTempDev")?.figure, "+0.0 °C")
         XCTAssertEqual(report.level, .steady)
 
         // With no sessions the load cannot be judged. That is not a concern, and it is not passed off as fine.

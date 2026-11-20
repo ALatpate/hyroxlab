@@ -445,6 +445,18 @@ public final class CoachEngine: ObservableObject {
     /// The name of the model that would write the read, when the list of models is already in hand.
     var doctorModelName: String? { AIModel.byStrength(models).first?.name }
 
+    // MARK: Glimm
+
+    /// One turn of a chat with Glimm, on the model the coach is set to. What comes back is the
+    /// model's text as it stands: `GlimmChat.parse` decides what of it Glimm says and does.
+    func glimmReply(_ messages: [AIMessage]) async throws -> String {
+        guard let key = env.secrets.coachKey(), !key.isEmpty else { throw CoachError.noKey }
+        let model = try await resolveModel(key: key)
+        // Room for a model that thinks before it answers; the answer itself is a line or two.
+        let request = AIRequest(model: model, system: GlimmChat.system, messages: messages, maxTokens: 4_000, stream: false)
+        return try await complete(request, key: key).text
+    }
+
     // MARK: Models
 
     /// The model to use: the athlete's choice if it is still offered, otherwise the newest Sonnet-line model.

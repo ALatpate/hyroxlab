@@ -257,6 +257,8 @@ enum LumaSheetDest: Identifiable {
     case sweatTest
     /// Set up a trial of one supplement.
     case trialSetup(String)
+    /// Glimm's wardrobe.
+    case wardrobe
 
     var id: String {
         switch self {
@@ -272,6 +274,7 @@ enum LumaSheetDest: Identifiable {
         case .weighIn: return "weigh-in"
         case .sweatTest: return "sweat-test"
         case .trialSetup(let name): return "trial-setup-\(name)"
+        case .wardrobe: return "wardrobe"
         }
     }
 }
@@ -487,6 +490,10 @@ public final class LumaEnv: ObservableObject {
     @Published var extras: LumaExtras { didSet { if !adopting, extras != oldValue { disk.save(extras, "extras.json"); refreshNext(); onGlanceChange?() } } }
     /// Luma Doctor's log: the weekly checks and any asked for by hand, newest first.
     @Published var doctorReports: [DoctorReport] { didSet { if !adopting, doctorReports != oldValue { disk.save(doctorReports, "doctor.json") } } }
+    /// What Glimm keeps: the taste it has learnt, what it was asked to remember, what it has on today.
+    @Published var glimm: GlimmState { didSet { if !adopting, glimm != oldValue { disk.save(glimm, "glimm.json"); onGlanceChange?() } } }
+    /// What Glimm is saying and doing just now. Nothing in it is kept.
+    let glimmStage = GlimmStage()
     /// The written read of a check is being fetched.
     @Published private(set) var doctorWriting = false
     private var doctorReadTriedAt: Date?
@@ -540,6 +547,7 @@ public final class LumaEnv: ObservableObject {
         reviews = disk.load([WeeklyReview].self, "reviews.json") ?? []
         extras = disk.load(LumaExtras.self, "extras.json") ?? LumaExtras()
         doctorReports = disk.load([DoctorReport].self, "doctor.json") ?? []
+        glimm = disk.load(GlimmState.self, "glimm.json") ?? GlimmState()
         benchmarks = disk.load(Benchmarks.self, "benchmarks.json") ?? Benchmarks()
         dismissedStretches = SessionSuggestions.prune(Set(disk.load([String].self, "stretches-dismissed.json") ?? []),
                                                       now: Date().timeIntervalSince1970)
@@ -629,6 +637,7 @@ public final class LumaEnv: ObservableObject {
         reviews = disk.load([WeeklyReview].self, "reviews.json") ?? []
         extras = disk.load(LumaExtras.self, "extras.json") ?? LumaExtras()
         doctorReports = disk.load([DoctorReport].self, "doctor.json") ?? []
+        glimm = disk.load(GlimmState.self, "glimm.json") ?? GlimmState()
         benchmarks = disk.load(Benchmarks.self, "benchmarks.json") ?? Benchmarks()
         dismissedStretches = SessionSuggestions.prune(Set(disk.load([String].self, "stretches-dismissed.json") ?? []),
                                                       now: Date().timeIntervalSince1970)
@@ -862,6 +871,7 @@ public final class LumaEnv: ObservableObject {
             }
             // The weekly check is due from Sunday 00:00 and runs at the first read of the strap data after it.
             self.runDoctorIfDue()
+            self.glimmTurnDay()
             await self.refreshSuggestions()
         }
     }

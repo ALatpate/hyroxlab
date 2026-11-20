@@ -10,11 +10,12 @@ everything described here sits beside it. [`AGENTS.md`](../AGENTS.md) still gove
 | Path | What lives here |
 |---|---|
 | `Packages/LumaCore` | Pure Foundation, no UI, builds and tests on Linux. Models, analysis (recovery, sleep, load, running, fitness, race readiness), the training log with its muscle model and progress read, the body figure's outlines, the food and supplement model, session state machines, and the coach's wire format and tools. |
-| `Packages/LumaUI`, target `LumaKit` | Design tokens (colour, type, motion), the bundled fonts, primitives, the glance snapshot, the queue for things logged from outside the app, the companion's drawing, and the views for widgets and the Lock Screen card. No dependencies, so the widget extension links it alone. |
+| `Packages/LumaUI`, target `LumaKit` | Design tokens (colour, type, motion), the bundled fonts, primitives, the glance snapshot, the queue for things logged from outside the app, the companion's drawing (Glimm: `GlimmArt`, `GlimmSpec`, `GlimmRig`, `GlimmFigure`), and the views for widgets and the Lock Screen card. No dependencies, so the widget extension links it alone. |
 | `Packages/LumaUI`, target `LumaUI` | Every screen, the charts, the environment object (`LumaEnv`), the session controllers and the coach engine. Depends on `LumaCore` and re-exports `LumaKit`. |
 | `LumaGallery/` | A small host app that mounts `LumaUI` over demo data. Used only to build and photograph the screens quickly. |
 | `StrandiOS/Luma/` | The bridge between Luma and the strap layer: `LumaRepoSource` (reads), `LumaBridge` (strap control, live state, widgets, Lock Screen card), `LumaWorkoutRecorder`, `LumaKeychain`, and `LumaShell`, which the app mounts as its root. |
 | `StrandiOSWidgets/LumaWidgets.swift` | The widget bundle and the Live Activity, drawn with `LumaKit` views. |
+| `Tools/glimm/` | Glimm described (`spec.js`), a reference renderer that draws that description in a headless browser (`render.js`, `shots.mjs`), and the step that carries it into the app (`build.mjs`). |
 | `StrandiOSShared/LumaQuickIntents.swift` | Luma's App Intents (log water, tick supplements, log a weigh-in, the tap on the companion), compiled into the app and the widget extension. |
 
 `LumaUI` knows nothing about Bluetooth, the database or HealthKit. It sees four protocols and the
@@ -122,16 +123,56 @@ bridge implements them:
   before lights-out, asleep at the usual bedtime). Bed and wake times are averages and seldom fall on
   a whole minute, so the rule and the schedule both read them rounded as the lines print them
   (`Buddy.onTheMinute`), and the clock is read to the second.
-- **The companion's build is the athlete's strength levels, and an unmeasured part is plain.** Each of
-  its six parts is the mean level of the muscles it stands for (`Buddy.build`), the same levels the
-  body figure shows. A part no graded lift measures is drawn at the plain build, never smaller: "not
-  measured" must not read as "weak". The drawing is Luma's own (`BuddyRig`): simple shapes turned
-  about their joints, so a change of pose is a change of position and angle that a widget can animate
-  between two entries. No third-party artwork.
+- **Glimm is described once and drawn from that description.** The companion's body, its clothes, the
+  pose of each mood and every small thing it does are data (`Tools/glimm/spec.js`), carried into the
+  app as `GlimmArt` and read by `GlimmSpec`. `GlimmRig` turns a mood and a moment into a flat list of
+  parts, each a shape at a place and an angle; the app draws them on a canvas for every frame, and a
+  widget is given them as a stack of shapes, so a change of pose is a change of position and angle
+  that iOS can animate between two entries. `Tools/glimm/render.js` does the same in JavaScript,
+  function for function, which is how a change to the art or the motion is looked at in seconds
+  (`node Tools/glimm/shots.mjs moods`) before it is built. A change goes into `spec.js`, then
+  `node Tools/glimm/build.mjs`; `Tools/test_glimm_spec.py` fails when the two have drifted, when the
+  wardrobe offers a cut the drawing cannot draw, or when a mood exists on one side only. The
+  character is the athlete's own design. No third-party artwork.
+- **Glimm's state is the facts'; its clothes, its words and its taste are its own.** The state still
+  comes from `Buddy.look`. What it wears for that state is chosen in one place
+  (`LumaEnv.glimmOutfit`, from `GlimmState.outfit`): the outfit kept on, else the one picked today,
+  else the stylist's (`GlimmStylist.outfit`), which is fixed by the day, the setting and how often
+  another was asked for, so the app, the widgets and the Lock Screen card show the same clothes and a
+  day keeps its look. The wardrobe is 64 cuts in 16 colours, every top in 6 patterns
+  (`GlimmWardrobe`, 2,944 pieces). A like or a dislike moves a score for each colour and cut once
+  per outfit, within bounds (`GlimmTaste`); one pick in seven ignores the scores so the wardrobe does
+  not narrow to a few favourites. Glimm has no way to know the weather, and on the days the season
+  dresses it for rain or cold its lines do not claim either.
+- **Glimm's own words carry no figures.** Its lines (`GlimmVoice`) are written into the app and say
+  nothing the data would have to back; a test fails on a line with a digit in it. The figure behind
+  a state is the fact line beside it (`BuddyLook.line`). No line guilts, none claims Glimm watched
+  while the app was closed, and none makes its affection depend on anything.
+- **A chat with Glimm is the athlete's own key, a few shared facts, and a checked answer.** The model
+  the coach is set to is given who Glimm is (`GlimmChat.system`), the message, and at most ten facts
+  the app chooses (`GlimmChat.facts`); the reason for its state carries health figures, so it goes
+  only while "Share my health data with the coach" is on. What comes back is used only after
+  `GlimmChat.parse` has checked it: words of a length it can say, a mood it has, a setting to dress
+  for and a colour only from the lists the app holds. Nothing else in a reply is acted on.
+- **Glimm remembers only what it was told to.** A reply may suggest one thing to keep; it is kept
+  only on a yes, and what was written in by hand or agreed to is listed on its screen and can be
+  taken out (`GlimmState.remember`). It stays in `glimm.json`, in the vault with the other records.
 - **A widget moves only as iOS lets it.** A widget is a list of dated pictures. The companion's are
-  its changes of state, a shift of weight every five minutes, and a hop and a wave straight after a
-  tap (`PokeBuddyIntent`). Continuous motion is in the app only. A still pose must always be a
-  truthful one: there is no frame that would look wrong if the next one came late.
+  its changes of state, one of the mood's stills every five minutes (`BuddyTimeline.beats`), and the
+  two steps of its answer straight after a tap (`PokeBuddyIntent`). The Lock Screen card stands it in
+  the next still as readings arrive (`LumaLiveState.glimmBeat`). Continuous motion is in the app
+  only. A still pose must always be a truthful one: there is no frame that would look wrong if the
+  next one came late.
+- **Luma Doctor reads a week against the athlete's own range, and is not a doctor.** From Sunday
+  00:00 it checks the week that ended the day before, at the first chance the app has to run
+  (`DoctorSchedule.due`), and keeps the result in a log (`doctor.json`). Each overnight reading is
+  held against the athlete's own range, and a night is judged by the rule the daily read applies
+  (`BodyWatch.assess`), so the weekly and the daily check cannot disagree about a night. A reading
+  with too little history says so and is not called steady. The check itself runs on the phone. A
+  written read of it is asked of the most capable model the key reaches (`AIModel.byStrength`, from
+  the line the Models API reports), whatever model the coach is set to, and only with leave to share
+  health data. The screens say what moved and by how much; they name no illness, and say when
+  something is worth showing to a doctor.
 - **What is logged from outside the app is queued, not written.** A widget button or a shortcut may
   run in the widget extension, which cannot reach the app's records. It queues the entry in the App
   Group (`LumaQuickLog`) and moves the stored glance to match; the app files the queue before it next
@@ -288,7 +329,9 @@ request too; the gallery shows one worded from the demo week's own figures.
 
 Only a phone shows how the companion's widget really behaves: how promptly iOS draws each entry of its
 timeline on the Lock Screen, whether the tap is answered within a second, and what it costs the
-widget's refresh budget. The gallery draws the same views still (`dev.buddy`, `dev.buddy.builds`).
+widget's refresh budget. The gallery draws the same views still (`dev.buddy`), every mood both ways a figure
+is drawn (`dev.glimm`), every cut in the wardrobe (`dev.glimm.wear`) and frames of its motion at fixed
+moments (`dev.glimm.motion`). How it moves, and how it answers a touch, is only seen on a phone.
 Notifications, Siri phrases and the widget's water button are likewise only exercised on a phone. A change is not verified on hardware until someone says
 what they tried.
 
