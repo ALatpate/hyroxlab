@@ -162,7 +162,8 @@ bridge implements them:
   two steps of its answer straight after a tap (`PokeBuddyIntent`). The Lock Screen card stands it in
   the next still as readings arrive (`LumaLiveState.glimmBeat`). Continuous motion is in the app
   only. A still pose must always be a truthful one: there is no frame that would look wrong if the
-  next one came late.
+  next one came late. The glance is rebuilt when its clothes change and not when it says a line
+  (`GlimmState.dressesAs`), so a tap in the app spends none of the widgets' updates.
 - **Luma Doctor reads a week against the athlete's own range, and is not a doctor.** From Sunday
   00:00 it checks the week that ended the day before, at the first chance the app has to run
   (`DoctorSchedule.due`), and keeps the result in a log (`doctor.json`). Each overnight reading is
