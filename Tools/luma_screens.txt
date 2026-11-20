@@ -53,6 +53,7 @@
 76-sweat|sheet.sweat|0|demo|5
 77-trial-setup|sheet.trial|0|demo|5
 78-lock|dev.lock|0|demo|5
+78b-lock-b|dev.lock|330|demo|5
 79-home|dev.home|0|demo|5
 80-home2|dev.home2|0|demo|5
 81-recovery|today.recovery|0|demo|5

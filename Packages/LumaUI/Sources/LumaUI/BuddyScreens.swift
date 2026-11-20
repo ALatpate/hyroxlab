@@ -198,7 +198,13 @@ private struct BuddyStage: View {
             name = env.extras.buddyName
             env.glimmGreet(env.buddyLook())
         }
-        .onDisappear { rename() }
+        .onChange(of: env.loaded) { _, _ in env.glimmGreet(env.buddyLook()) }
+        .onChange(of: env.buddyLook().mood) { _, _ in env.glimmGreet(env.buddyLook()) }
+        .onDisappear {
+            rename()
+            // The next time its screen opens it says how the day stands again.
+            stage.greeted = nil
+        }
     }
 
     private func screen(_ look: BuddyLook, now: Date) -> some View {
@@ -394,9 +400,9 @@ private struct BuddyStage: View {
                     Button { router.sheet = .wardrobe } label: {
                         HStack(spacing: 8) {
                             Image(systemName: "hanger").font(.system(size: 14, weight: .semibold)).foregroundStyle(Luma.volt)
-                            Text("Open the wardrobe").font(LumaFont.body(15, .medium)).foregroundStyle(Luma.frost)
+                            Text("Wardrobe").font(LumaFont.body(15, .medium)).foregroundStyle(Luma.frost)
                             Spacer()
-                            Text("\(GlimmWardrobe.count.formatted()) things to wear").font(LumaFont.body(12.5)).foregroundStyle(Luma.mist)
+                            Text("\(GlimmWardrobe.count.formatted()) things to wear").font(LumaFont.body(12.5)).foregroundStyle(Luma.mist).lineLimit(1)
                             Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Luma.smoke)
                         }
                         .contentShape(Rectangle())

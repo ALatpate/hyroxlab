@@ -75,6 +75,8 @@ struct LiveSessionClock: View {
 struct LiveStatusLine: View {
     let state: LumaLiveState
     var size: CGFloat = 11.5
+    /// Fewer words, where the card has the companion on it and the line has less room.
+    var short = false
 
     private var dot: Color {
         if state.isLive { return Luma.volt }
@@ -88,9 +90,10 @@ struct LiveStatusLine: View {
                 Text(state.zone.map { "Zone \($0)" } ?? "Live").foregroundStyle(state.zone == nil ? Luma.mist : state.zoneColor)
             } else if let at = state.lastAt {
                 // A system-driven clock: the age keeps counting while the app is suspended.
-                Text("\(state.connected ? "Last reading" : "Not connected ·") \(Text(at, style: .timer)) ago").foregroundStyle(Luma.mist).monospacedDigit()
+                Text("\(state.connected ? (short ? "Last" : "Last reading") : (short ? "Off ·" : "Not connected ·")) \(Text(at, style: .timer)) ago")
+                    .foregroundStyle(Luma.mist).monospacedDigit()
             } else {
-                Text(state.connected ? "Waiting for a reading" : "Strap not connected").foregroundStyle(Luma.mist)
+                Text(state.connected ? (short ? "Waiting" : "Waiting for a reading") : (short ? "Not connected" : "Strap not connected")).foregroundStyle(Luma.mist)
             }
         }
         .font(LumaFont.body(size, .medium))
@@ -124,7 +127,7 @@ public struct LumaLiveCard: View {
                         .foregroundStyle(state.isLive ? Luma.frost : Luma.mist).contentTransition(.numericText())
                     Text("bpm").font(LumaFont.body(13, .semibold)).foregroundStyle(Luma.mist)
                 }
-                LiveStatusLine(state: state)
+                LiveStatusLine(state: state, short: !roomy)
             }
             .layoutPriority(1)
             Spacer(minLength: 4)

@@ -491,7 +491,16 @@ public final class LumaEnv: ObservableObject {
     /// Luma Doctor's log: the weekly checks and any asked for by hand, newest first.
     @Published var doctorReports: [DoctorReport] { didSet { if !adopting, doctorReports != oldValue { disk.save(doctorReports, "doctor.json") } } }
     /// What Glimm keeps: the taste it has learnt, what it was asked to remember, what it has on today.
-    @Published var glimm: GlimmState { didSet { if !adopting, glimm != oldValue { disk.save(glimm, "glimm.json"); onGlanceChange?() } } }
+    @Published var glimm: GlimmState {
+        didSet {
+            guard glimm != oldValue else { return }
+            glimmStage.outfits = [:]
+            if !adopting {
+                disk.save(glimm, "glimm.json")
+                onGlanceChange?()
+            }
+        }
+    }
     /// What Glimm is saying and doing just now. Nothing in it is kept.
     let glimmStage = GlimmStage()
     /// The written read of a check is being fetched.

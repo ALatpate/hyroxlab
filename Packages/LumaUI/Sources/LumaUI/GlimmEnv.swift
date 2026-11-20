@@ -30,6 +30,11 @@ final class GlimmStage: ObservableObject {
     @Published var proposal: String?
     /// A reply is being fetched.
     @Published var thinking = false
+    /// The state it last put into words, so it says so once and not at every redraw.
+    var greeted: BuddyMood?
+    /// What it wears for a setting on a day, as already worked out. Emptied whenever what it keeps
+    /// changes: the same answer is asked for at every redraw, by the glance and by the Lock Screen card.
+    var outfits: [String: GlimmOutfit] = [:]
 
     /// The mood to draw at a moment: the borrowed one while it lasts, else the day's.
     func mood(or own: String, at date: Date) -> String {
@@ -66,7 +71,13 @@ extension LumaEnv {
     /// widgets and the Lock Screen card all draw what this gives.
     func glimmOutfit(for mood: BuddyMood, at date: Date) -> GlimmOutfit {
         let c = glimmClock(date)
-        return glimm.outfit(for: glimmContext(for: mood, at: date), day: c.day, month: c.month)
+        let context = GlimmStylist.context(for: mood, day: c.day, hour: c.hour, weekday: c.weekday, month: c.month)
+        let key = c.day + "|" + context.rawValue
+        if let known = glimmStage.outfits[key] { return known }
+        let outfit = glimm.outfit(for: context, day: c.day, month: c.month)
+        if glimmStage.outfits.count > 200 { glimmStage.outfits = [:] }
+        glimmStage.outfits[key] = outfit
+        return outfit
     }
 
     /// The companion as the Lock Screen card carries it: its state and its clothes right now, as
@@ -100,9 +111,11 @@ extension LumaEnv {
         glimm = g
     }
 
-    /// The line it greets with when its screen opens: the state of the day in its own words.
-    func glimmGreet(_ look: BuddyLook, now: Date = Date()) {
-        guard glimmStage.line == nil else { return }
+    /// The state of the day in its own words: said when its screen opens and when the state changes.
+    /// Not before the day's numbers are in: "no score yet" would be said of a day that has one.
+    func glimmGreet(_ look: BuddyLook) {
+        guard loaded, glimmStage.greeted != look.mood else { return }
+        glimmStage.greeted = look.mood
         glimmSay(.state(look.mood))
     }
 
