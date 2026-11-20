@@ -229,7 +229,7 @@ export const spec = {
   moods: {
     steady: {
       base: { sway: 1.2, lean: 1, headTilt: -2, shR: 20 },
-      osc: [['headTilt', 1.4, 0.11]],
+      osc: [['headTilt', 1.4, 0.11], ['lookX', 0.3, 0.07, 0.1, 'calm'], ['lookY', 0.18, 0.05, 0.4, 'calm'], ['sway', 0.5, 0.09, 0.3, 'calm']],
       gestures: ['wave', 'leafTouch', 'lookAround', 'shift', 'hop', 'stretch', 'checkShoes', 'shy'], every: 6.5,
       stills: [{ g: 'lookAround', at: 0.33 }, { g: 'wave', at: 0.3 }, { g: 'leafTouch', at: 0.3 }],
     },
@@ -292,7 +292,7 @@ export const spec = {
     },
     curious: {
       base: { headTilt: -8, browAsym: 1, lookX: 0.5, lookY: -0.3, mouth: 'open', mouthOpen: 0.6, shR: 44, elR: 150, frontR: 1, prop: 'question', sway: -1 },
-      osc: [['headTilt', 2, 0.16]],
+      osc: [['headTilt', 2, 0.16], ['lookX', 0.3, 0.09, 0.2, 'calm']],
       gestures: ['leafTouch', 'lookAround', 'shift'], every: 5.5,
       stills: [{ g: 'lookAround', at: 0.33 }, { g: 'leafTouch', at: 0.3 }, { set: { headTilt: 8, lookX: -0.5, sway: 1 } }],
     },

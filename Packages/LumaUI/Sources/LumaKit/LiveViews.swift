@@ -112,10 +112,10 @@ public struct LumaLiveCard: View {
         // With the companion on the card the figures draw in a little, so everything still fits a
         // three-figure heart rate on the narrowest phone.
         let roomy = state.glimm == nil
-        HStack(alignment: .center, spacing: roomy ? 12 : 8) {
+        HStack(alignment: .center, spacing: roomy ? 12 : 6) {
             if let kind = state.glimm {
                 GlimmFigure(kind: kind, outfit: state.glimmOutfit, beat: state.glimmBeat, energy: Double(state.recovery ?? 60) / 100)
-                    .frame(width: 56, height: 67)
+                    .frame(width: 54, height: 65)
             }
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 5) {
@@ -123,9 +123,11 @@ public struct LumaLiveCard: View {
                     Text(state.session ?? "Heart rate").font(LumaFont.label(10)).foregroundStyle(Luma.mist).lineLimit(1)
                 }
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    // One line always: a figure that does not fit is drawn smaller, never broken in two.
                     Text(state.shownBpm.map { "\($0)" } ?? "–").font(LumaFont.numeral(roomy ? 52 : 44, .heavy))
                         .foregroundStyle(state.isLive ? Luma.frost : Luma.mist).contentTransition(.numericText())
-                    Text("bpm").font(LumaFont.body(13, .semibold)).foregroundStyle(Luma.mist)
+                        .lineLimit(1).minimumScaleFactor(0.6)
+                    Text("bpm").font(LumaFont.body(13, .semibold)).foregroundStyle(Luma.mist).fixedSize()
                 }
                 LiveStatusLine(state: state, short: !roomy)
             }
@@ -137,14 +139,14 @@ public struct LumaLiveCard: View {
                     Text(sessionDetail).font(LumaFont.body(12.5, .medium)).foregroundStyle(Luma.mist).lineLimit(1)
                 }
             } else {
-                HStack(spacing: roomy ? 14 : 8) {
-                    ringStat
-                    LiveStat(label: "Strain", value: state.strainText, color: Luma.ember, size: roomy ? 24 : 20)
-                    LiveStat(label: "Sleep", value: state.sleepScore.map { "\($0)%" }, color: Luma.dusk, size: roomy ? 24 : 20)
+                HStack(spacing: roomy ? 14 : 7) {
+                    ringStat(roomy ? 42 : 38)
+                    LiveStat(label: "Strain", value: state.strainText, color: Luma.ember, size: roomy ? 24 : 19)
+                    LiveStat(label: "Sleep", value: state.sleepScore.map { "\($0)%" }, color: Luma.dusk, size: roomy ? 24 : 19)
                 }
             }
         }
-        .padding(.horizontal, roomy ? 18 : 14)
+        .padding(.horizontal, roomy ? 18 : 12)
         .padding(.vertical, 14)
         .background(LumaLiveBackdrop(color: state.isLive ? state.zoneColor : Luma.smoke))
     }
@@ -157,17 +159,18 @@ public struct LumaLiveCard: View {
         return parts.joined(separator: " · ")
     }
 
-    private var ringStat: some View {
+    private func ringStat(_ size: CGFloat) -> some View {
         VStack(spacing: 3) {
             ZStack {
                 LumaRing(progress: Double(state.recovery ?? 0) / 100, lineWidth: 4.5,
                          colors: [Luma.recovery(state.recovery.map { Double($0) }).opacity(0.7), Luma.recovery(state.recovery.map { Double($0) })])
-                Text(state.recovery.map { "\($0)" } ?? "–").font(LumaFont.numeral(16)).foregroundStyle(state.recovery == nil ? Luma.smoke : Luma.frost)
+                Text(state.recovery.map { "\($0)" } ?? "–").font(LumaFont.numeral(size > 40 ? 16 : 14.5))
+                    .foregroundStyle(state.recovery == nil ? Luma.smoke : Luma.frost).lineLimit(1).minimumScaleFactor(0.7)
             }
-            .frame(width: 42, height: 42)
+            .frame(width: size, height: size)
             Text("Recovery").font(LumaFont.label(8)).foregroundStyle(Luma.mist).lineLimit(1).fixedSize()
         }
-        .frame(width: 50)
+        .frame(width: size + 8)
     }
 }
 
