@@ -503,10 +503,16 @@ public enum GlimmStylist {
     /// (which still leans towards the setting).
     public static func dressing(_ context: GlimmContext) -> Double { occasions.contains(context) ? 1 : 0.45 }
 
-    /// Whether a cut may be worn for a setting at all: an occasion's clothes on that occasion only,
-    /// nothing warm or loose to train in, and night clothes at night.
-    public static func allowed(_ style: GlimmStyle, in context: GlimmContext) -> Bool {
+    /// Whether a cut may be worn for a setting at all: an occasion's clothes on that occasion only;
+    /// nothing made for sun on a cold or a wet day or in the cold months, and nothing made for cold on
+    /// a sunny day or in the warm ones (no sun hat with a scarf); nothing warm or loose to train in;
+    /// and night clothes at night.
+    public static func allowed(_ style: GlimmStyle, in context: GlimmContext, month: Int? = nil) -> Bool {
         if occasions.contains(style.context), style.context != context { return false }
+        let cold = context == .cold || context == .rain || [11, 12, 1, 2].contains(month ?? 0)
+        let warm = context == .sun || [6, 7, 8].contains(month ?? 0)
+        if style.context == .sun, cold { return false }
+        if style.context == .cold, warm { return false }
         switch context {
         case .training:
             if style.warmth > 2 { return false }
@@ -595,7 +601,7 @@ public enum GlimmStylist {
                 let bare = context == .celebration ? 0.12 : (slot == .head ? 0.45 : 0.3)
                 if rng.unit() < bare { continue }
             }
-            var styles = GlimmWardrobe.styles(in: slot).filter { allowed($0, in: context) }
+            var styles = GlimmWardrobe.styles(in: slot).filter { allowed($0, in: context, month: month) }
             if styles.isEmpty {
                 if slot == .head || slot == .accessory { continue }
                 styles = GlimmWardrobe.styles(in: slot)

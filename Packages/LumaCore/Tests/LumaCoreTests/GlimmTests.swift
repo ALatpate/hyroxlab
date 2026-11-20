@@ -120,6 +120,26 @@ final class GlimmTests: XCTestCase {
         XCTAssertEqual(GlimmOutfit.signature.wearing(GlimmItem(style: "nothing", palette: "coral")), .signature)
     }
 
+    func testNoSunHatIsWornWithAScarf() {
+        func made(for context: GlimmContext, in outfit: GlimmOutfit) -> Bool { outfit.items.contains { GlimmWardrobe.style($0.style)!.context == context } }
+        for day in days(150) {
+            // In the cold months, and on any cold or wet day, nothing made for sun.
+            for context in [GlimmContext.cold, .rain, .everyday, .focus, .relax] {
+                XCTAssertFalse(made(for: .sun, in: GlimmStylist.outfit(context: context, day: day, month: 1)), "\(context.rawValue) on \(day) in January")
+            }
+            XCTAssertFalse(made(for: .sun, in: GlimmStylist.outfit(context: .cold, day: day, month: 4)), "a cold day in April on \(day)")
+            XCTAssertFalse(made(for: .sun, in: GlimmStylist.outfit(context: .rain, day: day, month: 7)), "a wet day in July on \(day)")
+            // In the warm months, and on any sunny day, nothing made for cold.
+            for context in [GlimmContext.sun, .everyday, .adventure, .rain] {
+                XCTAssertFalse(made(for: .cold, in: GlimmStylist.outfit(context: context, day: day, month: 7)), "\(context.rawValue) on \(day) in July")
+            }
+        }
+        // In between, either may turn up on an ordinary day.
+        let spring = days(300).map { GlimmStylist.outfit(context: .everyday, day: $0, month: 4) }
+        XCTAssertTrue(spring.contains { made(for: .sun, in: $0) })
+        XCTAssertTrue(spring.contains { made(for: .cold, in: $0) })
+    }
+
     func testTheSeasonLeansOnWarmth() {
         func warmth(_ month: Int) -> Double {
             let all = days(200).map { GlimmStylist.outfit(context: .everyday, day: $0, month: month) }

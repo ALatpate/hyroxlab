@@ -167,7 +167,9 @@ bridge implements them:
   (`GlimmStylist.occasions`): a medal on an ordinary morning would read as a new best. For any other
   setting a piece made for it is taken outright a little under half the time and leant towards the
   rest (`GlimmStylist.dressing`), so it mostly looks dressed for what it is doing and not always the
-  same. When it gives the setting as its reason, something it has on was made for that setting.
+  same. Nothing made for sun is worn on a cold or a wet day or in the cold months, and nothing made
+  for cold on a sunny day or in the warm ones. When it gives the setting as its reason, something it
+  has on was made for that setting.
 - **Its taste is not set by anyone.** What pulls it towards a piece (`GlimmStylist.score`): the
   setting the state asks for; what it has always liked (`GlimmNature`, a fixed table: its hoodies,
   its trainers, its colours); the colour it is into for a run of nine days, which the calendar alone
