@@ -21,11 +21,11 @@
       "versions": [
         {
           "version": "12.1.0",
-          "buildVersion": "17",
+          "buildVersion": "18",
           "date": "2026-11-20",
-          "localizedDescription": "Build 17. Your records are safe, and typing works. Fixed: Luma could be started by the strap while the phone was locked, find it could not open your records, take them for empty, ask for your details again and save over what you had logged. It now waits until it can read them and never saves over what it has not read. New: a copy of everything you log is kept for each of the last 14 days. Settings, Your data, Copies of your records: go back to a day if anything goes missing, and undo it if you change your mind. Typing: the box you are typing in stays above the keyboard, on the coach and in every form. Sending a message puts the keyboard away and the box goes back to one line. SkiErg, RowErg, BikeErg, runs and carries: a box for distance, time or calories when you check a workout read from a photo, when you add one by hand, and in a live session. No weight is asked for. The minus and plus buttons take the whole button, keep going while held, and a figure can be typed by tapping it (year, height, body mass). Fixed: removing a food item, a set or an exercise could stop the app. Data check now shows how your records were read and what iOS reports when the app stops.",
-          "downloadURL": "https://github.com/ALatpate/hyroxlab/releases/download/build-17/Luma.ipa",
-          "size": 26446285,
+          "localizedDescription": "Build 18. Luma Doctor, and a new Glimm. Luma Doctor (Recovery, Weekly check): every Sunday it checks the week against your own usual range: resting heart rate, HRV, breathing, skin temperature, blood oxygen, sleep, bedtime, recovery and training load. It keeps a log of every check. With your key connected and health sharing on, the strongest model your key reaches writes the read, whatever the coach is set to. It is not a doctor: it says what moved and when something is worth showing to one. Glimm is new: a face that shows how it feels, a leaf, freckles, and clothes. 2,944 things to wear; it dresses for the day (training, a slow evening, bed) and changes every day. Like or pass on an outfit and it learns your taste. Open the wardrobe to dress it yourself. It moves: it breathes, blinks, looks about, waves, yawns, stretches and checks its trainers. Tap the leaf, the head, a cheek, the belly, a hand or the feet and it answers. Talk with it: with your key connected, it answers in its own voice, changes clothes when asked, and can offer to remember something. Nothing is remembered without your yes. Glimm is on the Lock Screen heart-rate card, and in its own widget, dressed the same.",
+          "downloadURL": "https://github.com/ALatpate/hyroxlab/releases/download/build-18/Luma.ipa",
+          "size": 26958921,
           "minOSVersion": "17.0"
         }
       ],
