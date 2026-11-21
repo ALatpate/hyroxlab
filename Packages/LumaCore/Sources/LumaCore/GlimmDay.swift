@@ -95,7 +95,7 @@ public enum GlimmBrief {
 // MARK: - The day's own lines
 
 /// One thing Glimm says, with the mood it is said in.
-public struct GlimmLine: Codable, Equatable, Sendable {
+public struct GlimmSaying: Codable, Equatable, Sendable {
     public var text: String
     public var mood: GlimmMood
 
@@ -105,19 +105,19 @@ public struct GlimmLine: Codable, Equatable, Sendable {
 /// The lines written for one day, kept on the phone so Glimm still has them with no connection.
 public struct GlimmDayLines: Codable, Equatable, Sendable {
     public var day: String
-    public var morning: GlimmLine
-    public var afterTraining: GlimmLine
-    public var evening: GlimmLine
+    public var morning: GlimmSaying
+    public var afterTraining: GlimmSaying
+    public var evening: GlimmSaying
     /// A shorter line for the widget and the Lock Screen.
     public var widget: String?
 
-    public init(day: String, morning: GlimmLine, afterTraining: GlimmLine, evening: GlimmLine, widget: String? = nil) {
+    public init(day: String, morning: GlimmSaying, afterTraining: GlimmSaying, evening: GlimmSaying, widget: String? = nil) {
         self.day = day; self.morning = morning; self.afterTraining = afterTraining; self.evening = evening; self.widget = widget
     }
 
     /// The line for this point of the day: the evening one from six, the after-training one once a
     /// session is done, the morning one otherwise.
-    public func line(hour: Int, trainedToday: Bool) -> GlimmLine {
+    public func line(hour: Int, trainedToday: Bool) -> GlimmSaying {
         if hour >= 18 { return evening }
         return trainedToday ? afterTraining : morning
     }
@@ -183,10 +183,10 @@ public enum GlimmDaily {
     public static func parse(_ raw: String, day: String) -> (lines: GlimmDayLines, noticed: [String])? {
         guard let open = raw.firstIndex(of: "{"), let close = raw.lastIndex(of: "}"), open < close,
               let json = JSONValue.parse(String(raw[open...close])) else { return nil }
-        func line(_ key: String) -> GlimmLine? {
+        func line(_ key: String) -> GlimmSaying? {
             guard let text = json[key]?["text"]?.string?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return nil }
             let mood = json[key]?["mood"]?.string.flatMap { GlimmMood(rawValue: $0) } ?? .steady
-            return GlimmLine(text: GlimmChat.clip(text, lineLimit), mood: mood)
+            return GlimmSaying(text: GlimmChat.clip(text, lineLimit), mood: mood)
         }
         guard let morning = line("morning"), let after = line("after_training"), let evening = line("evening") else { return nil }
         var widget = json["widget"]?.string?.trimmingCharacters(in: .whitespacesAndNewlines)

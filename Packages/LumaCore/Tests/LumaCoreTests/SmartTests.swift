@@ -240,7 +240,7 @@ final class SmartTests: XCTestCase {
         """#
         let parsed = GlimmDaily.parse(raw, day: today)!
         XCTAssertEqual(parsed.lines.day, today)
-        XCTAssertEqual(parsed.lines.morning, GlimmLine(text: "Morning. Legs feel like a tempo day.", mood: .focused))
+        XCTAssertEqual(parsed.lines.morning, GlimmSaying(text: "Morning. Legs feel like a tempo day.", mood: .focused))
         XCTAssertEqual(parsed.lines.afterTraining.mood, .proud)
         XCTAssertEqual(parsed.lines.evening.mood, .sleepy)
         XCTAssertEqual(parsed.lines.widget, "Tempo day")
@@ -314,8 +314,8 @@ final class SmartTests: XCTestCase {
         XCTAssertTrue(state.memories.contains { $0.text == "Likes the Thursday class" })
 
         // It survives being saved, with the day's lines and the switch.
-        state.lines = GlimmDayLines(day: today, morning: GlimmLine(text: "Morning.", mood: .steady), afterTraining: GlimmLine(text: "Done.", mood: .proud),
-                                    evening: GlimmLine(text: "Night.", mood: .sleepy), widget: "Hello")
+        state.lines = GlimmDayLines(day: today, morning: GlimmSaying(text: "Morning.", mood: .steady), afterTraining: GlimmSaying(text: "Done.", mood: .proud),
+                                    evening: GlimmSaying(text: "Night.", mood: .sleepy), widget: "Hello")
         state.linesAsked = today
         state.learns = false
         let back = try JSONDecoder().decode(GlimmState.self, from: JSONEncoder().encode(state))
