@@ -41,6 +41,7 @@ struct TrendsScreen: View {
 
             LumaSection(title: "Aerobic fitness")
             FitnessCard(fitness: a.fitness)
+            RunDepthCards()
         }
     }
 }

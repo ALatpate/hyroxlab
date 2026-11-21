@@ -658,6 +658,8 @@ public final class LumaVault: @unchecked Sendable {
         case "coach-brief.json": return "Today's brief"
         case "doctor.json": return "Luma Doctor's log"
         case "glimm.json": return "Glimm"
+        case "breaths.json": return "Breathing sittings"
+        case "guided.json": return "Workouts to be led through"
         default: return name
         }
     }

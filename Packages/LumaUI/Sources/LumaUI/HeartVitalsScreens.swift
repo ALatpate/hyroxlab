@@ -37,6 +37,7 @@ struct HeartScreen: View {
             }
             Group {
                 LumaSection(title: "Heart rate variability")
+                HRVTrendCard()
                 MetricHistoryCard(metric: .hrv, style: .line)
                 if let t = a.trend(.hrv) { TrendNote(trend: t) }
                 if nightHRV.count > 4 {

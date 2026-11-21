@@ -272,8 +272,7 @@ public enum SleepModel {
             let eff = d?.sleepEfficiency ?? mainBlock?.efficiency
             let bed = mainBlock.flatMap { relativeMinutes($0.start, wakeDay: key, calendar: calendar) }
             let wake = mainBlock.flatMap { relativeMinutes($0.end, wakeDay: key, calendar: calendar) }
-            let whole: Double? = d?.sleepScore ?? composite(asleep: asleep + napMin, need: needed, efficiency: eff,
-                                                            restorativePct: (deep != nil && rem != nil) ? ((deep ?? 0) + (rem ?? 0)) / asleep * 100 : nil)
+            let whole: Double? = d?.sleepScore ?? composite(asleep: asleep + napMin, need: needed, efficiency: eff)
             let score: Double? = isPartial ? nil : whole
             nights.append(SleepNight(day: key, main: mainBlock, naps: naps, asleepMin: asleep,
                                      inBedMin: mainBlock?.inBedMin ?? asleep / max(0.5, (eff ?? 90) / 100),
@@ -319,16 +318,15 @@ public enum SleepModel {
                             tonightNeedMin: tonightNeed, recommendedBedtime: recBed)
     }
 
-    /// Fallback sleep score when the strap pipeline has not stored one: how much of the need was met,
-    /// how efficiently, and how much of it was deep + REM.
-    public static func composite(asleep: Double, need: Double, efficiency: Double?, restorativePct: Double?) -> Double? {
+    /// Fallback sleep score when the strap pipeline has not stored one: how much of the need was met
+    /// and how efficiently. The split into stages is left out: a wrist strap agrees with a sleep lab on
+    /// the stage of a given half minute only about six times in ten, which is too rough to score by.
+    public static func composite(asleep: Double, need: Double, efficiency: Double?) -> Double? {
         guard need > 0, asleep > 0 else { return nil }
         let sufficiency = LStat.clamp(asleep / need, 0, 1)
         let eff = efficiency.map { LStat.clamp(($0 - 70) / 25, 0, 1) }
-        let rest = restorativePct.map { LStat.clamp($0 / 45, 0, 1) }
         var score = sufficiency * 0.65, weight = 0.65
         if let eff { score += eff * 0.2; weight += 0.2 }
-        if let rest { score += rest * 0.15; weight += 0.15 }
         return score / weight * 100
     }
 

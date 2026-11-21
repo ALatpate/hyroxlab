@@ -27,6 +27,39 @@ public enum GPX {
         }
     }
 
+    /// Points with times for a route that was kept as positions only. Each position is placed in time
+    /// by how far along the route it lies: against the run's own record of distance and time when there
+    /// is one, and at an even pace over the whole run when there is not.
+    public static func points(route: [LCoord], samples: [RunSample], durationS: Double) -> [GPXPoint] {
+        let usable = route.filter { valid(lat: $0.lat, lon: $0.lon) }
+        guard usable.count >= 2, durationS > 0 else { return [] }
+        var along: [Double] = [0]
+        for i in 1..<usable.count { along.append(along[i - 1] + metres(usable[i - 1], usable[i])) }
+        guard let total = along.last, total > 0 else { return [] }
+        let record = samples.filter { $0.distanceM.isFinite && $0.tS.isFinite }
+        let recorded = record.last?.distanceM ?? 0
+        var cursor = 0
+        return usable.enumerated().map { i, p in
+            let share = along[i] / total
+            guard recorded > 0, record.count >= 2 else { return GPXPoint(lat: p.lat, lon: p.lon, tS: share * durationS) }
+            // The first reading at or past this point's distance; the route only ever moves forward.
+            let d = share * recorded
+            while cursor < record.count - 1, record[cursor].distanceM < d { cursor += 1 }
+            let b = record[cursor], a = record[max(0, cursor - 1)]
+            var t = b.tS
+            if b.distanceM > a.distanceM { t = a.tS + (b.tS - a.tS) * LStat.clamp((d - a.distanceM) / (b.distanceM - a.distanceM), 0, 1) }
+            return GPXPoint(lat: p.lat, lon: p.lon, tS: t, hr: b.hr ?? a.hr)
+        }
+    }
+
+    /// Metres between two positions over the ground, near enough for a run.
+    static func metres(_ a: LCoord, _ b: LCoord) -> Double {
+        let rad = Double.pi / 180
+        let dLat = (b.lat - a.lat) * rad, dLon = (b.lon - a.lon) * rad
+        let h = sin(dLat / 2) * sin(dLat / 2) + cos(a.lat * rad) * cos(b.lat * rad) * sin(dLon / 2) * sin(dLon / 2)
+        return 2 * 6_371_000 * asin(min(1, h.squareRoot()))
+    }
+
     public static func valid(lat: Double, lon: Double) -> Bool {
         lat.isFinite && lon.isFinite && abs(lat) <= 90 && abs(lon) <= 180 && !(lat == 0 && lon == 0)
     }

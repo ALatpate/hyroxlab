@@ -211,6 +211,14 @@ final class BodyTrendTests: XCTestCase {
         XCTAssertNil(SleepRegularityModel.read(sleeps: [], today: today, calendar: cal))
     }
 
+    func testTheFallbackSleepScoreGoesByTimeAndEfficiencyAlone() {
+        // Seven hours of an eight-hour need, at an efficiency that earns full marks.
+        XCTAssertEqual(SleepModel.composite(asleep: 420, need: 480, efficiency: 95)!, (0.875 * 0.65 + 0.2) / 0.85 * 100, accuracy: 1e-9)
+        // With no efficiency it is the share of the need that was met.
+        XCTAssertEqual(SleepModel.composite(asleep: 240, need: 480, efficiency: nil)!, 50, accuracy: 1e-9)
+        XCTAssertNil(SleepModel.composite(asleep: 0, need: 480, efficiency: 90))
+    }
+
     // MARK: The week against the usual week
 
     func testAWeekIsSetAgainstTheUsualWeek() {

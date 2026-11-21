@@ -128,8 +128,17 @@ final class RunController: ObservableObject {
     @Published private(set) var result: RunResult?
     @Published private(set) var failed: String?
     @Published private(set) var samples: [RunSample] = []
+    /// Heart rate has stayed above the guarded zone and is not back yet.
+    @Published private(set) var aboveZone = false
+    /// The heart rate a rest is waiting for, when rests end by heart rate and not by the clock.
+    @Published private(set) var restTarget: Int?
 
     private var timer: AnyCancellable?
+    /// Set when the athlete asked for a buzz above a zone; steady runs and timed sessions only.
+    private var zoneGuard: ZoneGuard?
+    /// The rule the rest under way ends by, when it ends by heart rate.
+    private var restRule: GoAgain?
+    private var recordingMotion = false
     private var smoother = PaceSmoother()
     private var lapStartT = 0.0
     private var lapStartD = 0.0
@@ -146,6 +155,11 @@ final class RunController: ObservableObject {
         self.plan = plan
         self.recorder = env.recorder ?? DemoRecorder()
         voice.enabled = env.profile.voiceCues
+        // Hard efforts in an interval session are meant to go above a zone, so the guard keeps to the rest.
+        if env.extras.zoneGuard, plan.mode != .intervals,
+           let ceiling = ZoneGuard.ceiling(of: env.extras.zoneGuardZone, in: env.profile.zones()) {
+            zoneGuard = ZoneGuard(ceiling: ceiling)
+        }
     }
 
     var usesGPS: Bool { plan.mode == .free || plan.mode == .intervals }
@@ -154,12 +168,15 @@ final class RunController: ObservableObject {
 
     var phaseProgress: Double {
         guard let p = phase else { return 0 }
+        // A rest that ends by heart rate is drawn against the longest it can last.
+        if let rule = restRule { return min(1, (elapsed - phaseStartT) / rule.maxRestS) }
         if let m = p.metres { return min(1, (distanceM - phaseStartD) / m) }
         if let s = p.seconds { return min(1, (elapsed - phaseStartT) / s) }
         return 0
     }
     var phaseRemaining: String {
         guard let p = phase else { return "" }
+        if let target = restTarget { return "Until \(target) bpm" }
         if let m = p.metres { return "\(LNum.int(max(0, m - (distanceM - phaseStartD)))) m to go" }
         if let s = p.seconds { return "\(LumaText.duration(max(0, s - (elapsed - phaseStartT)))) to go" }
         return ""
@@ -176,6 +193,7 @@ final class RunController: ObservableObject {
         }
         started = true
         env.device?.setLiveHeartRate(true)
+        if env.extras.motion, env.device?.startMotion(note: plan.title) == true { recordingMotion = true }
         if plan.mode == .intervals { buildIntervals() }
         if env.isDemo { seedDemo() }
         voice.say(plan.mode == .intervals ? "Intervals. Warm up." : "\(plan.title) started.")
@@ -200,6 +218,7 @@ final class RunController: ObservableObject {
     func finish(treadmillKm: Double? = nil) {
         timer?.cancel()
         env.device?.setLiveHeartRate(false)
+        stopMotion()
         let seconds = elapsed
         var finalSamples = samples
         var distance = distanceM
@@ -233,6 +252,24 @@ final class RunController: ObservableObject {
         timer?.cancel()
         recorder.discard()
         env.device?.setLiveHeartRate(false)
+        stopMotion()
+    }
+
+    private func stopMotion() {
+        guard recordingMotion else { return }
+        recordingMotion = false
+        env.device?.stopMotion()
+    }
+
+    /// Speaks up when heart rate has stayed above the guarded zone, and once more when it is back.
+    private func watchZone() {
+        guard var zone = zoneGuard else { return }
+        let signal = zone.feed(hr: hr.map { Double($0) }, at: elapsed)
+        zoneGuard = zone
+        if aboveZone != zone.isAbove { aboveZone = zone.isAbove }
+        guard let signal else { return }
+        env.device?.cue(signal.cue)
+        voice.say(signal == .above ? "Heart rate above zone \(env.extras.zoneGuardZone). Ease off." : "Back in the zone.")
     }
 
     // MARK: Tick
@@ -250,6 +287,7 @@ final class RunController: ObservableObject {
             if usesGPS, distanceM - lapStartD >= 1000 { closeLap(partial: false, distance: lapStartD + 1000, time: elapsed) }
             if LNum.int(elapsed) % 5 == 0, usesGPS { route = recorder.route().map { LCoord(lat: $0.lat, lon: $0.lon) } }
             cues()
+            watchZone()
             if plan.mode == .intervals { advancePhase() }
         }
         guard env.profile.autoPause, usesGPS else { return }
@@ -314,17 +352,35 @@ final class RunController: ObservableObject {
     private func advancePhase() {
         guard let p = phase else { return }
         var done = false
-        if let m = p.metres, distanceM - phaseStartD >= m { done = true }
-        if let s = p.seconds, elapsed - phaseStartT >= s { done = true }
+        // A rest that ends by heart rate: over once it has come down, or the longest rest has run out.
+        var byHeartRate = false
+        if var rule = restRule {
+            done = rule.feed(hr: hr.map { Double($0) }, at: elapsed - phaseStartT) != nil
+            restRule = rule
+            byHeartRate = true
+        } else {
+            if let m = p.metres, distanceM - phaseStartD >= m { done = true }
+            if let s = p.seconds, elapsed - phaseStartT >= s { done = true }
+        }
         guard done else { return }
         phaseIndex += 1
         phaseStartT = elapsed; phaseStartD = distanceM
+        restRule = nil
+        restTarget = nil
         if phaseIndex < phases.count {
             let next = phases[phaseIndex]
             phase = next
-            env.device?.cue()
+            if env.extras.goAgain, next.label == "Recover" {
+                let rule = GoAgain(targetBpm: GoAgain.target(maxHR: env.profile.resolvedMaxHR()))
+                restRule = rule
+                restTarget = LNum.int(rule.targetBpm)
+            }
+            // Two buzzes say "go again" after a rest that waited for heart rate; one marks any other change.
+            if byHeartRate { env.device?.cue(.two) } else { env.device?.cue() }
+            if recordingMotion { env.device?.markMotion(next.label) }
             let target = next.targetPace.map { " Target " + SessionVoice.pace($0) + "." } ?? ""
-            voice.say(next.label + "." + target)
+            let rest = restTarget.map { " Rest until your heart rate is \($0)." } ?? ""
+            voice.say(next.label + "." + target + rest)
         } else {
             phase = nil
             voice.say("Session complete. Finish when you are ready.")
@@ -392,6 +448,7 @@ final class RaceController: ObservableObject {
     let ghost: RaceGhost?
 
     private var timer: AnyCancellable?
+    private var recordingMotion = false
     private var segmentHR: [Double] = []
     private var targets: [Int: Double] = [:]
     private var halfwaySpoken = false
@@ -440,6 +497,10 @@ final class RaceController: ObservableObject {
         strap.onStrapDoubleTap = { [weak self] in self?.advance() }
         env.device?.setLiveHeartRate(true)
         env.device?.cue()
+        if env.extras.motion, env.device?.startMotion(note: kind.title) == true {
+            recordingMotion = true
+            if let first = current { env.device?.markMotion(first.label) }
+        }
         if env.isDemo { seedDemo() }
         voice.say("Go. \(current?.label ?? "")")
         timer = Timer.publish(every: 0.2, on: .main, in: .common).autoconnect().sink { [weak self] _ in self?.tick() }
@@ -460,6 +521,7 @@ final class RaceController: ObservableObject {
             complete()
         } else {
             env.device?.cue()
+            if recordingMotion, let now = current { env.device?.markMotion(now.label) }
             // After a run or a station, where this stands against last time; a roxzone says nothing new.
             var words = cue(current)
             if let ghost, let c = closed, c.kind == .run || c.kind == .station {
@@ -487,7 +549,14 @@ final class RaceController: ObservableObject {
         strap.onStrapDoubleTap = nil
         strap.discard()
         env.device?.setLiveHeartRate(false)
+        stopMotion()
         env.delete(recorder.session)
+    }
+
+    private func stopMotion() {
+        guard recordingMotion else { return }
+        recordingMotion = false
+        env.device?.stopMotion()
     }
 
     private func complete() {
@@ -498,6 +567,7 @@ final class RaceController: ObservableObject {
         env.upsert(s)
         env.device?.setLiveHeartRate(false)
         env.device?.cue()
+        stopMotion()
         voice.say("Finished. \(LumaText.duration(s.totalS ?? 0)).")
         let distance = s.runs.compactMap { $0.distanceM }.reduce(0, +)
         Task {

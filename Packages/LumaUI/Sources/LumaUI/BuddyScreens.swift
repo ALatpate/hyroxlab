@@ -186,6 +186,7 @@ private struct BuddyStage: View {
     @EnvironmentObject private var env: LumaEnv
     @EnvironmentObject private var router: LumaRouter
     @ObservedObject var stage: GlimmStage
+    @StateObject private var ears = GlimmEars()
     @State private var name = ""
     @State private var draft = ""
     @State private var note = ""
@@ -202,9 +203,12 @@ private struct BuddyStage: View {
         .onChange(of: env.buddyLook().mood) { _, _ in env.glimmGreet(env.buddyLook()) }
         .onDisappear {
             rename()
+            ears.stop()
             // The next time its screen opens it says how the day stands again.
             stage.greeted = nil
         }
+        // What is heard is put in the box as it is heard, to be looked at and sent.
+        .onChange(of: ears.heard) { _, text in if ears.listening || !text.isEmpty { draft = text } }
     }
 
     private func screen(_ look: BuddyLook, now: Date) -> some View {
@@ -234,6 +238,7 @@ private struct BuddyStage: View {
             .frame(maxWidth: .infinity)
 
             talk(look)
+            if let offer = stage.offer { GlimmOfferCard(action: offer) }
             if let proposal = stage.proposal { proposalCard(proposal) }
             wearing(look, outfit, now: now)
 
@@ -247,6 +252,7 @@ private struct BuddyStage: View {
 
             BuddyDayCard(now: now)
             memories
+            GlimmNotebook()
             taste
 
             LumaSection(title: "On your Lock Screen")
@@ -290,6 +296,33 @@ private struct BuddyStage: View {
                 }
                 .tint(Luma.volt)
                 .padding(.vertical, 8).padding(.horizontal, 16)
+                Toggle(isOn: Binding(get: { env.extras.glimmFresh }, set: { on in
+                    var e = env.extras
+                    e.glimmFresh = on
+                    env.extras = e
+                    if on { env.glimmWriteDay() }
+                })) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Fresh lines each day").font(LumaFont.body(15, .medium)).foregroundStyle(Luma.frost)
+                        Text("Once a day its lines are written from how your day stands, on your Anthropic key: one small request. Off, it speaks from its own fixed lines.")
+                            .font(LumaFont.body(12.5)).foregroundStyle(Luma.mist).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .tint(Luma.volt)
+                .padding(.vertical, 8).padding(.horizontal, 16)
+                Toggle(isOn: Binding(get: { env.extras.glimmAloud }, set: { on in
+                    var e = env.extras
+                    e.glimmAloud = on
+                    env.extras = e
+                })) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Say replies aloud").font(LumaFont.body(15, .medium)).foregroundStyle(Luma.frost)
+                        Text("Its answers in a chat are spoken as well as shown.")
+                            .font(LumaFont.body(12.5)).foregroundStyle(Luma.mist).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .tint(Luma.volt)
+                .padding(.vertical, 8).padding(.horizontal, 16)
             }
 
             LumaSection(title: "Every state")
@@ -310,6 +343,20 @@ private struct BuddyStage: View {
                     .font(LumaFont.body(15)).foregroundStyle(Luma.frost)
                     .submitLabel(.send)
                     .onSubmit { send(look) }
+                if !env.isDemo {
+                    Button {
+                        LumaHaptics.select()
+                        ears.toggle()
+                    } label: {
+                        Image(systemName: ears.listening ? "waveform" : "mic.fill").font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(ears.listening ? Luma.ink : Luma.frost)
+                            .frame(width: 36, height: 36)
+                            .background(Circle().fill(ears.listening ? Luma.coral : Color.white.opacity(0.1)))
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(ears.listening ? "Stop listening" : "Say it aloud")
+                }
                 Button { send(look) } label: {
                     Image(systemName: "arrow.up").font(.system(size: 15, weight: .bold)).foregroundStyle(Luma.ink)
                         .frame(width: 36, height: 36)
@@ -322,10 +369,15 @@ private struct BuddyStage: View {
             }
             .padding(.vertical, 8).padding(.leading, 16).padding(.trailing, 8)
             .background(LumaPanel(radius: 24))
+            if ears.listening {
+                Text("Listening. Tap the microphone again when you have finished, then send.").font(LumaFont.body(12.5)).foregroundStyle(Luma.mist)
+            } else if let problem = ears.problem {
+                Text(problem).font(LumaFont.body(12.5)).foregroundStyle(Luma.amber).fixedSize(horizontal: false, vertical: true)
+            }
             if !env.glimm.chat.isEmpty { lately }
             LumaNote(env.profile.shareHealthWithCoach
-                     ? "Its replies come from your own Anthropic key, on the model the coach is set to. It is told why it looks the way it does, what it chose to wear and what you asked it to remember."
-                     : "Its replies come from your own Anthropic key, on the model the coach is set to. It is told what it chose to wear and what you asked it to remember, and none of your numbers: sharing health data with the coach is off.")
+                     ? "Its replies come from your own Anthropic key, on the model the coach is set to. It is told why it looks the way it does, how today stands (the night, the plan, the last session), what it chose to wear, what you asked it to remember and what it has worked out. Speech is turned into words on this phone."
+                     : "Its replies come from your own Anthropic key, on the model the coach is set to. It is told what it chose to wear and what you asked it to remember, and none of your numbers: sharing health data with the coach is off. Speech is turned into words on this phone.")
         } else {
             LumaCard {
                 VStack(alignment: .leading, spacing: 10) {
@@ -360,6 +412,7 @@ private struct BuddyStage: View {
     }
 
     private func send(_ look: BuddyLook) {
+        ears.stop()
         let text = draft
         draft = ""
         LumaKeyboard.dismiss()
@@ -412,7 +465,7 @@ private struct BuddyStage: View {
     private var memories: some View {
         LumaSection(title: "What it remembers")
         LumaGroup {
-            ForEach(env.glimm.memories.reversed()) { memory in
+            ForEach(env.glimm.memories.filter { $0.source != GlimmState.noticed }.reversed()) { memory in
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     Text(memory.text).font(LumaFont.body(14.5)).foregroundStyle(Luma.frost).fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 6)

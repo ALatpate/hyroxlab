@@ -13,6 +13,8 @@ struct WorkoutScreen: View {
     @State private var route: [LCoord] = []
     @State private var recovery: LHRRecovery?
     @State private var confirmDelete = false
+    /// The route as a file other apps open, made once the route has been read.
+    @State private var gpx: URL?
 
     private var workout: LWorkout? { env.workouts.first { $0.id == id } }
 
@@ -20,7 +22,13 @@ struct WorkoutScreen: View {
         LumaDetailScreen(title: workout?.kind.title ?? "Session", tone: workout?.kind.tone ?? .run) {
             if let w = workout {
                 header(w)
-                if route.count >= 2 { LumaRouteTrace(coords: route).frame(height: 240).background(LumaPanel()) }
+                if route.count >= 2 {
+                    LumaRouteTrace(coords: route).frame(height: 240).background(LumaPanel())
+                    if let gpx {
+                        ShareLink(item: gpx) { Label("Share the route as a GPX file", systemImage: "square.and.arrow.up").frame(maxWidth: .infinity) }
+                            .buttonStyle(LumaSecondaryButtonStyle())
+                    }
+                }
                 stats(w)
                 if hr.count > 4 {
                     SessionHeartCard(points: hr, start: w.start, end: w.end, step: Double(Self.bucketSeconds(w)))
@@ -68,6 +76,7 @@ struct WorkoutScreen: View {
             guard let w = workout else { return }
             hr = await env.source.heartRate(from: w.start, to: w.end, bucketSeconds: Self.bucketSeconds(w))
             route = await env.source.route(for: w)
+            gpx = route.count >= 2 ? env.gpxFile(for: w, route: route) : nil
             recovery = await env.source.heartRateRecovery(for: w, maxHR: env.profile.resolvedMaxHR())
         }
         .confirmationDialog("Delete this session?", isPresented: $confirmDelete, titleVisibility: .visible) {
@@ -202,6 +211,7 @@ struct SessionReportView: View {
                     }
                 }
             }
+            SessionDepthCards(session: session)
             if report.runs.count >= 2 {
                 let slowest = report.runs.map { $0.seconds }.max() ?? 1
                 LumaCard {

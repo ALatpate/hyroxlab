@@ -41,6 +41,7 @@ struct SleepScreen: View {
                                 if main.incomplete {
                                     LumaNote("The strap flagged this night's staging as possibly incomplete.")
                                 }
+                                LumaNote("Stages are a rough guide. A wrist strap agrees with a sleep lab on the stage of a given half minute only about six times in ten, so read the shape of the night, not the minutes. Time asleep is far more dependable.")
                             }
                         }
                     }
@@ -88,7 +89,7 @@ struct SleepScreen: View {
                 TonightCard(summary: summary)
 
                 LumaSection(title: "Schedule")
-                ScheduleCard(summary: summary)
+                ScheduleCard(summary: summary, regularity: env.analysis.regularity)
 
                 LumaSection(title: "History")
                 MetricHistoryCard(metric: .sleepHours, style: .bars, title: "Time asleep", goal: summary.tonightNeedMin / 60)
@@ -231,6 +232,7 @@ struct TonightCard: View {
 /// Bed and wake times for the last two weeks as floating bars, with the consistency score.
 struct ScheduleCard: View {
     let summary: SleepSummary
+    var regularity: SleepRegularity? = nil
 
     /// The clock range covering every bar, snapped out to whole hours.
     private func scheduleRange(_ nights: [SleepNight]) -> ClosedRange<Double> {
@@ -253,11 +255,23 @@ struct ScheduleCard: View {
         LumaCard {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        LumaLabel("Consistency")
-                        HStack(alignment: .firstTextBaseline, spacing: 3) {
-                            Text(summary.consistency.map { String(format: "%.0f", $0) } ?? "–").font(LumaFont.numeral(40)).foregroundStyle(Luma.frost)
-                            Text("%").font(LumaFont.body(13, .semibold)).foregroundStyle(Luma.mist)
+                    // One readout of how regular sleep is: the Sleep Regularity Index once there are
+                    // enough nights for it, Luma's own figure only until then.
+                    if let regular = regularity {
+                        VStack(alignment: .leading, spacing: 3) {
+                            LumaLabel("Regularity index")
+                            HStack(alignment: .firstTextBaseline, spacing: 3) {
+                                Text("\(LNum.int(regular.index.rounded()))").font(LumaFont.numeral(40)).foregroundStyle(Luma.frost)
+                                Text("of 100").font(LumaFont.body(13, .semibold)).foregroundStyle(Luma.mist)
+                            }
+                        }
+                    } else {
+                        VStack(alignment: .leading, spacing: 3) {
+                            LumaLabel("Consistency")
+                            HStack(alignment: .firstTextBaseline, spacing: 3) {
+                                Text(summary.consistency.map { String(format: "%.0f", $0) } ?? "–").font(LumaFont.numeral(40)).foregroundStyle(Luma.frost)
+                                Text("%").font(LumaFont.body(13, .semibold)).foregroundStyle(Luma.mist)
+                            }
                         }
                     }
                     Spacer()
@@ -272,6 +286,9 @@ struct ScheduleCard: View {
                         LumaBarChart.Bar(id: i, value: n.wake, color: Luma.dusk, label: LumaText.weekdayLetter(n.day), low: n.bedtime)
                     }, yRange: scheduleRange(nights), height: 170, format: { LFormat.timeOfDay(minutes: $0) },
                     ticks: scheduleTicks(nights), axisWidth: 40)
+                }
+                if let regular = regularity {
+                    LumaNote("\(regular.headline). The index is how often you are asleep or awake at the same clock time as the day before, over \(regular.pairs) pairs of days: 100 is the same pattern every day. It is the measure the large studies of sleep regularity use.")
                 }
                 if let j = summary.socialJetlagMin, abs(j) >= 30 {
                     LumaNote("Your sleep midpoint runs \(LFormat.hm(minutes: abs(j))) \(j > 0 ? "later" : "earlier") at weekends than on weekdays.")

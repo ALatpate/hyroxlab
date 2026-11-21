@@ -21,6 +21,7 @@ struct TodayScreen: View {
             }
         } content: {
             SwitchedOffNote()
+            NewBuildNote()
             if a.watch.level >= .watch, a.lastNight?.day == a.today { WatchBanner(watch: a.watch) }
             TodayHero(analysis: a, strainOn21: env.profile.strainOn21)
             BuddyStrip()

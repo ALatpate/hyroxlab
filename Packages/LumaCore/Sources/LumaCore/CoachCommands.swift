@@ -149,6 +149,15 @@ public extension CoachTools {
 // MARK: - System prompt
 
 public enum CoachPrompt {
+    /// Added to the coach's instructions while the athlete has let it search the web. What a search may
+    /// be about, and what must never go into one.
+    public static let webSearch = """
+
+
+    Web search
+    You can search the web. Use it only for facts from outside the athlete's own records: a race's date, course or rules, what a study found, what a product's label says, how a session format works. Never put the athlete's name, their health figures, where they live or train, or anything else about them into a search: search words leave the phone. Answer questions about their own data from your tools, never from the web. When an answer rests on something a search found, say where it came from, and say so plainly when sources disagree or a page looks unreliable.
+    """
+
     /// The coach's standing instructions plus who the athlete is. Data comes through tools; only a
     /// one-line status is inlined so trivial questions do not need a tool call.
     public static func system(world w: CoachWorld, calendar: Calendar = LDate.calendar) -> String {

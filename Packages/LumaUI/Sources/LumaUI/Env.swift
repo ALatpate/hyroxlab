@@ -108,6 +108,57 @@ public enum LumaStrapGeneration: String, CaseIterable, Sendable {
     var title: String { self == .four ? "WHOOP 4.0" : "WHOOP 5.0 / MG" }
 }
 
+/// The wake alarm as it stands: what was asked for, and what will happen when it is next due. Every
+/// reading on the alarm screen comes from this one, worked out in one place by the app.
+public struct LumaAlarmState: Equatable, Sendable {
+    public var on = false
+    /// Minutes from midnight.
+    public var minutes = 7 * 60
+    /// The days it goes off on: 1 is Monday, 7 is Sunday. Empty means every day.
+    public var weekdays: Set<Int> = []
+    /// When it is next due. Nil when it is off.
+    public var next: Date?
+    /// The strap itself will buzz then.
+    public var strapWillBuzz = false
+    /// On this strap the strap's own alarm is still a trial.
+    public var strapIsTrial = false
+    /// The athlete has switched that trial on.
+    public var trialOn = false
+    /// The phone will show a notification then.
+    public var phoneWillNotify = false
+
+    public init() {}
+
+    /// Whether anything at all will happen at the time shown. A time is only a promise when it will.
+    public var willGoOff: Bool { on && next != nil && (strapWillBuzz || phoneWillNotify) }
+}
+
+/// Heart rate shared with gym equipment and other apps, the phone standing in as a standard
+/// heart-rate sensor.
+public struct LumaBroadcast: Equatable, Sendable {
+    public var on = false
+    /// The phone is on the air as a sensor.
+    public var advertising = false
+    /// Devices reading it right now.
+    public var listeners = 0
+    /// Why it is not on the air, when it is switched on and is not.
+    public var note: String?
+
+    public init() {}
+}
+
+/// One kept recording of the strap's raw motion.
+public struct LumaMotionRecording: Identifiable, Equatable, Sendable {
+    public var id: String
+    public var startedAt: Date
+    public var seconds: Double
+    public var note: String
+
+    public init(id: String, startedAt: Date, seconds: Double, note: String) {
+        self.id = id; self.startedAt = startedAt; self.seconds = seconds; self.note = note
+    }
+}
+
 /// What Luma can ask the strap and the system to do. Implemented by the app over the strap layer.
 @MainActor
 public protocol LumaDeviceControl: AnyObject {
@@ -130,6 +181,24 @@ public protocol LumaDeviceControl: AnyObject {
     func connectHealth() async
     /// Notifications when the strap's battery runs low.
     func setBatteryAlerts(_ on: Bool)
+    /// One of the cues Luma sends during a session, told apart by feel: one, two or three buzzes.
+    func cue(_ kind: StrapCue)
+    /// Sets the wake alarm, or switches it off. Weekdays: 1 is Monday, 7 is Sunday; none is every day.
+    func setAlarm(on: Bool, minutes: Int, weekdays: Set<Int>)
+    /// Switches the trial of the strap's own alarm on or off, on straps where it is still a trial.
+    func setAlarmTrial(_ on: Bool)
+    /// Shares heart rate with gym equipment and other apps, the phone standing in as a sensor.
+    func setBroadcast(_ on: Bool)
+    /// Starts recording the strap's raw motion. False when the strap did not take the request.
+    func startMotion(note: String) -> Bool
+    /// Marks a moment in the motion being recorded.
+    func markMotion(_ text: String)
+    func stopMotion()
+    /// The motion recordings kept, newest first.
+    func motionRecordings() async -> [LumaMotionRecording]
+    /// One recording as a file that can be shared.
+    func motionFile(_ id: String) async -> URL?
+    func deleteMotion(_ id: String) async
 }
 
 public struct LumaRoutePoint: Codable, Equatable, Sendable {
@@ -182,6 +251,13 @@ public final class LumaLive: ObservableObject {
     /// What an earlier version of the app had been left doing on its own and this one switched off,
     /// each named for the athlete ("the wake alarm"). Today shows it once.
     @Published public var switchedOff: [String] = []
+    @Published public var alarm = LumaAlarmState()
+    @Published public var broadcast = LumaBroadcast()
+    /// The strap's raw motion is being recorded.
+    @Published public var motionRecording = false
+    /// Beat-to-beat intervals in milliseconds, as the strap sends them. Not published: only a screen
+    /// that asks for them listens, and nothing is redrawn for a beat.
+    public let beats = PassthroughSubject<[Double], Never>()
     public init() {}
 }
 
@@ -238,6 +314,9 @@ public enum LumaDest: Hashable {
     /// One lift over time.
     case liftHistory(String)
     case reminders
+    /// Paced breathing with the strap, and the strap's wake alarm.
+    case breathing
+    case alarm
     /// Development only: the widget design sheets.
     case dev(Int)
 }
@@ -259,6 +338,8 @@ enum LumaSheetDest: Identifiable {
     case trialSetup(String)
     /// Add an official race, or correct the one with this id.
     case raceEntry(UUID?)
+    /// Read a workout from a sentence or a picture of the board, to be led through it.
+    case guided
 
     var id: String {
         switch self {
@@ -275,6 +356,7 @@ enum LumaSheetDest: Identifiable {
         case .sweatTest: return "sweat-test"
         case .trialSetup(let name): return "trial-setup-\(name)"
         case .raceEntry(let id): return "race-entry-\(id?.uuidString ?? "new")"
+        case .guided: return "guided"
         }
     }
 }
@@ -289,6 +371,8 @@ enum LumaCoverDest: Identifiable {
     case race(HXSessionKind)
     case lift
     case onboarding
+    /// A workout being led through, one effort or rest at a time.
+    case guided(GuidedWorkout)
 
     var id: String {
         switch self {
@@ -296,6 +380,7 @@ enum LumaCoverDest: Identifiable {
         case .race: return "race"
         case .lift: return "lift"
         case .onboarding: return "onboarding"
+        case .guided: return "guided"
         }
     }
 }
@@ -488,6 +573,21 @@ public final class LumaEnv: ObservableObject {
     @Published var sweatTests: [SweatTest] { didSet { if !adopting { disk.save(sweatTests, "sweat-tests.json"); refreshNext() } } }
     @Published var reviews: [WeeklyReview] { didSet { if !adopting { disk.save(reviews, "reviews.json") } } }
     @Published var extras: LumaExtras { didSet { if !adopting, extras != oldValue { disk.save(extras, "extras.json"); refreshNext(); onGlanceChange?() } } }
+    /// Breathing sittings, newest first, and the workouts last read to be led through.
+    @Published var breaths: [BreathOutcome] { didSet { if !adopting, breaths != oldValue { disk.save(breaths, "breaths.json") } } }
+    @Published var guided: [GuidedWorkout] { didSet { if !adopting, guided != oldValue { disk.save(guided, "guided.json") } } }
+    /// What the recordings of recent runs add up to: heart rate at the easy pace, and the fastest
+    /// efforts with the critical speed they give. Worked out after a reload, away from the first draw.
+    @Published var runDepth = RunDepthState()
+    var runDepthSignature: String?
+    /// The newest build the public listing names, when a look has found one newer than this one.
+    @Published var newerBuild: ListedBuild?
+    /// What a look asked for by hand found, in a few words.
+    @Published var buildLookSaid: String?
+    var lookingForBuild = false
+    var buildLookTriedAt: Double = 0
+    /// When Glimm's lines for the day were last asked for, so a failed request is not repeated at every reload.
+    var glimmDayTriedAt: Double = 0
     /// Luma Doctor's log: the weekly checks and any asked for by hand, newest first.
     @Published var doctorReports: [DoctorReport] { didSet { if !adopting, doctorReports != oldValue { disk.save(doctorReports, "doctor.json") } } }
     /// What Glimm keeps: the taste it has learnt, what it was asked to remember, what it has on today.
@@ -557,6 +657,8 @@ public final class LumaEnv: ObservableObject {
         sweatTests = disk.load([SweatTest].self, "sweat-tests.json") ?? []
         reviews = disk.load([WeeklyReview].self, "reviews.json") ?? []
         extras = disk.load(LumaExtras.self, "extras.json") ?? LumaExtras()
+        breaths = disk.load([BreathOutcome].self, "breaths.json") ?? []
+        guided = disk.load([GuidedWorkout].self, "guided.json") ?? []
         doctorReports = disk.load([DoctorReport].self, "doctor.json") ?? []
         glimm = disk.load(GlimmState.self, "glimm.json") ?? GlimmState()
         benchmarks = disk.load(Benchmarks.self, "benchmarks.json") ?? Benchmarks()
@@ -590,6 +692,22 @@ public final class LumaEnv: ObservableObject {
         live.strap = strap
         live.paired = [LumaPairedStrap(id: "demo", name: "WHOOP MG", detail: "Active", isActive: true)]
         live.health = .on
+        // A weekday alarm on a strap whose own alarm is a trial, so the phone's notification is what will happen.
+        var alarm = LumaAlarmState()
+        alarm.on = true
+        alarm.minutes = 6 * 60 + 15
+        alarm.weekdays = [1, 2, 3, 4, 5]
+        alarm.strapIsTrial = true
+        alarm.phoneWillNotify = true
+        let todayKey = LumaAnalysis.todayKey()
+        for offset in 0...7 {
+            let key = LDate.adding(offset, to: todayKey)
+            guard alarm.weekdays.contains(LDate.weekday(key)),
+                  let at = LDate.startOfDay(key)?.addingTimeInterval(Double(alarm.minutes) * 60), at > Date() else { continue }
+            alarm.next = at
+            break
+        }
+        live.alarm = alarm
         let env = LumaEnv(source: source, live: live, secrets: MemorySecrets(key: sparse ? nil : "demo"), persistent: false)
         env.demoScenario = scenario
         // The gallery's pictures of the screen shown while the records cannot be opened.
@@ -649,6 +767,8 @@ public final class LumaEnv: ObservableObject {
         sweatTests = disk.load([SweatTest].self, "sweat-tests.json") ?? []
         reviews = disk.load([WeeklyReview].self, "reviews.json") ?? []
         extras = disk.load(LumaExtras.self, "extras.json") ?? LumaExtras()
+        breaths = disk.load([BreathOutcome].self, "breaths.json") ?? []
+        guided = disk.load([GuidedWorkout].self, "guided.json") ?? []
         doctorReports = disk.load([DoctorReport].self, "doctor.json") ?? []
         glimm = disk.load(GlimmState.self, "glimm.json") ?? GlimmState()
         benchmarks = disk.load(Benchmarks.self, "benchmarks.json") ?? Benchmarks()
@@ -886,6 +1006,9 @@ public final class LumaEnv: ObservableObject {
             // The weekly check is due from Sunday 00:00 and runs at the first read of the strap data after it.
             self.runDoctorIfDue()
             self.glimmKeepUp()
+            self.glimmWriteDay()
+            self.lookForNewerBuild()
+            self.refreshRunDepth()
             await self.refreshSuggestions()
         }
     }

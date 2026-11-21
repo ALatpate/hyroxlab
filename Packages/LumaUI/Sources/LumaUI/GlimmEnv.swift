@@ -29,6 +29,10 @@ final class GlimmStage: ObservableObject {
     @Published var cue: GlimmCue?
     /// Something it suggests remembering, waiting for a yes or a no.
     @Published var proposal: String?
+    /// A small job it offers to do because it was asked for one, waiting for a tap.
+    @Published var offer: GlimmAction?
+    /// Says its replies aloud, when that is switched on.
+    let voice = SessionVoice()
     /// A reply is being fetched.
     @Published var thinking = false
     /// The state it last put into words, so it says so once and not at every redraw.
@@ -120,6 +124,15 @@ extension LumaEnv {
         g.turn(to: c.day, month: c.month)
         g.enjoyed(GlimmStylist.outfit(context: .rain, day: "2026-11-01", month: 11))
         g.noteBest(day: c.day, month: c.month)
+        // A notebook with a little in it, and lines for today, as a week of its learning would leave them.
+        g.notice("Trains hardest on Tuesdays and Thursdays.", now: now.addingTimeInterval(-5 * 86_400))
+        g.notice("Sleeps about forty minutes longer at weekends.", now: now.addingTimeInterval(-3 * 86_400))
+        g.notice("Likes the morning class better than the evening one.", now: now.addingTimeInterval(-86_400))
+        g.lines = GlimmDayLines(day: c.day,
+                                morning: GlimmSaying(text: "Morning. You slept like someone with plans. Shall we go and do them?", mood: .focused),
+                                afterTraining: GlimmSaying(text: "That is the work done. Eat something proper, then let the legs be.", mood: .proud),
+                                evening: GlimmSaying(text: "Day's done. An early night would suit us both.", mood: .sleepy))
+        g.linesAsked = c.day
         glimm = g
     }
 
@@ -142,12 +155,19 @@ extension LumaEnv {
     func glimmGreet(_ look: BuddyLook) {
         guard loaded, glimmStage.greeted != look.mood else { return }
         glimmStage.greeted = look.mood
+        // A line written for today, when one fits the state it is in; its own fixed lines otherwise.
+        if let saying = glimmDayLine(for: look) {
+            glimmStage.line = GlimmLine(id: "day-" + look.mood.rawValue, text: saying.text)
+            glimmStage.show(saying.mood)
+            return
+        }
         glimmSay(.state(look.mood))
     }
 
     /// A line for the Today card: its own words for the state, the same all hour, never recorded.
     func glimmAside(_ look: BuddyLook, now: Date = Date()) -> String {
         guard !glimm.quiet else { return look.line }
+        if let saying = glimmDayLine(for: look, now: now) { return saying.text }
         let hour = (now.timeIntervalSince1970 / 3600).rounded(.down)
         return GlimmVoice.line(.state(look.mood), seed: UInt64(max(0, LNum.int(hour)))).text
     }
@@ -240,12 +260,17 @@ extension LumaEnv {
         let mood = look.mood.glimm
         let said = now.formatted(.dateTime.weekday(.wide)) + " " + ["morning", "afternoon", "evening"][GlimmVoice.part(ofDay: glimmClock(now).hour)]
         let worn = glimmOutfit(for: look.mood, at: now)
-        let facts = GlimmChat.facts(name: profile.name, look: look, shareHealth: profile.shareHealthWithCoach, outfit: worn,
-                                    why: glimmWhy(for: look.mood, at: now), into: glimmPhase(at: now), memories: glimm.memories, clock: said,
-                                    taste: glimm.taste)
+        let share = profile.shareHealthWithCoach
+        // What it worked out by itself came from the day's readings, so it goes only with leave to share those.
+        let kept = share ? glimm.memories : glimm.memories.filter { $0.source != GlimmState.noticed }
+        let brief = GlimmBrief.facts(analysis: analysis, planned: planned, workouts: workouts, today: today, shareHealth: share)
+        let facts = GlimmChat.facts(name: profile.name, look: look, shareHealth: share, outfit: worn,
+                                    why: glimmWhy(for: look.mood, at: now), into: glimmPhase(at: now), memories: kept, clock: said,
+                                    taste: glimm.taste, brief: brief)
         let request = GlimmChat.request(message: message, mood: mood, context: "companion screen", facts: facts)
         let messages = GlimmChat.messages(history: history, request: request, mood: mood)
         glimmStage.thinking = true
+        glimmStage.offer = nil
         glimmStage.show(.curious, for: 30)
         Task { [weak self] in
             guard let self else { return }
@@ -263,6 +288,8 @@ extension LumaEnv {
             self.glimm = g
             self.glimmStage.line = GlimmLine(id: "chat", text: reply.text)
             self.glimmStage.show(reply.mood)
+            self.glimmStage.offer = reply.action
+            if self.extras.glimmAloud { self.glimmStage.voice.say(reply.text) }
             if let setting = reply.outfit {
                 // Its own decision: the reply's words stay up, and the change of clothes says the rest.
                 self.glimmChangeMind(look.mood, to: setting, fancying: reply.colour)

@@ -471,6 +471,23 @@ struct CoachCardView: View {
             Label("Noted: \(fact)", systemImage: "bookmark.fill").font(LumaFont.body(13)).foregroundStyle(Luma.mist)
         case .done(let text):
             Label(text, systemImage: "checkmark.circle.fill").font(LumaFont.body(13, .medium)).foregroundStyle(Luma.mint)
+        case .links(let pages):
+            LumaCard(padding: 14) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Label("From the web", systemImage: "globe").font(LumaFont.body(13, .semibold)).foregroundStyle(Luma.sky)
+                    ForEach(pages) { page in
+                        if let url = URL(string: page.url) {
+                            Link(destination: url) {
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(page.title).font(LumaFont.body(14, .medium)).foregroundStyle(Luma.frost).lineLimit(2).multilineTextAlignment(.leading)
+                                    Text(url.host ?? page.url).font(LumaFont.body(12)).foregroundStyle(Luma.smoke).lineLimit(1)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

@@ -5,6 +5,13 @@ import LumaKit
 import UIKit
 #endif
 
+/// A page a web search brought back and the coach's answer may rest on.
+struct CoachLink: Equatable, Codable, Identifiable {
+    var title: String
+    var url: String
+    var id: String { url }
+}
+
 /// Something the coach did, shown under its reply.
 enum CoachCard: Equatable, Codable, Identifiable {
     case chart(metric: String, days: Int)
@@ -12,6 +19,8 @@ enum CoachCard: Equatable, Codable, Identifiable {
     case planned(sessionIDs: [UUID])
     case note(String)
     case done(String)
+    /// The pages its web searches brought back.
+    case links([CoachLink])
 
     var id: String {
         switch self {
@@ -20,6 +29,7 @@ enum CoachCard: Equatable, Codable, Identifiable {
         case .planned(let ids): return "planned-" + ids.map { $0.uuidString }.joined()
         case .note(let s): return "note-\(s)"
         case .done(let s): return "done-\(s)"
+        case .links(let pages): return "links-" + pages.map { $0.url }.joined(separator: "|")
         }
     }
 }
@@ -84,6 +94,9 @@ public final class CoachEngine: ObservableObject {
     private unowned let env: LumaEnv
     private var task: Task<Void, Never>?
     private let session: URLSession
+    /// Requests whose extras (a fixed shape, strict tools, an effort level) the service turned down
+    /// for a model, by model and what was asked: those go out plain from then on, not refused twice.
+    private var refused: Set<String> = []
 
     nonisolated static let maxSteps = 12
     nonisolated static let maxPhotos = 8
@@ -135,7 +148,13 @@ public final class CoachEngine: ObservableObject {
     // MARK: World
 
     func world() -> CoachWorld {
-        CoachWorld(today: env.today, now: Date(), profile: env.profile, days: env.days, workouts: env.workouts, analysis: env.analysis,
+        // The coach is given the critical speed the screens show, so the two cannot differ.
+        var analysis = env.analysis
+        if let c = env.criticalSpeed {
+            analysis.fitness.criticalSpeed = c.cs
+            analysis.fitness.dPrime = c.dPrime
+        }
+        return CoachWorld(today: env.today, now: Date(), profile: env.profile, days: env.days, workouts: env.workouts, analysis: analysis,
                    planned: env.planned, routine: env.routine, fuel: env.fuel, supplements: env.supplements, checkIns: env.checkIns,
                    lifts: env.lifts, sessions: env.sessions, benchmarks: env.benchmarks, personalBests: env.runPBs, notes: notes,
                    shareHealth: env.profile.shareHealthWithCoach)
@@ -229,9 +248,14 @@ public final class CoachEngine: ObservableObject {
         guard let key = env.secrets.coachKey(), !key.isEmpty else { throw CoachError.noKey }
         let model = try await resolveModel(key: key)
         var convo = history
+        // With leave to search the web, the search runs on the service's side and its pages come back in the reply.
+        let search = env.extras.webSearch
+        var pages: [CoachLink] = []
         for _ in 0..<CoachEngine.maxSteps {
             try Task.checkCancellation()
-            let request = AIRequest(model: model, system: CoachPrompt.system(world: world()), messages: convo, tools: CoachTools.all)
+            var request = AIRequest(model: model, system: CoachPrompt.system(world: world()) + (search ? CoachPrompt.webSearch : ""),
+                                    messages: convo, tools: CoachTools.all)
+            if search { request.serverTools = [AIServerTool.webSearch] }
             let acc = try await stream(request, key: key) { [weak self] update in
                 guard let self else { return }
                 switch update {
@@ -246,6 +270,9 @@ public final class CoachEngine: ObservableObject {
             }
             if let message = acc.errorMessage { throw CoachError.message(message) }
             convo.append(acc.assistantMessage)
+            for source in acc.sources where !pages.contains(where: { $0.url == source.url }) {
+                pages.append(CoachLink(title: source.title, url: source.url))
+            }
             let calls = acc.toolCalls
             if !calls.isEmpty {
                 var results: [JSONValue] = []
@@ -260,10 +287,18 @@ public final class CoachEngine: ObservableObject {
                 activity = "Thinking"
                 continue
             }
-            if acc.stopReason == "pause_turn" { continue }
+            // Paused part-way through its own searches: carried on by sending the turn back as it stands.
+            if acc.isPaused {
+                activity = "Searching the web"
+                continue
+            }
             if acc.stopReason == "max_tokens" { update(replyID) { $0.text += "\n\n(The reply was cut short. Ask me to continue.)" } }
             if acc.stopReason == "refusal", acc.text.isEmpty { update(replyID) { $0.text = "I can't help with that request." } }
             break
+        }
+        if !pages.isEmpty {
+            let shown = Array(pages.prefix(8))
+            update(replyID) { $0.cards.append(.links(shown)) }
         }
         update(replyID) { $0.text = $0.text.trimmingCharacters(in: .whitespacesAndNewlines) }
     }
@@ -379,8 +414,20 @@ public final class CoachEngine: ObservableObject {
         return .api(status: status, message: message)
     }
 
-    private func stream(_ request: AIRequest, key: String, onUpdate: @escaping (AIStreamUpdate) -> Void) async throws -> AIStreamAccumulator {
+    /// What a request's extras are filed under when the service turns them down.
+    private func extrasKey(_ request: AIRequest) -> String {
+        request.model + "|" + (request.tools.first { $0.strict }?.name ?? (request.format != nil ? "shape" : "effort"))
+    }
+
+    /// The request as it should go out: plain when its extras were turned down for this model before.
+    private func shaped(_ request: AIRequest) -> AIRequest {
+        request.hasExtras && refused.contains(extrasKey(request)) ? request.plain : request
+    }
+
+    private func stream(_ asked: AIRequest, key: String, onUpdate: @escaping (AIStreamUpdate) -> Void) async throws -> AIStreamAccumulator {
+        var request = shaped(asked)
         var attempt = 0
+        var retriedPlain = false
         while true {
             attempt += 1
             let (bytes, response) = try await session.bytes(for: makeRequest(request.bodyData(), key: key))
@@ -392,8 +439,15 @@ public final class CoachEngine: ObservableObject {
                     try await Task.sleep(nanoseconds: UInt64(attempt) * 1_500_000_000)
                     continue
                 }
+                // An extra this model does not take must not cost the athlete the answer: asked once more without.
+                if status == 400, request.hasExtras {
+                    request = request.plain
+                    retriedPlain = true
+                    continue
+                }
                 throw CoachEngine.apiError(status: status, data: data)
             }
+            if retriedPlain { refused.insert(extrasKey(asked)) }
             var acc = AIStreamAccumulator()
             for try await line in bytes.lines {
                 try Task.checkCancellation()
@@ -404,10 +458,17 @@ public final class CoachEngine: ObservableObject {
     }
 
     private func complete(_ request: AIRequest, key: String) async throws -> AIStreamAccumulator {
-        var r = request
+        var r = shaped(request)
         r.stream = false
-        let (data, response) = try await session.data(for: makeRequest(r.bodyData(), key: key))
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        var (data, response) = try await session.data(for: makeRequest(r.bodyData(), key: key))
+        var status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        // An extra this model does not take must not cost the athlete the answer: asked once more without,
+        // and from then on that request goes out plain for this model.
+        if status == 400, r.hasExtras {
+            (data, response) = try await session.data(for: makeRequest(r.plain.bodyData(), key: key))
+            status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            if status == 200 { refused.insert(extrasKey(request)) }
+        }
         guard status == 200 else { throw CoachEngine.apiError(status: status, data: data) }
         guard let json = String(data: data, encoding: .utf8).flatMap({ JSONValue.parse($0) }) else { throw CoachError.message("The reply could not be read.") }
         return AIStreamAccumulator(response: json)
@@ -430,7 +491,8 @@ public final class CoachEngine: ObservableObject {
         var last: CoachError = .message("No model answered.")
         for model in ranked.prefix(4) {
             // Room for the model's own thinking as well as the answer: the strongest models always think.
-            let request = AIRequest(model: model.id, system: DoctorPrompt.system, messages: [AIMessage.user(ask)], maxTokens: 16_000, stream: false)
+            var request = AIRequest(model: model.id, system: DoctorPrompt.system, messages: [AIMessage.user(ask)], maxTokens: 16_000, stream: false)
+            request.effort = "high"
             do {
                 let reply = try await complete(request, key: key)
                 if let text = DoctorPrompt.tidy(reply.text) { return (text, model.name) }
@@ -453,7 +515,20 @@ public final class CoachEngine: ObservableObject {
         guard let key = env.secrets.coachKey(), !key.isEmpty else { throw CoachError.noKey }
         let model = try await resolveModel(key: key)
         // Room for a model that thinks before it answers; the answer itself is a line or two.
-        let request = AIRequest(model: model, system: GlimmChat.system, messages: messages, maxTokens: 4_000, stream: false)
+        var request = AIRequest(model: model, system: GlimmChat.system, messages: messages, maxTokens: 4_000, stream: false)
+        request.effort = "low"
+        return try await complete(request, key: key).text
+    }
+
+    /// Glimm's lines for the day and anything new for its notebook, as the model's text: one small
+    /// request, held to a fixed shape, on the model the coach is set to. `GlimmDaily.parse` decides
+    /// what of it is used.
+    func glimmDay(_ ask: String) async throws -> String {
+        guard let key = env.secrets.coachKey(), !key.isEmpty else { throw CoachError.noKey }
+        let model = try await resolveModel(key: key)
+        var request = AIRequest(model: model, system: GlimmDaily.system, messages: [AIMessage.user(ask)], maxTokens: 3_000, stream: false)
+        request.effort = "low"
+        request.format = GlimmDaily.format
         return try await complete(request, key: key).text
     }
 
@@ -563,6 +638,20 @@ public final class CoachEngine: ObservableObject {
         return entry
     }
 
+    /// Reads a sentence or a picture of the board into a workout to be led through. Nothing is saved.
+    func readGuided(text: String, photos: [Data]) async throws -> GuidedWorkout {
+        let nothing = "No workout could be read from that. Try a clearer picture, or type it."
+        let note = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let acc = try await askOnce(system: GuidedReading.system, tool: GuidedReading.tool(),
+                                    text: note.isEmpty ? "Read the workout this shows." : note, photos: photos, maxTokens: 4096)
+        if acc.stopReason == "max_tokens" { throw CoachError.message("That was too much to read in one go. Try one board at a time.") }
+        guard let call = acc.toolCalls.first(where: { $0.name == GuidedReading.toolName }),
+              let workout = GuidedReading.workout(from: call.input) else {
+            throw CoachError.message(acc.text.isEmpty ? nothing : acc.text)
+        }
+        return workout
+    }
+
     private func extract(kind: String, tool: AITool, text: String, photos: [Data]) async throws -> AIStreamAccumulator {
         try await askOnce(system: CoachPrompt.extraction(kind: kind), tool: tool, text: text, photos: photos, maxTokens: 4096)
     }
@@ -572,8 +661,11 @@ public final class CoachEngine: ObservableObject {
         guard let key = env.secrets.coachKey(), !key.isEmpty else { throw CoachError.noKey }
         let model = try await resolveModel(key: key)
         let images = photos.prefix(CoachEngine.maxPhotos).compactMap { CoachEngine.prepare($0) }.map { (base64: $0.base64EncodedString(), mediaType: "image/jpeg") }
+        // The service is asked to hold the answer to the tool's own shape; a model that will not is asked plainly.
+        var held = tool
+        held.strict = true
         let request = AIRequest(model: model, system: system, messages: [AIMessage.user(text, images: images)],
-                                tools: [tool], maxTokens: maxTokens, stream: false)
+                                tools: [held], maxTokens: maxTokens, stream: false)
         return try await complete(request, key: key)
     }
 

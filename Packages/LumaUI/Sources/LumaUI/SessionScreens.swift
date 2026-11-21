@@ -77,6 +77,23 @@ struct GoSheet: View {
             .fixedSize(horizontal: false, vertical: true)
             Button {
                 dismiss()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { router.sheet = .guided }
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "list.bullet.rectangle.portrait.fill").font(.system(size: 16, weight: .bold)).foregroundStyle(Luma.ink)
+                        .frame(width: 44, height: 44).background(Circle().fill(Luma.aqua))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Lead me through a workout").font(LumaFont.heading(16)).foregroundStyle(Luma.frost)
+                        Text("Type it, or take a picture of the board").font(LumaFont.body(13)).foregroundStyle(Luma.mist)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Luma.smoke)
+                }
+                .padding(14).background(LumaPanel(tint: Luma.aqua.opacity(0.4), radius: 20))
+            }
+            .buttonStyle(.plain)
+            Button {
+                dismiss()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { router.sheet = .manualWorkout }
             } label: { Label("Log a session that already happened", systemImage: "square.and.pencil").frame(maxWidth: .infinity) }
                 .buttonStyle(LumaSecondaryButtonStyle())
@@ -202,8 +219,8 @@ private struct RunLiveBody: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(c.plan.title).font(LumaFont.heading(17)).foregroundStyle(Luma.frost)
-                    Text(c.paused ? (c.autoPaused ? "Auto-paused" : "Paused") : "Recording").font(LumaFont.label(11))
-                        .foregroundStyle(c.paused ? Luma.amber : Luma.volt)
+                    Text(c.paused ? (c.autoPaused ? "Auto-paused" : "Paused") : (c.aboveZone ? "Above your zone" : "Recording")).font(LumaFont.label(11))
+                        .foregroundStyle(c.paused ? Luma.amber : (c.aboveZone ? Luma.coral : Luma.volt))
                 }
                 Spacer()
                 if let hr = c.hr {

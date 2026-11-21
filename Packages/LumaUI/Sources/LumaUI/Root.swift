@@ -332,6 +332,8 @@ struct LumaDestinationView: View {
         case .reviews: ReviewsScreen()
         case .liftHistory(let name): LiftHistoryScreen(name: name)
         case .reminders: RemindersScreen()
+        case .breathing: BreathScreen()
+        case .alarm: AlarmScreen()
         case .dev(let page): DevWidgetsScreen(page: page)
         }
     }
@@ -355,6 +357,7 @@ struct LumaSheetView: View {
         case .weighIn: WeighInSheet()
         case .sweatTest: SweatTestSheet()
         case .trialSetup(let name): TrialSetupSheet(supplement: name)
+        case .guided: GuidedSetupSheet()
         }
     }
 }
@@ -368,6 +371,7 @@ struct LumaCoverView: View {
         case .race(let kind): RaceLiveScreen(kind: kind)
         case .lift: LiftLiveScreen()
         case .onboarding: OnboardingScreen()
+        case .guided(let workout): GuidedLiveScreen(workout: workout)
         }
     }
 }
@@ -468,6 +472,15 @@ enum LumaRoute {
         case "today.best":
             env.celebration = LumaBest(lift: "Back squat", kg: 133, previous: 130)
         case "sheet.water": r.sheet = .fuelAdd(.water)
+        case "you.alarm": r.open(.today, .alarm)
+        case "you.breathing": r.open(.today, .breathing)
+        case "you.breathing.live": LumaLaunch.page = 1; r.open(.today, .breathing)
+        case "today.newbuild":
+            env.newerBuild = ListedBuild(version: "12.1.0", build: 22)
+            r.tab = .today
+        case "sheet.guided": r.tab = .train; r.sheet = .guided
+        case "sheet.guided.review": r.tab = .train; LumaLaunch.page = 1; r.sheet = .guided
+        case "cover.guided": r.cover = .guided(GuidedSetupSheet.demoWorkout)
         default: break
         }
     }

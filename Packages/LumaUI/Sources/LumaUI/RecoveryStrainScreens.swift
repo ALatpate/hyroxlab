@@ -388,8 +388,7 @@ struct LoadTeaser: View {
                 .frame(width: 44, height: 44).background(Circle().fill(Luma.ember.opacity(0.14)))
             VStack(alignment: .leading, spacing: 2) {
                 Text("Training load: \(load.status.title.lowercased())").font(LumaFont.heading(15)).foregroundStyle(Luma.frost)
-                Text(load.ready ? String(format: "Load ratio %.2f · fitness %.0f · fatigue %.0f", load.acwr ?? 0, load.today?.fitness ?? 0, load.today?.fatigue ?? 0)
-                                : "\(load.historyDays) of \(LoadModel.minimumHistory) days recorded")
+                Text(load.ready ? LoadTeaser.line(load) : "\(load.historyDays) of \(LoadModel.minimumHistory) days recorded")
                     .font(LumaFont.body(13)).foregroundStyle(Luma.mist)
             }
             Spacer(minLength: 4)
@@ -397,6 +396,14 @@ struct LoadTeaser: View {
         }
         .padding(16)
         .background(LumaPanel(radius: 22))
+    }
+
+    /// The week against the usual week, then fitness and fatigue. With no usual week to set it against
+    /// (back after a break), the share is left out, not shown as a figure it does not have.
+    static func line(_ load: LoadState) -> String {
+        let rest = String(format: "fitness %.0f · fatigue %.0f", load.today?.fitness ?? 0, load.today?.fatigue ?? 0)
+        guard let share = load.weekShare else { return rest.prefix(1).uppercased() + rest.dropFirst() }
+        return "This week \(LNum.int((share * 100).rounded()))% of usual · " + rest
     }
 }
 
@@ -452,21 +459,23 @@ struct LoadScreen: View {
                     if load.ready {
                         HStack(alignment: .center, spacing: 16) {
                             ZStack {
-                                LumaGauge(value: load.acwr, range: 0.4...2.0, bands: [
-                                    (0.4...0.8, Luma.sky), (0.8...1.3, Luma.volt), (1.3...1.5, Luma.amber), (1.5...2.0, Luma.coral),
+                                // This week's load as a share of the usual week: the middle one of the six before it.
+                                LumaGauge(value: load.weekShare, range: 0.3...2.0, bands: [
+                                    (0.3...0.7, Luma.sky), (0.7...1.3, Luma.volt), (1.3...1.5, Luma.amber), (1.5...2.0, Luma.coral),
                                 ])
                                 VStack(spacing: -2) {
-                                    Text(load.acwr.map { String(format: "%.2f", $0) } ?? "–").font(LumaFont.numeral(34, .heavy)).foregroundStyle(Luma.frost)
-                                    LumaLabel("Load ratio")
+                                    Text(load.weekShare.map { "\(LNum.int(($0 * 100).rounded()))%" } ?? "–")
+                                        .font(LumaFont.numeral(34, .heavy)).foregroundStyle(Luma.frost)
+                                    LumaLabel("Of usual week")
                                 }
                                 .offset(y: 6)
                             }
                             .frame(width: 150, height: 122)
                             VStack(alignment: .leading, spacing: 8) {
-                                keyRow(Luma.sky, "Under 0.8", "Fresh, losing fitness if it lasts")
-                                keyRow(Luma.volt, "0.8 – 1.3", "Building safely")
-                                keyRow(Luma.amber, "1.3 – 1.5", "Overreaching")
-                                keyRow(Luma.coral, "Over 1.5", "Spike: higher injury risk")
+                                keyRow(Luma.sky, "Under 70%", "Fresh; fitness fades if it lasts")
+                                keyRow(Luma.volt, "70 – 130%", "Your usual range")
+                                keyRow(Luma.amber, "130 – 150%", "A heavier week")
+                                keyRow(Luma.coral, "Over 150%", "A lot to take on at once")
                             }
                         }
                     }

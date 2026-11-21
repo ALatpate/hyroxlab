@@ -281,6 +281,32 @@ final class StrapPackTests: XCTestCase {
 
     // MARK: A route as a file
 
+    func testARouteKeptAsPositionsIsPlacedInTimeByDistance() {
+        // Three positions the same distance apart along a line of longitude.
+        let route = [LCoord(lat: 53.330, lon: -6.25), LCoord(lat: 53.331, lon: -6.25), LCoord(lat: 53.332, lon: -6.25)]
+        // With no record of the run, time is spread evenly over it.
+        let even = GPX.points(route: route, samples: [], durationS: 100)
+        XCTAssertEqual(even.count, 3)
+        XCTAssertEqual(even[0].tS, 0, accuracy: 1e-6)
+        XCTAssertEqual(even[1].tS, 50, accuracy: 1e-6)
+        XCTAssertEqual(even[2].tS, 100, accuracy: 1e-6)
+        XCTAssertNil(even[1].hr)
+        // With one, a slow first half shows: the halfway point was reached well past half the time.
+        let record = [RunSample(tS: 0, distanceM: 0, hr: 120), RunSample(tS: 80, distanceM: 110, hr: 140), RunSample(tS: 100, distanceM: 200, hr: 160)]
+        let timed = GPX.points(route: route, samples: record, durationS: 100)
+        XCTAssertEqual(timed[0].tS, 0, accuracy: 1e-6)
+        XCTAssertEqual(timed[1].tS, 80 * 100.0 / 110, accuracy: 1e-6)
+        XCTAssertEqual(timed[2].tS, 100, accuracy: 1e-6)
+        XCTAssertEqual(timed[1].hr, 140)
+        XCTAssertEqual(timed[2].hr, 160)
+        // A thousandth of a degree of latitude is about 111 metres.
+        XCTAssertEqual(GPX.metres(route[0], route[1]), 111.2, accuracy: 0.3)
+        // One position, or a run of no length, gives nothing to write.
+        XCTAssertTrue(GPX.points(route: Array(route.prefix(1)), samples: record, durationS: 100).isEmpty)
+        XCTAssertTrue(GPX.points(route: route, samples: record, durationS: 0).isEmpty)
+        XCTAssertNotNil(GPX.document(name: "Run", startedAt: Date(timeIntervalSince1970: 1_795_000_000), points: timed))
+    }
+
     func testARouteIsWrittenAsGPX() {
         let samples = [RunSample(tS: 0, distanceM: 0, hr: 120, altitudeM: 12.34, lat: 53.3331, lon: -6.2489),
                        RunSample(tS: 5, distanceM: 15, lat: 53.3332, lon: -6.249),

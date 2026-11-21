@@ -19,10 +19,33 @@ struct LumaExtras: Codable, Equatable {
     var bestAt: Date?
     /// A notification when Luma Doctor's weekly check is done. Off until switched on.
     var doctorNotify = false
+    /// A buzz on the strap when heart rate stays above a zone in a run or a timed session.
+    var zoneGuard = false
+    /// The zone to stay in or under, 1 to 4.
+    var zoneGuardZone = 3
+    /// In the rests of an interval session, a buzz when heart rate is back down, in place of a set rest.
+    var goAgain = false
+    /// Looks once a day for a newer build. Off until switched on; `newBuildAsked` once the offer of it
+    /// has been answered either way.
+    var newBuild = false
+    var newBuildAsked = false
+    /// When the listing was last looked at, in seconds since 1970, and the newest build it named.
+    var newBuildLookedAt: Double = 0
+    var newBuildListed: Int?
+    /// Records the strap's raw motion with each session. Experimental, off until switched on.
+    var motion = false
+    /// The coach may search the web. Off until switched on.
+    var webSearch = false
+    /// Glimm's lines are written afresh each day on the athlete's key, and it says its replies aloud.
+    var glimmFresh = true
+    var glimmAloud = false
 
     init() {}
 
-    enum CodingKeys: String, CodingKey { case buddyName, buddyOnToday, reminders, easeSettled, bestLift, bestKg, bestAt, doctorNotify }
+    enum CodingKeys: String, CodingKey {
+        case buddyName, buddyOnToday, reminders, easeSettled, bestLift, bestKg, bestAt, doctorNotify
+        case zoneGuard, zoneGuardZone, goAgain, newBuild, newBuildAsked, newBuildLookedAt, newBuildListed, motion, webSearch, glimmFresh, glimmAloud
+    }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -36,6 +59,17 @@ struct LumaExtras: Codable, Equatable {
         bestKg = try c.decodeIfPresent(Double.self, forKey: .bestKg)
         bestAt = try c.decodeIfPresent(Date.self, forKey: .bestAt)
         doctorNotify = try c.decodeIfPresent(Bool.self, forKey: .doctorNotify) ?? false
+        zoneGuard = try c.decodeIfPresent(Bool.self, forKey: .zoneGuard) ?? false
+        zoneGuardZone = min(4, max(1, try c.decodeIfPresent(Int.self, forKey: .zoneGuardZone) ?? 3))
+        goAgain = try c.decodeIfPresent(Bool.self, forKey: .goAgain) ?? false
+        newBuild = try c.decodeIfPresent(Bool.self, forKey: .newBuild) ?? false
+        newBuildAsked = try c.decodeIfPresent(Bool.self, forKey: .newBuildAsked) ?? false
+        newBuildLookedAt = try c.decodeIfPresent(Double.self, forKey: .newBuildLookedAt) ?? 0
+        newBuildListed = try c.decodeIfPresent(Int.self, forKey: .newBuildListed)
+        motion = try c.decodeIfPresent(Bool.self, forKey: .motion) ?? false
+        webSearch = try c.decodeIfPresent(Bool.self, forKey: .webSearch) ?? false
+        glimmFresh = try c.decodeIfPresent(Bool.self, forKey: .glimmFresh) ?? true
+        glimmAloud = try c.decodeIfPresent(Bool.self, forKey: .glimmAloud) ?? false
     }
 
     var reminderKinds: Set<ReminderKind> { Set(reminders.compactMap { ReminderKind(rawValue: $0) }) }

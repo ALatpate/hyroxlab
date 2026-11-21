@@ -145,6 +145,11 @@ final class SmartTests: XCTestCase {
         XCTAssertEqual(plain.body()["model"]?.string, "m")
     }
 
+    func testTheSearchRulesKeepTheAthleteOutOfSearches() {
+        XCTAssertTrue(CoachPrompt.webSearch.contains("Never put the athlete's name"))
+        XCTAssertTrue(CoachPrompt.webSearch.contains("say where it came from"))
+    }
+
     func testAStrictToolClosesEveryObjectInItsSchema() {
         var tool = GuidedReading.tool()
         XCTAssertNil(AIRequest(model: "m", system: "s", messages: [.user("hi")], tools: [tool]).body()["tools"]?.array?.first?["strict"])

@@ -297,6 +297,7 @@ struct DevicesScreen: View {
                 // The same notice Today carries, so the two screens cannot describe the data differently.
                 DataNoticeCard()
             }
+            StrapExtras()
             LumaSection(title: "Your straps")
             if live.paired.isEmpty {
                 LumaCard { Text("No strap has been paired yet.").font(LumaFont.body(14)).foregroundStyle(Luma.mist) }
@@ -441,6 +442,13 @@ struct SettingsScreen: View {
             LumaGroup {
                 toggle("Share my health data with the coach", "Sent to Anthropic with a question when the answer needs it.", $env.profile.shareHealthWithCoach)
                 toggle("Morning brief", "A short read of the day on Today, written once each morning.", $env.profile.morningBrief)
+                toggle("Let the coach search the web",
+                       "For facts outside your own records: a race's date or rules, what a study found. Anthropic runs each search on your key, at about a US cent a search, with no limit set on how many. The coach is told to keep your figures and details out of the search words.",
+                       Binding(get: { env.extras.webSearch }, set: { on in
+                           var e = env.extras
+                           e.webSearch = on
+                           env.extras = e
+                       }))
                 Button { router.sheet = .coachSetup } label: { LumaRow(symbol: "key.fill", symbolColor: Luma.aqua, title: "API key and model", chevron: true) }.buttonStyle(.plain)
             }
             LumaSection(title: "Your data")
@@ -488,9 +496,10 @@ struct AboutScreen: View {
                     Text(env.versionLine).font(LumaFont.body(13)).foregroundStyle(Luma.mist)
                 }
             }
+            NewBuildCard()
             section("What the numbers are", "Recovery, strain and sleep are computed on this phone from the strap's heart rate, heart-rate variability, skin temperature and movement. Baselines are your own: Luma compares you with you. Estimates such as VO₂max, sleep need and race predictions are labelled as estimates wherever they appear.")
             section("Not a medical device", "Luma is for training and general wellbeing. It does not diagnose, treat or monitor any condition, and its warning signs are prompts to pay attention, not medical findings. If something feels wrong, see a doctor.")
-            section("Privacy", "Everything Luma records stays on this phone. Nothing is uploaded to any Luma server, because there is none. The only data that leaves the phone is what you send to the coach: your messages, photos you attach and, if you turn it on, the health data a question needs, sent to Anthropic with your own API key.")
+            section("Privacy", "Everything Luma records stays on this phone. Nothing is uploaded to any Luma server, because there is none. The only data that leaves the phone is what you send to the coach and to Glimm: your messages, photos you attach and, if you turn it on, the health data a question needs, sent to Anthropic with your own API key. If you let the coach search the web, Anthropic runs the searches, and the coach is told to keep your figures and details out of the search words. The daily look for a new build, if you switch it on, reads one public file and sends nothing about you.")
             section("Open-source licences", "Luma's strap connection, on-device storage and its recovery, strain and sleep scoring are built on the open-source NOOP project (github.com/ryanbr/noop), used under the PolyForm Noncommercial License 1.0.0. This is a personal, non-commercial build. Luma is not affiliated with WHOOP or HYROX. Titles and figures are set in Barlow Condensed by the Barlow Project Authors, used under the SIL Open Font License 1.1.")
         }
     }
