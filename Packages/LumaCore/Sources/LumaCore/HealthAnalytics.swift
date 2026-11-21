@@ -408,6 +408,20 @@ public struct BodyWatch: Equatable, Sendable {
     }
 }
 
+public extension BodyWatch {
+    /// The same watch with a slow rise in resting heart rate taken into account. A rise that no single
+    /// night would flag lifts a clear morning to a watch; on a morning already flagged it is added to
+    /// what is said.
+    func adding(_ drift: RestingDrift?) -> BodyWatch {
+        guard let drift, drift.raised else { return self }
+        let why = " A slow rise can follow a hard block, short sleep, alcohol or the start of an illness, so an easier day or two is a sensible answer."
+        if level == .clear {
+            return BodyWatch(level: .watch, signals: signals, title: "Resting heart rate is creeping up", detail: drift.line + why)
+        }
+        return BodyWatch(level: level, signals: signals, title: title, detail: detail + " " + drift.line)
+    }
+}
+
 // MARK: - Daily stress proxy
 
 public enum StressModel {
@@ -458,7 +472,7 @@ public struct DayCall: Equatable, Sendable {
     }
 
     public static func make(recovery: Double?, gap: RecoveryGap? = nil, load: LoadState?, sleepDebtMin: Double, watch: BodyWatch,
-                            plannedHard: Bool = false) -> DayCall {
+                            plannedHard: Bool = false, hrv: HRVTrend? = nil) -> DayCall {
         var reasons: [String] = []
         if watch.level == .alert {
             reasons.append(watch.signals.filter { $0.flagged }.map { $0.text }.joined(separator: " · "))
@@ -471,18 +485,22 @@ public struct DayCall: Equatable, Sendable {
             return DayCall(level: .unknown, title: words.title, body: words.body, reasons: [], strainTarget: nil)
         }
         reasons.append("Recovery \(LNum.int(r.rounded()))%")
-        let acwr = load?.ready == true ? load?.acwr : nil
-        if let a = acwr { reasons.append(String(format: "Load ratio %.2f", a)) }
+        let share = load?.ready == true ? load?.weekShare : nil
+        if let s = share { reasons.append("Week load \(LNum.int((s * 100).rounded()))% of usual") }
         if sleepDebtMin >= 60 { reasons.append("Sleep debt \(LFormat.hm(minutes: sleepDebtMin))") }
-        if watch.level == .watch { reasons.append("Two overnight signals off") }
+        // The watch is quoted for what set it off: two signals, or a slow rise that no single night shows.
+        if watch.level == .watch { reasons.append(watch.flaggedCount >= 2 ? "Two overnight signals off" : watch.title) }
+        // A week of HRV under the athlete's own normal weighs the same as a heavy sleep debt.
+        let hrvLow = hrv?.holdsBack == true
+        if hrvLow, let days = hrv?.daysThere { reasons.append("HRV under your normal for \(days) days") }
 
-        let spike = (acwr ?? 1) > 1.5
-        let heavyDebt = sleepDebtMin >= 150
+        let spike = (share ?? 1) > 1.5
+        let heavyDebt = sleepDebtMin >= 150 || hrvLow
         switch RecoveryBand.of(r) {
         case .high:
             if spike {
                 return DayCall(level: .build, title: "Ready, but hold the reins",
-                               body: "You have recovered well, yet your load has jumped faster than your base. Train with quality, keep the volume where it is.",
+                               body: "You have recovered well, yet this week is already well above your usual load. Train with quality, keep the volume where it is.",
                                reasons: reasons, strainTarget: 12...15)
             }
             if watch.level == .watch || heavyDebt {

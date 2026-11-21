@@ -343,24 +343,24 @@ public enum Doctor {
         let state = LoadModel.compute(loads: loads.filter { $0.key <= weekEnd }, today: weekEnd, calendar: calendar)
         let series: [Double?] = span.map { loads[$0] ?? 0 }
         let title = "Training load"
-        guard state.ready, let ratio = state.acwr else {
+        guard state.ready, let share = state.weekShare else {
             return DoctorFinding(id: "load", title: title, level: .noData, figure: "–", usual: nil,
-                                 line: "Luma needs four weeks of sessions before the load ratio means anything.", series: series)
+                                 line: "Luma needs four weeks of sessions before a week can be set against your usual one.", series: series)
         }
-        let figure = String(format: "%.1f×", ratio)
-        let usual = "0.8 to 1.3 times your recent average is the steady band"
+        let figure = String(format: "%.1f×", share)
+        let usual = "0.7 to 1.3 times your usual week is the steady band"
         let change = state.weekChangePct.map { String(format: " (%+.0f%% on the week before)", $0) } ?? ""
-        if ratio >= 2 {
+        if share >= 2 {
             return DoctorFinding(id: "load", title: title, level: .outside, figure: figure, usual: usual,
-                                 line: "This week's load was \(figure) what your body is used to\(change). Jumps of this size are where injuries and illness cluster.",
+                                 line: "This week's load was \(figure) your usual week\(change). That is a lot to take on at once.",
                                  series: series)
         }
         if state.status == .spike {
             return DoctorFinding(id: "load", title: title, level: .watch, figure: figure, usual: usual,
-                                 line: "This week's load was \(figure) what your body is used to\(change).", series: series)
+                                 line: "This week's load was \(figure) your usual week\(change).", series: series)
         }
         return DoctorFinding(id: "load", title: title, level: .steady, figure: figure, usual: usual,
-                             line: "This week's load was \(figure) your recent average\(change): \(state.headline.lowercased()).", series: series)
+                             line: "This week's load was \(figure) your usual week\(change): \(state.headline.lowercased()).", series: series)
     }
 }
 

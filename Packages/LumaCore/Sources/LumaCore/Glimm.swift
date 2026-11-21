@@ -663,12 +663,15 @@ public enum GlimmStylist {
 
 // MARK: - What it keeps
 
-/// Something Glimm was asked to remember. Nothing is kept that its person did not confirm.
+/// Something Glimm keeps. What it is told or suggests in a chat is kept only once its person agrees.
+/// What it works out by itself, a day at a time, is kept while learning is switched on. Every line can
+/// be read and removed.
 public struct GlimmMemory: Codable, Equatable, Sendable, Identifiable {
     public var id: String
     public var text: String
     public var at: Date
-    /// "told" when it was written in by hand, "chat" when Glimm suggested it in a chat and it was agreed to.
+    /// "told" when it was written in by hand, "chat" when Glimm suggested it in a chat and it was agreed
+    /// to, "noticed" when Glimm worked it out by itself.
     public var source: String
 
     public init(id: String, text: String, at: Date, source: String) {
@@ -708,6 +711,15 @@ public struct GlimmState: Codable, Equatable, Sendable {
     public var chat: [GlimmTurn] = []
     /// Glimm keeps its words to itself: it still moves, and still answers when spoken to.
     public var quiet = false
+    /// It adds to its own notebook, a little each day, from what the day held.
+    public var learns = true
+    /// The lines written for one day, and the day they were last asked for.
+    public var lines: GlimmDayLines?
+    public var linesAsked: String?
+
+    /// The source of a line it worked out by itself.
+    public static let noticed = "noticed"
+    public static let noticedLimit = 30
 
     public static let memoryLimit = 60
     public static let memoryLength = 200
@@ -718,7 +730,9 @@ public struct GlimmState: Codable, Equatable, Sendable {
 
     // An outfit could once be kept on by hand ("lock"). It is no longer read or written: what it
     // wears is its own choice, and a file that still holds one is read as if it did not.
-    enum CodingKeys: String, CodingKey { case taste, chosen, salts, day, recentTops, feel, lucky, luckyDay, memories, said, chat, quiet }
+    enum CodingKeys: String, CodingKey {
+        case taste, chosen, salts, day, recentTops, feel, lucky, luckyDay, memories, said, chat, quiet, learns, lines, linesAsked
+    }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -734,6 +748,9 @@ public struct GlimmState: Codable, Equatable, Sendable {
         said = try c.decodeIfPresent([String].self, forKey: .said) ?? []
         chat = try c.decodeIfPresent([GlimmTurn].self, forKey: .chat) ?? []
         quiet = try c.decodeIfPresent(Bool.self, forKey: .quiet) ?? false
+        learns = try c.decodeIfPresent(Bool.self, forKey: .learns) ?? true
+        lines = try? c.decodeIfPresent(GlimmDayLines.self, forKey: .lines)
+        linesAsked = try c.decodeIfPresent(String.self, forKey: .linesAsked)
         // A piece the wardrobe no longer holds is not worn.
         chosen = chosen.filter { $0.value.isValid }
     }
@@ -839,6 +856,32 @@ public struct GlimmState: Codable, Equatable, Sendable {
     }
 
     public mutating func forget(_ id: String) { memories.removeAll { $0.id == id } }
+
+    /// Something it worked out by itself. Kept only while learning is on, and only so many: the oldest
+    /// of its own notes give way, never what its person told it.
+    @discardableResult
+    public mutating func notice(_ text: String, now: Date = Date()) -> Bool {
+        guard learns, remember(text, source: GlimmState.noticed, now: now) else { return false }
+        // The oldest of its own notes go first, by place and not by name: two notes can share a name.
+        var extra = memories.filter { $0.source == GlimmState.noticed }.count - GlimmState.noticedLimit
+        guard extra > 0 else { return true }
+        var kept: [GlimmMemory] = []
+        for memory in memories {
+            if extra > 0, memory.source == GlimmState.noticed {
+                extra -= 1
+            } else {
+                kept.append(memory)
+            }
+        }
+        memories = kept
+        return true
+    }
+
+    /// Its own notes, oldest first.
+    public var notebook: [GlimmMemory] { memories.filter { $0.source == GlimmState.noticed } }
+
+    /// Forget everything it worked out by itself. What it was told stays.
+    public mutating func clearNotebook() { memories.removeAll { $0.source == GlimmState.noticed } }
 
     public mutating func noteSaid(_ id: String) { said = Array((said + [id]).suffix(GlimmState.saidKept)) }
 

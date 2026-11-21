@@ -70,8 +70,11 @@ public enum LoadStatus: String, Codable, Sendable {
 public struct LoadState: Equatable, Sendable {
     /// Contiguous days, oldest first, ending today.
     public let days: [LoadDay]
-    /// Acute:chronic ratio (fatigue ÷ fitness). 0.8–1.3 is the range where load is building safely.
+    /// Acute:chronic ratio (fatigue ÷ fitness). Kept for the record; nothing is judged by it any more,
+    /// since the research found no support for it as a warning. The week is judged by `weekShare`.
     public let acwr: Double?
+    /// The athlete's usual week: the middle one of the six weeks before this one. Nil with fewer than three.
+    public let usualWeek: Double?
     /// Foster's monotony: mean ÷ SD of the last 7 daily loads. Above 2 means every day looks the same.
     public let monotony: Double?
     public let weekLoad: Double
@@ -81,12 +84,17 @@ public struct LoadState: Equatable, Sendable {
     public let status: LoadStatus
     public let headline: String
     public let detail: String
-    /// Enough history (4 weeks) for the ratio to mean something.
+    /// Enough history (4 weeks) for a week to be set against the usual one.
     public let ready: Bool
     public let historyDays: Int
 
     public var today: LoadDay? { days.last }
     public var weekChangePct: Double? { prevWeekLoad > 0 ? (weekLoad - prevWeekLoad) / prevWeekLoad * 100 : nil }
+    /// This week's load as a share of the usual week: 1 is a usual week, 1.5 is half as much again.
+    public var weekShare: Double? {
+        guard let usual = usualWeek, usual > 0 else { return nil }
+        return weekLoad / usual
+    }
 }
 
 public enum LoadModel {
@@ -103,7 +111,7 @@ public enum LoadModel {
 
     public static func compute(loads: [String: Double], today: String, calendar: Calendar = LDate.calendar) -> LoadState {
         guard let first = loads.keys.min(), first <= today else {
-            return LoadState(days: [], acwr: nil, monotony: nil, weekLoad: 0, prevWeekLoad: 0, ramp: nil, status: .building,
+            return LoadState(days: [], acwr: nil, usualWeek: nil, monotony: nil, weekLoad: 0, prevWeekLoad: 0, ramp: nil, status: .building,
                              headline: "No sessions yet", detail: "Record a few sessions and Luma will track how your training load is building.",
                              ready: false, historyDays: 0)
         }
@@ -128,30 +136,46 @@ public enum LoadModel {
         let acwr: Double? = fitness > 1 ? fatigue / fitness : nil
         let ramp: Double? = days.count > 7 ? fitness - days[days.count - 8].fitness : nil
 
+        // The usual week: the middle one of up to six whole weeks before this one.
+        var earlier: [Double] = []
+        var rest = Array(days.dropLast(7))
+        while rest.count >= 7, earlier.count < 6 {
+            earlier.append(rest.suffix(7).reduce(0) { $0 + $1.load })
+            rest.removeLast(7)
+        }
+        let usual: Double? = earlier.count >= 3 ? LStat.median(earlier).flatMap { $0 > 0 ? $0 : nil } : nil
+        let share: Double? = usual.map { week / $0 }
+
         let status: LoadStatus
         let headline: String, detail: String
         if !ready {
             status = .building
             headline = "Building a baseline"
-            detail = "\(span) of \(minimumHistory) days recorded. The load ratio becomes meaningful once four weeks of training are in."
-        } else if let a = acwr, a > 1.5 {
+            detail = "\(span) of \(minimumHistory) days recorded. A week can be set against your usual one once four weeks of training are in."
+        } else if share == nil {
+            // The weeks before this one are empty or nearly so: there is no usual week to set this one against.
+            status = week > 0 ? .building : .fresh
+            headline = week > 0 ? "Building back" : "Fresh"
+            detail = week > 0 ? "The weeks before this one hold too little training to set this week against. Build back gradually."
+                              : "No training load in the last weeks. Fitness fades when that lasts, so start back gently."
+        } else if let s = share, s > 1.5 {
             status = .spike
-            headline = "Load has spiked"
-            detail = String(format: "This week's load is %.0f%% above what your body is used to. Jumps like this are where injuries and illness cluster. Hold volume steady for a few days.", (a - 1) * 100)
-        } else if let a = acwr, a > 1.3 {
+            headline = "Well above your usual week"
+            detail = String(format: "This week's load is %.0f%% above your usual week. That is a lot to take on at once. A few steadier days let it settle.", (s - 1) * 100)
+        } else if let s = share, s > 1.3 {
             status = .pushing
-            headline = "Pushing above your base"
-            detail = "You are overreaching on purpose. Fine for a week before an easier one, not for several in a row."
-        } else if let a = acwr, a < 0.8 {
+            headline = "Above your usual week"
+            detail = "A heavier week than you are used to. Fine before an easier one, not for several in a row."
+        } else if let s = share, s < 0.7 {
             status = .fresh
             headline = "Fresh"
-            detail = "Load is well under your recent normal. Good before a race or test; if it lasts beyond two weeks, fitness starts to fade."
+            detail = "Load is well under your usual week. Good before a race or test; if it lasts beyond two weeks, fitness starts to fade."
         } else {
             status = .productive
             headline = "Productive"
-            detail = "Load is building at a rate your body is prepared for."
+            detail = "This week's load sits in the range your body is used to."
         }
-        return LoadState(days: days, acwr: acwr, monotony: monotony, weekLoad: week, prevWeekLoad: prevWeek, ramp: ramp,
+        return LoadState(days: days, acwr: acwr, usualWeek: usual, monotony: monotony, weekLoad: week, prevWeekLoad: prevWeek, ramp: ramp,
                          status: status, headline: headline, detail: detail, ready: ready, historyDays: span)
     }
 

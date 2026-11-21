@@ -123,7 +123,10 @@ final class CoachToolTests: XCTestCase {
     func testReadToolsReturnData() {
         let w = world()
         for name in CoachTools.readNames.sorted() {
-            let out = CoachTools.read(name, input: ["start_date": .string(LDate.adding(-13, to: w.today, calendar: cal))], world: w, calendar: cal)
+            // The sums tool has no dates to default to: it is asked for one sum.
+            let input: JSONValue = name == CoachCalc.toolName ? ["operation": "summary", "metric": "hrv"]
+                                                              : ["start_date": .string(LDate.adding(-13, to: w.today, calendar: cal))]
+            let out = CoachTools.read(name, input: input, world: w, calendar: cal)
             XCTAssertNotNil(out, name)
             XCTAssertNil(out?["error"], name)
             XCTAssertGreaterThan(out!.text.count, 20, name)
@@ -140,6 +143,12 @@ final class CoachToolTests: XCTestCase {
     func testReadToolsAreClosedWithoutConsent() {
         let out = CoachTools.read("get_overview", input: .object([:]), world: world(share: false), calendar: cal)
         XCTAssertNotNil(out?["error"])
+        // The sums are worked out from the same records, so they are closed with them.
+        let sums = CoachTools.read(CoachCalc.toolName, input: ["operation": "summary", "metric": "hrv"], world: world(share: false), calendar: cal)
+        XCTAssertNotNil(sums?["error"])
+        let open = CoachTools.read(CoachCalc.toolName, input: ["operation": "summary", "metric": "hrv"], world: world(), calendar: cal)
+        XCTAssertNil(open?["error"])
+        XCTAssertEqual(open?["days_in_period"]?.number, 28)
         XCTAssertTrue(CoachPrompt.system(world: world(share: false), calendar: cal).contains("has not enabled sharing"))
     }
 

@@ -33,6 +33,7 @@ public enum InsightEngine {
 
     public static func build(days: [LDay], today: String, baselines: LBaselines, sleep: SleepSummary, load: LoadState, watch: BodyWatch,
                              trends: [TrendRead], effects: [EffectFinding], links: [LinkFinding], fitness: FitnessState,
+                             regularity: SleepRegularity? = nil, hrv: HRVTrend? = nil,
                              calendar: Calendar = LDate.calendar) -> [Insight] {
         var out: [Insight] = []
 
@@ -77,7 +78,18 @@ public enum InsightEngine {
                                evidence: .series(.sleepHours), priority: 35))
         }
 
-        if let c = sleep.consistency, sleep.nights.count >= 7 {
+        // One readout of how regular sleep is: the published index when there are enough nights for it,
+        // Luma's own figure only until then.
+        if let r = regularity {
+            if r.index < 70 {
+                out.append(Insight(id: "sleep-consistency", topic: .sleep, tone: .caution, title: r.headline,
+                                   body: r.detail + " Regular timing is linked with better health even at the same hours of sleep.",
+                                   evidence: .none, priority: 55))
+            } else if r.index >= 85 {
+                out.append(Insight(id: "sleep-consistency", topic: .sleep, tone: .good, title: r.headline, body: r.detail,
+                                   evidence: .none, priority: 25))
+            }
+        } else if let c = sleep.consistency, sleep.nights.count >= 7 {
             if c < 60 {
                 out.append(Insight(id: "sleep-consistency", topic: .sleep, tone: .caution, title: "Your sleep times are scattered",
                                    body: "Bed and wake times have varied a lot this week (consistency \(LNum.int(c.rounded()))%). Regular timing improves sleep quality even at the same duration.",
@@ -87,6 +99,11 @@ public enum InsightEngine {
                                    body: "Bed and wake times have barely moved this week (consistency \(LNum.int(c.rounded()))%).",
                                    evidence: .none, priority: 25))
             }
+        }
+
+        if let h = hrv, h.ready, h.place != .within, h.daysThere >= 2 {
+            out.append(Insight(id: "hrv-trend", topic: .body, tone: h.place == .below ? .caution : .neutral, title: h.headline, body: h.detail,
+                               evidence: .series(.hrv), priority: h.place == .below ? 70 : 30))
         }
 
         if let j = sleep.socialJetlagMin, abs(j) >= 60 {

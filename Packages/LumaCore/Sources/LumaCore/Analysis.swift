@@ -20,6 +20,12 @@ public struct LumaAnalysis: Sendable {
     public var load: LoadState
     public var watch: BodyWatch
     public var call: DayCall
+    /// The week's HRV against the athlete's own normal band.
+    public var hrvTrend: HRVTrend
+    /// A slow rise in resting heart rate, when there is enough history to judge one.
+    public var restingDrift: RestingDrift?
+    /// The Sleep Regularity Index, when there are enough nights for it.
+    public var regularity: SleepRegularity?
     public var trends: [TrendRead]
     public var fitness: FitnessState
     public var effects: [EffectFinding]
@@ -84,7 +90,10 @@ public struct LumaAnalysis: Sendable {
         // A night with part of its record missing is not compared with the athlete's normal: its resting
         // heart rate and HRV describe only the part that was recorded.
         let judged = !night.isPartial || lastNight?.day != today
-        let assessed: BodyWatch? = judged ? lastNight.map { BodyWatch.assess(day: $0, baselines: baselines) } : BodyWatch(
+        let hrvTrend = HRVTrendModel.build(days: whole, today: reference, calendar: calendar)
+        let restingDrift = judged ? RestingDriftModel.assess(days: whole, today: reference, calendar: calendar) : nil
+        let regularity = SleepRegularityModel.read(sleeps: sleeps, today: today, calendar: calendar)
+        let assessed: BodyWatch? = judged ? lastNight.map { BodyWatch.assess(day: $0, baselines: baselines).adding(restingDrift) } : BodyWatch(
             level: .clear, signals: [], title: "Not assessed",
             detail: "Part of last night's record is missing, so Luma has not compared the night with your normal.")
         let watch = assessed
@@ -92,7 +101,8 @@ public struct LumaAnalysis: Sendable {
         let plannedHard = planned.contains { $0.day == today && $0.status == .planned && $0.intensity == .hard }
         // Only a night that ended today counts as today's recovery; an older one must not drive the call.
         var call = DayCall.make(recovery: todaysRecovery, gap: gap, load: load, sleepDebtMin: sleep.debtMin, watch: lastNight?.day == today ? watch
-                                : BodyWatch(level: .clear, signals: [], title: "", detail: ""), plannedHard: plannedHard)
+                                : BodyWatch(level: .clear, signals: [], title: "", detail: ""), plannedHard: plannedHard,
+                                hrv: lastNight?.day == today ? hrvTrend : nil)
         // A score worked out from part of a night is a rough guide, and the call built on it says so.
         if todaysRecovery != nil, case .cutOff = night { call = call.qualified("This is scored from part of a night, so treat it as a rough guide.") }
         let trends = TrendModel.all(days: whole, today: today, calendar: calendar)
@@ -102,10 +112,12 @@ public struct LumaAnalysis: Sendable {
                                           profile: profile, calendar: calendar)
         let links = EffectModel.links(days: whole, calendar: calendar)
         let insights = InsightEngine.build(days: whole, today: today, baselines: baselines, sleep: sleep, load: load, watch: watch,
-                                           trends: trends, effects: effects, links: links, fitness: fitness, calendar: calendar)
+                                           trends: trends, effects: effects, links: links, fitness: fitness,
+                                           regularity: regularity, hrv: hrvTrend, calendar: calendar)
         return LumaAnalysis(today: today, day: day, lastNight: lastNight, night: night, gap: gap, lastScored: lastScored,
                             baselines: baselines, recovery: recovery, sleep: sleep,
-                            load: load, watch: watch, call: call, trends: trends, fitness: fitness, effects: effects, links: links,
+                            load: load, watch: watch, call: call, hrvTrend: hrvTrend, restingDrift: restingDrift, regularity: regularity,
+                            trends: trends, fitness: fitness, effects: effects, links: links,
                             insights: insights, dayCount: days.count)
     }
 

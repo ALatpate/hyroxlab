@@ -160,8 +160,9 @@ final class DoctorTests: XCTestCase {
         let found = finding(check(steady(), loads: loads), "load")
         let state = LoadModel.compute(loads: loads, today: weekEnd, calendar: calendar)
         XCTAssertEqual(state.status, .spike)
-        XCTAssertEqual(found?.level, (state.acwr ?? 0) >= 2 ? .outside : .watch)
-        XCTAssertEqual(found?.figure, String(format: "%.1f×", state.acwr ?? 0))
+        // The week is set against the usual week, not against a ratio of two moving averages.
+        XCTAssertEqual(found?.level, (state.weekShare ?? 0) >= 2 ? .outside : .watch)
+        XCTAssertEqual(found?.figure, String(format: "%.1f×", state.weekShare ?? 0))
     }
 
     func testTheCheckIsDueFromSundayMidnightForTheWeekJustEnded() {

@@ -118,11 +118,12 @@ public enum CoachTools {
     ]
 
     public static let all: [AITool] = [
+        CoachCalc.tool(),
         AITool(name: "get_overview", description: "Today at a glance: recovery and what drives it, strain so far, last night's sleep, baselines, warning signs, training load, today's plan and nutrition so far. Call this first for any question about how the athlete is doing today."),
         AITool(name: "get_daily_metrics", description: "Daily strap metrics over a date range (up to 180 days): recovery, strain (0–21), sleep hours, HRV, resting HR, respiratory rate, skin temperature deviation, deep and REM minutes, sleep efficiency, steps, active energy.", properties: dateRange, required: ["start_date"]),
         AITool(name: "get_sleep", description: "Night-by-night sleep detail over a date range (up to 60 nights): time asleep, need, debt, score, stages, bed and wake times, efficiency, plus the schedule summary and tonight's recommended bedtime.", properties: dateRange, required: ["start_date"]),
         AITool(name: "get_workouts", description: "Recorded sessions over a date range (up to 200): sport, duration, heart rate, strain, distance, pace, heart-rate zone split.", properties: dateRange.merging(["sport": AISchema.string("Only this sport family", enum: LSportKind.allCases.map { $0.rawValue })]) { a, _ in a }, required: ["start_date"]),
-        AITool(name: "get_training_load", description: "Training load: fitness (42-day), fatigue (7-day), form, load ratio, monotony, weekly totals for 12 weeks, the 4-week training mix by sport and the intensity split."),
+        AITool(name: "get_training_load", description: "Training load: fitness (42-day), fatigue (7-day), form, this week as a share of the usual week, monotony, weekly totals for 12 weeks, the 4-week training mix by sport and the intensity split."),
         AITool(name: "get_trends_and_fitness", description: "Four-week trends in HRV, resting HR, recovery, sleep, respiratory rate and strain with significance, plus aerobic fitness: VO2max estimate, critical speed, running economy, personal bests and race-time predictions."),
         AITool(name: "get_insights", description: "Patterns found in the athlete's own data: the insight feed, measured effects of habits (alcohol, late caffeine, sauna, hard days…) on next-morning metrics, and day-to-day links between metrics."),
         AITool(name: "get_schedule", description: "The training calendar over a date range: planned sessions with their ids and whether each was done, recorded sessions, and the standing weekly routine.", properties: dateRange, required: ["start_date"]),
@@ -194,7 +195,7 @@ public enum CoachTools {
 
     public static let readNames: Set<String> = ["get_overview", "get_daily_metrics", "get_sleep", "get_workouts", "get_training_load",
                                                 "get_trends_and_fitness", "get_insights", "get_schedule", "get_nutrition",
-                                                "get_strength_log", "get_progress", "get_hyrox", "get_checkins"]
+                                                "get_strength_log", "get_progress", "get_hyrox", "get_checkins", CoachCalc.toolName]
 
     /// A short label for a tool call while it runs.
     public static func activity(_ name: String) -> String {
@@ -212,6 +213,8 @@ public enum CoachTools {
         case "get_progress": return "Checking your progress"
         case "get_hyrox": return "Checking HYROX benchmarks"
         case "get_checkins": return "Reading your check-ins"
+        case CoachCalc.toolName: return "Working out the numbers"
+        case AIServerTool.webSearchName: return "Searching the web"
         case "log_food": return "Logging food"
         case "log_supplement": return "Logging supplements"
         case "log_water": return "Logging water"
@@ -326,7 +329,7 @@ public enum CoachTools {
             }
             return ["status": .string(l.status.title), "explanation": .string(l.detail), "ready": .bool(l.ready), "history_days": .number(Double(l.historyDays)),
                     "fitness_42d": .rounded(l.today?.fitness), "fatigue_7d": .rounded(l.today?.fatigue), "form": .rounded(l.today?.form),
-                    "load_ratio_acwr": .rounded(l.acwr, 2), "monotony": .rounded(l.monotony, 2), "this_week_load": .rounded(l.weekLoad, 0),
+                    "this_week_as_share_of_usual_week": .rounded(l.weekShare, 2), "monotony": .rounded(l.monotony, 2), "this_week_load": .rounded(l.weekLoad, 0),
                     "last_week_load": .rounded(l.prevWeekLoad, 0), "weekly_loads_newest_first": .array(weeks),
                     "mix_minutes_4_weeks": .object(Dictionary(mix.map { ($0.kind.rawValue, JSONValue.rounded($0.minutes, 0)) }, uniquingKeysWith: { x, _ in x })),
                     "intensity_split_4_weeks": split,
@@ -440,6 +443,8 @@ public enum CoachTools {
                          "assumption": .optional(r.assumption)]
                     }),
                     "note": "Readiness is indicative: it comes from the athlete's own benchmark and simulation times, not from a lab or race result."]
+        case CoachCalc.toolName:
+            return CoachCalc.run(input, days: w.days, workouts: w.workouts, today: w.today, calendar: calendar)
         case "get_checkins":
             let keys = Set(range(input, world: w, maxDays: 120, calendar: calendar))
             return ["checkins": .array(w.checkIns.filter { keys.contains($0.day) }.sorted { $0.day < $1.day }.map { c -> JSONValue in
@@ -540,7 +545,7 @@ public enum CoachTools {
         o["todays_call"] = call
         o["warning_signs"] = ["level": .string("\(a.watch.level)"), "detail": .string(a.watch.detail)]
         o["sleep_last_night"] = sleep
-        o["training_load"] = ["status": .string(a.load.status.title), "load_ratio": .rounded(a.load.acwr, 2), "ready": .bool(a.load.ready)]
+        o["training_load"] = ["status": .string(a.load.status.title), "week_as_share_of_usual": .rounded(a.load.weekShare, 2), "ready": .bool(a.load.ready)]
         o["today_plan"] = .array(plan)
         o["sessions_recorded_today"] = .array((todaysPlan?.workouts ?? []).map(workoutJSON))
         o["nutrition_today"] = nutrition

@@ -142,7 +142,20 @@ public struct AITool: Equatable, Sendable {
         self.inputSchema = ["type": "object", "properties": .object(properties), "required": .array(required.map { .string($0) })]
     }
 
-    var json: JSONValue { ["name": .string(name), "description": .string(description), "input_schema": inputSchema] }
+    /// Ask the API to hold the model to this tool's schema exactly. Off unless a request turns it on.
+    public var strict = false
+
+    var json: JSONValue {
+        guard strict else { return ["name": .string(name), "description": .string(description), "input_schema": inputSchema] }
+        return ["name": .string(name), "description": .string(description), "input_schema": AISchema.closed(inputSchema), "strict": true]
+    }
+}
+
+/// Tools the API runs itself. Nothing in the app answers them; their results come back in the reply.
+public enum AIServerTool {
+    public static let webSearchName = "web_search"
+    /// Web search, the plain version. No cap on searches is set: the athlete asked for none.
+    public static let webSearch: JSONValue = ["type": "web_search_20250305", "name": .string(webSearchName)]
 }
 
 /// Schema helpers for tool parameters.
@@ -161,6 +174,20 @@ public enum AISchema {
     public static func object(_ properties: [String: JSONValue], required: [String] = []) -> JSONValue {
         ["type": "object", "properties": .object(properties), "required": .array(required.map { .string($0) })]
     }
+
+    /// The same schema with every object closed to keys it does not name, which a strict tool needs.
+    public static func closed(_ schema: JSONValue) -> JSONValue {
+        switch schema {
+        case .object(var o):
+            for (key, value) in o { o[key] = closed(value) }
+            if o["type"]?.string == "object", o["properties"] != nil { o["additionalProperties"] = false }
+            return .object(o)
+        case .array(let items):
+            return .array(items.map(closed))
+        default:
+            return schema
+        }
+    }
 }
 
 public struct AIRequest: Sendable {
@@ -174,11 +201,30 @@ public struct AIRequest: Sendable {
     public var tools: [AITool]
     public var maxTokens: Int
     public var stream: Bool
+    /// Tools the API runs itself, as their raw entries (`AIServerTool`).
+    public var serverTools: [JSONValue] = []
+    /// How much work the model puts in: "low", "medium" or "high". Nil leaves the model's own default.
+    public var effort: String?
+    /// A shape the answer must have (`type: json_schema`). Nil for free text.
+    public var format: JSONValue?
 
     public init(model: String, system: String, messages: [AIMessage], tools: [AITool] = [], maxTokens: Int = 8192, stream: Bool = true) {
         self.model = model; self.system = system; self.messages = messages; self.tools = tools
         self.maxTokens = maxTokens; self.stream = stream
     }
+
+    /// The same request without the extras a model or an older API version might refuse: no effort,
+    /// no fixed shape, no strict tools. Sent once when the first form is turned down, so a refused
+    /// extra cannot cost the athlete the answer.
+    public var plain: AIRequest {
+        var r = self
+        r.effort = nil
+        r.format = nil
+        r.tools = tools.map { var t = $0; t.strict = false; return t }
+        return r
+    }
+
+    public var hasExtras: Bool { effort != nil || format != nil || tools.contains { $0.strict } }
 
     /// The request body. The system prompt and tool list are marked cacheable: they repeat unchanged
     /// on every step of a tool loop. No sampling parameters are sent (the current API rejects them),
@@ -191,7 +237,12 @@ public struct AIRequest: Sendable {
             "messages": .array(messages.map { ["role": .string($0.role), "content": .array($0.content)] }),
         ]
         if stream { o["stream"] = true }
-        if !tools.isEmpty { o["tools"] = .array(tools.map { $0.json }) }
+        let toolList = tools.map { $0.json } + serverTools
+        if !toolList.isEmpty { o["tools"] = .array(toolList) }
+        var config: [String: JSONValue] = [:]
+        if let effort { config["effort"] = .string(effort) }
+        if let format { config["format"] = format }
+        if !config.isEmpty { o["output_config"] = .object(config) }
         return .object(o)
     }
 
@@ -237,7 +288,8 @@ public struct AIStreamAccumulator: Sendable {
             guard let index = event["index"]?.int, let block = event["content_block"] else { return [] }
             while blocks.count <= index { blocks.append(.null) }
             blocks[index] = block
-            if block["type"]?.string == "tool_use", let name = block["name"]?.string { return [.toolStarted(name: name)] }
+            let kind = block["type"]?.string
+            if kind == "tool_use" || kind == "server_tool_use", let name = block["name"]?.string { return [.toolStarted(name: name)] }
         case "content_block_delta":
             guard let index = event["index"]?.int, index < blocks.count, let delta = event["delta"],
                   var o = blocks[index].object else { return [] }
@@ -255,12 +307,17 @@ public struct AIStreamAccumulator: Sendable {
             case "signature_delta":
                 o["signature"] = .string((o["signature"]?.string ?? "") + (delta["signature"]?.string ?? ""))
                 blocks[index] = .object(o)
+            case "citations_delta":
+                if let citation = delta["citation"] {
+                    o["citations"] = .array((o["citations"]?.array ?? []) + [citation])
+                    blocks[index] = .object(o)
+                }
             default:
                 break
             }
         case "content_block_stop":
             guard let index = event["index"]?.int, index < blocks.count, var o = blocks[index].object else { return [] }
-            if o["type"]?.string == "tool_use" {
+            if o["type"]?.string == "tool_use" || o["type"]?.string == "server_tool_use" {
                 let raw = partialJSON[index] ?? ""
                 o["input"] = raw.isEmpty ? (o["input"] ?? .object([:])) : (JSONValue.parse(raw) ?? .object([:]))
                 blocks[index] = .object(o)
@@ -302,6 +359,27 @@ public struct AIStreamAccumulator: Sendable {
             guard b["type"]?.string == "tool_use", let id = b["id"]?.string, let name = b["name"]?.string else { return nil }
             return ToolCall(id: id, name: name, input: b["input"] ?? .object([:]))
         }
+    }
+
+    /// The turn was paused by the API part-way through its own tools. It is carried on by sending the
+    /// conversation back with this turn added, and nothing after it.
+    public var isPaused: Bool { stopReason == "pause_turn" }
+
+    /// Web searches the API ran in this turn.
+    public var searches: Int {
+        blocks.filter { $0["type"]?.string == "server_tool_use" && $0["name"]?.string == AIServerTool.webSearchName }.count
+    }
+
+    /// Pages a search in this turn brought back, as title and address, without repeats.
+    public var sources: [(title: String, url: String)] {
+        var seen = Set<String>(), out: [(String, String)] = []
+        for block in blocks where block["type"]?.string == "web_search_tool_result" {
+            for item in block["content"]?.array ?? [] {
+                guard let url = item["url"]?.string, seen.insert(url).inserted else { continue }
+                out.append((item["title"]?.string ?? url, url))
+            }
+        }
+        return out.map { (title: $0.0, url: $0.1) }
     }
 
     /// The assistant turn to send back while a tool loop continues: every block, unmodified.
