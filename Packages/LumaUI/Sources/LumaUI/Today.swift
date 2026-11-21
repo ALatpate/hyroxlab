@@ -195,7 +195,7 @@ struct SwitchedOffNote: View {
                 Image(systemName: "bell.slash.fill").font(.system(size: 15, weight: .bold)).foregroundStyle(Luma.sky)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Switched off after the update").font(LumaFont.heading(15)).foregroundStyle(Luma.frost)
-                    Text("Luma has no screen yet for alarms and reminders set up in the earlier version, so what was on there has been switched off: \(live.switchedOff.joined(separator: ", ")).")
+                    Text("These were set up in the earlier version and Luma has no screen for them, so they have been switched off: \(live.switchedOff.joined(separator: ", ")).")
                         .font(LumaFont.body(13.5)).foregroundStyle(Luma.mist).fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)

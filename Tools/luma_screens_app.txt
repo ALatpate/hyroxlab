@@ -24,3 +24,8 @@ app-22-buddy|today.buddy|0|live|8
 app-23-body|fuel.body|0|live|8
 app-24-reminders|you.reminders|0|live|8
 app-25-dose|today.dose|0|live|8
+app-26-alarm|you.alarm|0|live|8
+app-27-strap-b|you.devices|640|live|8
+app-28-strap-c|you.devices|1280|live|8
+app-29-breathing|you.breathing|0|live|8
+app-30-datacheck-b|you.datacheck|1400|live|8

@@ -61,6 +61,9 @@ public struct LumaStrap: Equatable {
     public var firmware: String?
     /// A plain-language hint when pairing needs the athlete to do something.
     public var hint: String?
+    /// A cue of two or three is that many buzzes on this strap (a WHOOP 5.0 or MG). False for a strap that
+    /// buzzes once for longer instead (a WHOOP 4.0).
+    public var buzzesByCount = true
 
     public init() {}
 
@@ -108,6 +111,19 @@ public enum LumaStrapGeneration: String, CaseIterable, Sendable {
     var title: String { self == .four ? "WHOOP 4.0" : "WHOOP 5.0 / MG" }
 }
 
+/// Where the strap stands with the wake time. Only what the app knows it did is stated: that the strap
+/// was told is known, that it will buzz is not.
+public enum LumaStrapAlarm: Equatable, Sendable {
+    /// No strap is paired.
+    case none
+    /// A strap whose own alarm is still a trial, with the trial switched off: it is not asked to buzz.
+    case notAsked
+    /// It has not been told this wake time yet. It is told when it is next connected with Luma running.
+    case waiting
+    /// It has been told this wake time.
+    case told
+}
+
 /// The wake alarm as it stands: what was asked for, and what will happen when it is next due. Every
 /// reading on the alarm screen comes from this one, worked out in one place by the app.
 public struct LumaAlarmState: Equatable, Sendable {
@@ -118,19 +134,23 @@ public struct LumaAlarmState: Equatable, Sendable {
     public var weekdays: Set<Int> = []
     /// When it is next due. Nil when it is off.
     public var next: Date?
-    /// The strap itself will buzz then.
-    public var strapWillBuzz = false
+    /// Where the strap stands with that time.
+    public var strap: LumaStrapAlarm = .none
     /// On this strap the strap's own alarm is still a trial.
     public var strapIsTrial = false
     /// The athlete has switched that trial on.
     public var trialOn = false
     /// The phone will show a notification then.
     public var phoneWillNotify = false
+    /// The strap could not be reached when its alarm was taken off, so it may still buzz at the time
+    /// it was last told. It is told to stop when it next connects.
+    public var strapOwesStop = false
 
     public init() {}
 
-    /// Whether anything at all will happen at the time shown. A time is only a promise when it will.
-    public var willGoOff: Bool { on && next != nil && (strapWillBuzz || phoneWillNotify) }
+    /// Whether anything at all is set to happen at the time shown. A time is only a promise when it is:
+    /// a strap that is still waiting to be told does not count.
+    public var willGoOff: Bool { on && next != nil && (strap == .told || phoneWillNotify) }
 }
 
 /// Heart rate shared with gym equipment and other apps, the phone standing in as a standard
@@ -171,7 +191,8 @@ public protocol LumaDeviceControl: AnyObject {
     func forget(_ id: String)
     /// A deliberate buzz the athlete asked for (finding the strap, testing it).
     func buzz()
-    /// A short buzz that marks a moment inside a session: an interval change, the next race segment.
+    /// The buzz that marks a change inside a session: the next interval, the next race segment, go again.
+    /// The same as `cue(.two)`.
     func cue()
     /// Ask the strap for its fast heart-rate stream while a live screen is open.
     func setLiveHeartRate(_ on: Bool)
@@ -181,13 +202,15 @@ public protocol LumaDeviceControl: AnyObject {
     func connectHealth() async
     /// Notifications when the strap's battery runs low.
     func setBatteryAlerts(_ on: Bool)
-    /// One of the cues Luma sends during a session, told apart by feel: one, two or three buzzes.
+    /// One of the cues Luma sends, told apart by feel: one, two or three buzzes on a WHOOP 5.0 or MG, one
+    /// buzz of growing length on a 4.0.
     func cue(_ kind: StrapCue)
     /// Sets the wake alarm, or switches it off. Weekdays: 1 is Monday, 7 is Sunday; none is every day.
     func setAlarm(on: Bool, minutes: Int, weekdays: Set<Int>)
     /// Switches the trial of the strap's own alarm on or off, on straps where it is still a trial.
     func setAlarmTrial(_ on: Bool)
-    /// Shares heart rate with gym equipment and other apps, the phone standing in as a sensor.
+    /// Shares heart rate with gym equipment and other apps, the phone standing in as a sensor, while Luma
+    /// is on screen or recording a session.
     func setBroadcast(_ on: Bool)
     /// Starts recording the strap's raw motion. False when the strap did not take the request.
     func startMotion(note: String) -> Bool
@@ -449,6 +472,8 @@ public final class LumaRouter: ObservableObject {
         case "buddy": show(.buddy)
         case "body": show(.body)
         case "reviews": show(.reviews)
+        case "breathing": show(.breathing)
+        case "alarm": show(.alarm)
         case "go":
             tab = .today
             sheet = .go
@@ -698,6 +723,7 @@ public final class LumaEnv: ObservableObject {
         alarm.minutes = 6 * 60 + 15
         alarm.weekdays = [1, 2, 3, 4, 5]
         alarm.strapIsTrial = true
+        alarm.strap = .notAsked
         alarm.phoneWillNotify = true
         let todayKey = LumaAnalysis.todayKey()
         for offset in 0...7 {

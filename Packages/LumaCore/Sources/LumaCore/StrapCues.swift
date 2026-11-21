@@ -2,13 +2,14 @@ import Foundation
 
 // MARK: - Cues on the wrist
 
-/// The few buzzes Luma sends during a session, told apart by feel alone.
+/// The few buzzes Luma sends, told apart by feel alone. On a WHOOP 5.0 or MG they are one, two or
+/// three buzzes; a 4.0 buzzes once, for longer with each.
 public enum StrapCue: String, Codable, Sendable, CaseIterable {
-    /// One short buzz: a change of interval, breathe in.
+    /// Breathe in.
     case one
-    /// Two short buzzes: back in the zone, go again, breathe out.
+    /// A change inside a session, go again, back in the zone, breathe out.
     case two
-    /// Three buzzes: ease off.
+    /// Ease off: heart rate has stayed above the zone.
     case three
 }
 

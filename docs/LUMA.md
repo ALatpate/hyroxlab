@@ -23,7 +23,8 @@ bridge implements them:
 
 - `LumaDataSource`: days, nights, sessions, heart-rate and HRV series, routes, stress, how far the
   recovery baseline has got, and the plain facts behind the data check.
-- `LumaDeviceControl`: pair, sync, buzz, live heart rate, being on screen, Health access, battery alerts.
+- `LumaDeviceControl`: pair, sync, buzz and cue, live heart rate, being on screen, Health access, battery
+  alerts, the wake alarm, heart rate for gym equipment, and the recording of raw motion.
 - `LumaRecorder`: start, pause and finish a recorded session.
 - `LumaSecrets`: the coach's API key, held in the keychain.
 
@@ -306,8 +307,87 @@ bridge implements them:
   check. It is sent nowhere; the athlete can send the report.
 - **The upstream credit stays.** About carries the open-source licence credit the licence requires.
 - **What the earlier shell did on its own is not left running.** Its first-run screens, update check,
-  coach and banners are marked settled, and automations with no Luma screen (alarm, reminders, haptic
-  nudges) are switched off at launch and named to the athlete once (`LumaBridge`).
+  coach and banners are marked settled, and automations with no Luma screen (reminders, haptic nudges,
+  a wake time of its own for one weekday) are switched off at launch and named to the athlete once
+  (`LumaBridge`).
+- **The wake alarm has one time and one reading.** The alarm is the strap layer's: Luma stores it
+  where that layer keeps it and has that layer act on it (`AppModel.applySmartAlarm`), and sends no
+  command of its own. Every sentence about it is drawn from one value (`LumaAlarmState`, worked out in
+  `LumaBridge.refreshAlarm`), whose next time comes from the function the strap layer itself sets the
+  strap and plans the notification from (`AppModel.nextSmartAlarmDate`). The screen states what the
+  app did, not what the strap will do: the strap is "told" only on the strap layer's own record of
+  its last send (that time, to this strap, over a link that could carry it); otherwise it is waiting
+  to be told, or not asked. A time is shown as a promise only when something is set to happen at it
+  (`willGoOff`), and a strap still waiting does not count. The phone's part is one notification, and
+  the screen says that a Focus can silence it. A time being picked is stored at once and passed to
+  the strap once it has settled, so the strap is not written to for every turn of the wheel.
+- **On a WHOOP 5.0 or MG the strap's own alarm is a trial, behind its own switch.** That switch is
+  the strap layer's `PuffinExperiment.isEnabled`, whose one effect in this tree is to let
+  `BLEManager.armStrapAlarm` send the wake time to such a strap. A second reader of that flag,
+  arriving with a merge from upstream, would ride on a consent given for the alarm alone: check for
+  one at every merge. Switching the trial off takes the strap's alarm off. A stop the strap could not
+  be reached for is said on the screen (`strapOwesStop`) and sent when the strap is next reachable.
+- **A cue is felt, so there are few of them** (`StrapCue`): one for breathe in; two for a change
+  inside a session, go again, back in the zone, and breathe out; three for ease off. They are the
+  strap layer's cue buzz with its count (`AppModel.buzz(loops:)`). On a 5.0 or MG the count is the
+  number of buzzes, on a 4.0 the length of one, and the wording on screen follows the strap
+  (`LumaStrap.cueText`). The zone guard (`ZoneGuard`) speaks after eight seconds above the zone and
+  once more when heart rate is back under it by a margin, and never in an interval session; go-again
+  (`GoAgain`) ends a rest when heart rate has come down, never under 15 seconds and never over three
+  minutes. Both are off until switched on.
+- **Breathing figures are read within one sitting only** (`BreathPace`, `LiveHRV`). Beat-to-beat
+  variation is worked out over the last minute, from intervals each passed on once
+  (`LumaBridge.takeBeats`, keyed on the strap layer's packet count as that layer requires). A sitting
+  sets its first minute against its last, is never compared across days, and is not a medical reading.
+- **Heart rate is on the air only while Luma is on screen or recording a session**
+  (`LumaBridge.applyBroadcast`), through the strap layer's `HrBroadcaster`, which passes on the heart
+  rate the app already has and writes nothing to the strap. It is off until switched on, and the app
+  carries the `bluetooth-peripheral` background mode for this alone.
+- **Raw motion is recorded, not read.** With its switch on, a session records the strap's raw motion
+  through the strap layer's collector (its start and stop commands, its files), with a mark where each
+  part of the session starts (`LumaBridge.startMotion`, `markMotion`). Nothing is worked out from it
+  yet: counting reps or strokes waits for recordings to check a method against, as `AGENTS.md`
+  requires of any signal derived from raw sensor data. A recording stays on the phone until it is
+  shared as a file or deleted.
+- **A led workout is read, shown, then led** (`GuidedWorkout`, `GuidedReading`). A workout that was
+  typed or photographed is read into blocks of steps through a tool with a fixed shape, shown for
+  checking, and can be started only when it has no problems (`GuidedWorkout.problems`). It is recorded
+  like any other session.
+- **A trend says what it is made of, and stays quiet without enough of it.** HRV is the week's mean
+  of the logarithm of the nightly values, set against the athlete's own band (the sixty-day mean, give
+  or take half the day-to-day spread), with its count of nights and no verdict on a week of fewer than
+  three (`HRVTrendModel`). A rise in resting heart rate is a
+  running sum of nights above the usual, capped for each night so that one bad night is not read as a
+  rise, and raised only with three nights above and last night among them (`RestingDriftModel`). Sleep
+  regularity is the share of the day spent in the same state, asleep or awake, as 24 hours earlier
+  (`SleepRegularityModel`). Load is the week against the athlete's own usual week
+  (`LoadState.weekShare`); the acute-to-chronic ratio is not shown as a warning. Sleep stages from the
+  wrist are labelled a rough guide and are no part of Luma's sleep score (`SleepModel.composite`).
+- **What is said about running comes from the runs** (`RunDepth.swift`). Heart rate at the athlete's
+  own easy pace is read only from steady stretches (`EasyPace`). Critical speed is fitted to the
+  fastest efforts found inside the runs of the last sixteen weeks (`CriticalSpeedEfforts`) and
+  resolved once for the screens and the coach (`LumaEnv.criticalSpeed`). Durability is heart rate for
+  the same speed late in a HYROX session against early in it (`Durability`), and the time shares are
+  the session's own segments beside the shares in published results (`TimeSharesModel`).
+- **The coach's extras are each a switch or a fallback.** Searching the web is off until switched on,
+  has no cap, lists what it found under the answer, and is told to keep the athlete out of the search
+  words (`CoachPrompt.webSearch`). Sums are done by a tool, not by the model (`CoachCalc`). When a
+  request is refused over a feature the model does not take (a fixed tool shape, effort, a fixed
+  answer shape), it is sent again without that feature, which is then left out for the rest of the
+  run (`CoachEngine.refused`).
+- **Glimm writes its day once, and learns only what it may** (`GlimmDaily`, `LumaEnv.glimmWriteDay`).
+  Once a day its lines are written from what the day holds, on the athlete's own key; without a key,
+  a connection or the switch it speaks from its fixed lines. Its own notebook is added to, and sent
+  back with a chat, only while learning and the sharing of health data are both on; it holds a fixed
+  number of lines and each can be read and taken out (`GlimmNotebook`). What it is told is kept only
+  once confirmed. A small job it offers (logging water, opening a screen) is done only on a tap
+  (`glimmPerform`). Speech is turned into words on the phone or not at all (`GlimmEars`).
+- **A newer build is looked for only when that is switched on** (`NewBuild`,
+  `LumaEnv.lookForNewerBuild`): one read of the public listing a day, with nothing about the athlete
+  sent. It is off until switched on, and offered once on Today.
+- **None of the strap features above has been felt on a wrist from the working environment.** Cues,
+  the alarm, sharing heart rate and motion recording are built on the strap layer's own calls and
+  compile; what they do on a strap is known only once it has been tried on one.
 - **The coach sends data only with consent.** Requests go from the phone straight to Anthropic with
   the athlete's own key; health data is included only while "Share my health data with the coach" is on.
 - **Demo data carries no personal details.** Screenshots are published to a branch of a public

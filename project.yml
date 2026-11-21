@@ -265,6 +265,10 @@ targets:
           - UIInterfaceOrientationLandscapeRight
         UIBackgroundModes:
           - bluetooth-central
+          # Luma: heart rate shared with gym equipment (the strap layer's HrBroadcaster, switched on in
+          # Luma only while it is on screen or recording a session). Without this mode iOS stops serving
+          # a machine that is already reading the heart rate the moment the screen locks mid-session.
+          - bluetooth-peripheral
           # #524: keep recording an outdoor workout's GPS route while the app is backgrounded (screen off),
           # matching Android's foreground-service capture. Required by GpsWorkoutRecorder's
           # allowsBackgroundLocationUpdates; without this mode iOS crashes when background updates start.
@@ -305,8 +309,8 @@ targets:
         # the mic button is disabled where the locale doesn't support that, never falls back to
         # server transcription. Only the resulting TEXT reaches the provider, via the same channel
         # a typed question already uses.
-        NSSpeechRecognitionUsageDescription: "Luma transcribes your question on this iPhone so you can ask the coach out loud. Audio never leaves your iPhone."
-        NSMicrophoneUsageDescription: "Luma uses the microphone to let you ask the coach a question by voice. The audio is transcribed on this iPhone and never leaves it."
+        NSSpeechRecognitionUsageDescription: "Luma turns what you say into words on this iPhone, so you can talk to your companion or ask the coach out loud. Audio never leaves your iPhone."
+        NSMicrophoneUsageDescription: "Luma uses the microphone when you talk to your companion or ask the coach by voice. What you say is turned into words on this iPhone and the audio never leaves it."
         # Photos of meals, nutrition labels and supplements, taken from the food log and the coach.
         NSCameraUsageDescription: "Luma uses the camera when you photograph a meal, a nutrition label or a supplement to log it. A photo leaves your iPhone only when you send it to the coach."
         # #187: the opt-in AI Coach's "Custom (OpenAI-compatible)" provider can point at a LOCAL LLM on

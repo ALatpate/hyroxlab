@@ -173,10 +173,11 @@ struct AlarmScreen: View {
             }
             outcome(a)
             if a.strapIsTrial { trial(a) }
-            LumaNote("Keep another alarm for anything you cannot miss.")
+            LumaNote("The phone's part is one notification with its usual sound, and a Focus that silences notifications silences it too. Keep another alarm for anything you cannot miss.")
         }
         .onAppear {
-            time = (Calendar.current.startOfDay(for: Date())).addingTimeInterval(Double(a.minutes) * 60)
+            // By the clock, not by seconds from midnight: on a day the clocks change those differ.
+            time = Calendar.current.date(bySettingHour: a.minutes / 60, minute: a.minutes % 60, second: 0, of: Date()) ?? Date()
             days = a.weekdays
         }
         .onChange(of: time) { _, _ in push() }
@@ -215,21 +216,34 @@ struct AlarmScreen: View {
                 LumaLabel("What will happen")
                 if !a.on {
                     Text("The alarm is off.").font(LumaFont.body(15)).foregroundStyle(Luma.mist)
-                } else if let next = a.next, a.willGoOff {
-                    Text(next.formatted(.dateTime.weekday(.wide).hour().minute())).font(LumaFont.title(26)).foregroundStyle(Luma.frost)
-                    happens("waveform", a.strapWillBuzz,
-                            a.strapWillBuzz ? (a.strapIsTrial ? "The strap is asked to buzz. On this strap that is a trial."
-                                                              : "The strap buzzes, even with the phone asleep or Luma closed.")
-                                            : (a.strapIsTrial ? "The strap will not buzz: its own alarm is a trial on this strap, and the trial is off."
-                                                              : "The strap will not buzz."))
+                } else if let next = a.next {
+                    if a.willGoOff {
+                        Text(next.formatted(.dateTime.weekday(.wide).hour().minute())).font(LumaFont.title(26)).foregroundStyle(Luma.frost)
+                    } else {
+                        Text("Nothing is set to go off").font(LumaFont.heading(17)).foregroundStyle(Luma.amber)
+                    }
+                    happens("waveform", a.strap == .told, strapLine(a))
                     happens("bell.fill", a.phoneWillNotify,
-                            a.phoneWillNotify ? "This phone shows a notification." : "No notification: notifications are off for Luma in the phone's Settings.")
+                            a.phoneWillNotify ? "This phone shows a notification, titled Smart alarm." : "No notification: notifications are off for Luma in the phone's Settings.")
                 } else {
-                    Text("Nothing will go off").font(LumaFont.heading(17)).foregroundStyle(Luma.amber)
-                    LumaNote("The strap is not set to buzz and notifications are off for Luma, so nothing would happen at this time. Allow notifications for Luma in the phone's Settings"
-                             + (a.strapIsTrial ? ", or switch on the strap trial below." : "."))
+                    Text("No day is picked for it to go off on.").font(LumaFont.body(15)).foregroundStyle(Luma.mist)
+                }
+                if a.strapOwesStop {
+                    LumaNote("The strap could not be reached when its alarm was taken off, so it may still buzz at the time it was last given. It is told to stop when it next connects.")
                 }
             }
+        }
+    }
+
+    /// The strap's part, said as what the app did: that the strap was told is known, that it buzzes is not.
+    private func strapLine(_ a: LumaAlarmState) -> String {
+        switch a.strap {
+        case .told:
+            return a.strapIsTrial ? "The strap has been told to buzz then. On this strap that is a trial, so it may not."
+                                  : "The strap has been told to buzz then, and can do so with the phone asleep or Luma closed."
+        case .waiting: return "The strap has not been told this time yet. It is told when it is connected with Luma running."
+        case .notAsked: return "The strap is not asked to buzz: on this strap its own alarm is a trial, and the trial is off."
+        case .none: return "No strap is paired, so nothing buzzes on the wrist."
         }
     }
 
@@ -247,7 +261,7 @@ struct AlarmScreen: View {
                     Text("Try the strap's own alarm").font(LumaFont.body(15, .medium)).foregroundStyle(Luma.frost)
                 }
                 .tint(Luma.volt)
-                LumaNote("On a WHOOP 5.0 or MG the strap's own alarm is still a trial: wakes have been reported, and it is not known to work every time. With this on, Luma asks the strap to buzz at the wake time; the notification on the phone comes either way.")
+                LumaNote("On a WHOOP 5.0 or MG the strap's own alarm is still a trial: wakes have been reported, and it is not known to work every time. With this on, Luma tells the strap the wake time; the notification on the phone comes either way.")
             }
         }
     }
@@ -402,13 +416,13 @@ private struct BreathBody: View {
                     Toggle(isOn: $buzz) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Buzz on the strap").font(LumaFont.body(15, .medium)).foregroundStyle(Luma.frost)
-                            Text("One buzz to breathe in, two to breathe out, so you can do this with your eyes closed.")
+                            Text("\(live.strap.cueText(.one).capitalizedFirst) to breathe in, \(live.strap.cueText(.two)) to breathe out, so you can do this with your eyes closed.")
                                 .font(LumaFont.body(12.5)).foregroundStyle(Luma.mist).fixedSize(horizontal: false, vertical: true)
                         }
                     }
                     .tint(Luma.volt)
                 } else {
-                    LumaNote("With the strap paired, it can buzz once to breathe in and twice to breathe out.")
+                    LumaNote("With the strap paired, it can buzz to breathe in and to breathe out.")
                 }
             }
         }
@@ -486,7 +500,7 @@ struct StrapExtras: View {
             }
             .buttonStyle(.plain)
             toggle("Buzz above a heart-rate zone",
-                   "In a steady run or a timed session, not in intervals: three buzzes when your heart rate has stayed above the zone for eight seconds, two when it is back.",
+                   "In a steady run or a timed session, not in intervals: \(live.strap.cueText(.three)) when your heart rate has stayed above the zone for eight seconds, \(live.strap.cueText(.two)) when it is back.",
                    Binding(get: { env.extras.zoneGuard }, set: { on in change { $0.zoneGuard = on } }))
             if env.extras.zoneGuard {
                 VStack(alignment: .leading, spacing: 8) {
@@ -500,7 +514,7 @@ struct StrapExtras: View {
                 .padding(.vertical, 10).padding(.horizontal, 16)
             }
             toggle("Go again by heart rate",
-                   "In the rests of an interval run: two buzzes when your heart rate is back down to \(LNum.int(comeDown)) bpm, in place of a set rest. Never under 15 seconds, never over three minutes.",
+                   "In the rests of an interval run: the buzz to go again comes when your heart rate is back down to \(LNum.int(comeDown)) bpm, in place of a set rest. Never under 15 seconds, never over three minutes.",
                    Binding(get: { env.extras.goAgain }, set: { on in change { $0.goAgain = on } }))
         }
         if !live.strap.secure {
@@ -548,17 +562,17 @@ struct StrapExtras: View {
     private var alarmLine: String {
         let a = live.alarm
         guard a.on else { return "Off" }
-        guard let next = a.next, a.willGoOff else { return "On, but nothing will go off. Open to see why." }
+        guard let next = a.next, a.willGoOff else { return "On, but nothing is set to go off. Open to see why." }
         return "Next: " + next.formatted(.dateTime.weekday(.abbreviated).hour().minute())
     }
 
     private var broadcastLine: String {
         let b = live.broadcast
-        let what = "The phone stands in as a standard heart-rate sensor, so a treadmill, a bike or another app can read your heart rate from it. Works while Luma is open on screen."
+        let what = "Experimental. The phone stands in as a standard heart-rate sensor, so a treadmill, a bike or another app can read your heart rate from it. It is on the air only while Luma is on screen or recording a session, and anything nearby that looks for a heart-rate sensor can read it then."
         guard b.on else { return what }
         if let note = b.note { return note }
-        if b.listeners > 0 { return "On the air, read by \(b.listeners) device\(b.listeners == 1 ? "" : "s"). Look for it under heart-rate sensors on the equipment." }
-        return b.advertising ? "On the air. Look for it under heart-rate sensors on the equipment, with Luma open on screen." : "Starting. " + what
+        if b.listeners > 0 { return "On the air, read by \(b.listeners) device\(b.listeners == 1 ? "" : "s")." }
+        return b.advertising ? "On the air. Look for it under heart-rate sensors on the equipment, with Luma on screen." : "Starting. " + what
     }
 
     private func change(_ edit: (inout LumaExtras) -> Void) {
@@ -577,4 +591,20 @@ struct StrapExtras: View {
         .tint(Luma.volt)
         .padding(.vertical, 11).padding(.horizontal, 16)
     }
+}
+
+extension LumaStrap {
+    /// How a cue feels on this strap, in words: a WHOOP 5.0 or MG buzzes once, twice or three times; a
+    /// 4.0 buzzes once, for longer.
+    func cueText(_ cue: StrapCue) -> String {
+        switch cue {
+        case .one: return buzzesByCount ? "one buzz" : "a short buzz"
+        case .two: return buzzesByCount ? "two buzzes" : "a longer buzz"
+        case .three: return buzzesByCount ? "three buzzes" : "a long buzz"
+        }
+    }
+}
+
+private extension String {
+    var capitalizedFirst: String { prefix(1).uppercased() + dropFirst() }
 }

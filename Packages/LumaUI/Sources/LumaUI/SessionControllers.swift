@@ -353,11 +353,9 @@ final class RunController: ObservableObject {
         guard let p = phase else { return }
         var done = false
         // A rest that ends by heart rate: over once it has come down, or the longest rest has run out.
-        var byHeartRate = false
         if var rule = restRule {
             done = rule.feed(hr: hr.map { Double($0) }, at: elapsed - phaseStartT) != nil
             restRule = rule
-            byHeartRate = true
         } else {
             if let m = p.metres, distanceM - phaseStartD >= m { done = true }
             if let s = p.seconds, elapsed - phaseStartT >= s { done = true }
@@ -375,8 +373,8 @@ final class RunController: ObservableObject {
                 restRule = rule
                 restTarget = LNum.int(rule.targetBpm)
             }
-            // Two buzzes say "go again" after a rest that waited for heart rate; one marks any other change.
-            if byHeartRate { env.device?.cue(.two) } else { env.device?.cue() }
+            // The same buzz for every change, whether a rest ran its time or waited for heart rate.
+            env.device?.cue()
             if recordingMotion { env.device?.markMotion(next.label) }
             let target = next.targetPace.map { " Target " + SessionVoice.pace($0) + "." } ?? ""
             let rest = restTarget.map { " Rest until your heart rate is \($0)." } ?? ""
