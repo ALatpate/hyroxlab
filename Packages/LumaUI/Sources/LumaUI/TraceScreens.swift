@@ -23,7 +23,7 @@ extension LumaEnv {
 }
 
 enum TraceWords {
-    static let what = "Your WHOOP MG has two electrodes in its clasp. Held with a finger and thumb of your other hand, they pick up your heartbeat itself, which gives a heart rate counted beat by beat."
+    static let what = "A WHOOP MG has two electrodes in its clasp. Held with a finger and thumb of your other hand, they pick up your heartbeat itself, which gives a heart rate counted beat by beat."
     static let trial = "A trial. Luma sends the strap the commands that start and stop a reading. Nobody has yet shown from here that they work on this strap's software, so a reading may come back empty."
     static let not = "This is a recording of a signal, not a check of your heart. Luma does not look for rhythm problems, cannot tell you whether a trace is as it should be, and shows nothing the strap's own software concluded. If you are worried about your heart, see a doctor."
     static let hold = "Sit still, arm resting. Hold the clasp between a finger and thumb of your other hand and keep holding until it ends: about 40 seconds, a minute at most."

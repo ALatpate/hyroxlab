@@ -378,8 +378,10 @@ final class LumaBridge: ObservableObject, LumaDeviceControl {
         strap.hint = Self.plain(state.pairingHint ?? state.reconnectGuide)
         // A WHOOP 5.0 or MG repeats a buzz the number of times asked; a 4.0 makes one buzz longer.
         strap.buzzesByCount = device == nil || model.whoop5Detected
-        // Only a strap that has said, itself, that it is an MG is offered the trace from the clasp.
+        // Only a strap that has said, itself, that it is an MG can take a trace from the clasp. The
+        // pairing knows no more than "5.0 or MG", which is enough to show where the trial is.
         strap.hasClasp = model.ble.isWhoop5MG
+        strap.fiveOrMG = device != nil && model.whoop5Detected
         if strap != live.strap { live.strap = strap }
         refreshTrace()
 

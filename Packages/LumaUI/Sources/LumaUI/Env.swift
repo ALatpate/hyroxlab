@@ -66,6 +66,8 @@ public struct LumaStrap: Equatable {
     public var buzzesByCount = true
     /// The strap has said, itself, that it is a WHOOP MG: the one whose clasp can take a trace.
     public var hasClasp = false
+    /// The strap was paired as a WHOOP 5.0 or MG, which the pairing does not tell apart.
+    public var fiveOrMG = false
 
     public init() {}
 

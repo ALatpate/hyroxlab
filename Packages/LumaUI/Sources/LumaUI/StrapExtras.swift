@@ -564,7 +564,9 @@ struct StrapExtras: View {
             }
         }
         .task(id: live.motionRecording) { recordings = await env.device?.motionRecordings() ?? [] }
-        if live.strap.hasClasp {
+        // Offered wherever the strap could be an MG, and to stop a trace left running. Whether it is one
+        // is the strap's to say; until it has, the row says so.
+        if live.strap.hasClasp || live.strap.fiveOrMG || live.trace.on || live.trace.mayStillRun {
             LumaSection(title: "From the clasp")
             LumaGroup {
                 Button { router.push(.trace) } label: {
@@ -577,6 +579,7 @@ struct StrapExtras: View {
 
     private var traceLine: String {
         if live.trace.mayStillRun { return "A trace may still be running. Open to stop it." }
+        if !live.strap.hasClasp { return "A trial, for a WHOOP MG. This strap has not said it is one; it says so once connected and paired." }
         if let last = env.traces.first, let rate = last.beatsAMinute {
             return "A trial. Last: \(rate) beats a minute, \(last.takenAt.formatted(date: .abbreviated, time: .shortened))"
         }

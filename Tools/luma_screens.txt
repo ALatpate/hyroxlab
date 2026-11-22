@@ -122,5 +122,4 @@
 118-trace|you.trace|0|demo|5
 118b-trace-b|you.trace|640|demo|5
 118c-trace-c|you.trace|1280|demo|5
-119-strap-d|you.devices|1900|demo|5
-120-workout-motion|train.workout.motion|900|demo|6
+120-workout-motion|train.workout.motion|560|demo|6
