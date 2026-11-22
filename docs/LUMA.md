@@ -370,8 +370,10 @@ bridge implements them:
   measure of the last reading is on the Data check, because whether a real strap's pieces join is not
   known.
 - **The trace from the clasp is a trial, and is instrumentation only** (`LumaCore/ECGTrace.swift`,
-  `TraceScreens.swift`, `LumaBridge` under "Trace from the clasp"). It is offered only on a strap
-  that has said, itself, that it is a WHOOP MG, and is off until switched on. Luma adds no command: it
+  `TraceScreens.swift`, `LumaBridge` under "Trace from the clasp"). It is off until switched on. Its
+  screen is shown for any strap paired as a 5.0 or MG, which the pairing does not tell apart, and says
+  so; a trace can be asked for only once the strap has said, itself, that it is a WHOOP MG, which is
+  the strap layer's own check (`LumaStrap.hasClasp`). Luma adds no command: it
   uses the strap layer's own attempt (its opt-in, its checks, its start and its stop), and reads the
   trace out of the frames that layer keeps meanwhile. Every send follows a tap and a confirmation;
   the one thing sent without being asked for is a stop, when the trial is switched off, because a
