@@ -306,6 +306,41 @@ final class ECGTests: XCTestCase {
         XCTAssertTrue(kept.beatsAt.allSatisfy { $0 >= 0 && $0 < 6000 })
     }
 
+    func testTheStrapsAnswersArePutInLumasWordsAndNothingElseIsRead() {
+        // The strap layer's report, as it lays one out.
+        let report = """
+        WHOOP MG ECG (Labrador) TURN-ON PROBE
+        Verdict: 12 revision-17 ECG packet(s) decoded. The strap IS producing the filtered stream.
+
+        Commands sent:
+          TOGGLE_LABRADOR_FILTERED(139): SUCCESS(1) — asks for realtime data
+          TOGGLE_LABRADOR_RAW_SAVE(125): FAILURE(0) — configuration
+          TOGGLE_LABRADOR_DATA_GENERATION(124): no reply — asks for realtime data
+          SELECT_WRIST(123): UNSUPPORTED(3) — configuration
+          SOMETHING_NEW(200): result7 — unknown
+
+        ECG-shaped packets seen in 47s: 12
+        Revision-17 packets decoded (type 43, revision 17, both CRCs checked):
+          type=0x2b len=236 seq=4 samples=100 quality=3 presence=1 progress=40 state=1 hr=61 avgHr=0 var=0 classifierRaw=4 unreadable=0x00
+          TOGGLE_LABRADOR_FILTERED(139): SUCCESS(1) — a line that only looks like a command
+
+        This is unvalidated instrumentation, not a medical measurement or a diagnosis.
+        """
+        let answers = ECGReport.answers(from: report)
+        XCTAssertEqual(answers, [
+            "Asking for the trace to be sent: accepted",
+            "Asking the strap to keep its own copy: refused",
+            "Starting the reading: no answer",
+            "Telling the strap which wrist it is on: not something this strap's software does",
+            "Command 200: an answer Luma does not know",
+        ])
+        XCTAssertEqual(ECGReport.headline(from: report), "12 revision-17 ECG packet(s) decoded. The strap IS producing the filtered stream.")
+        // A report with no commands, or one that is not laid out this way, gives nothing rather than a guess.
+        XCTAssertTrue(ECGReport.answers(from: "Commands sent:\n  (none)\n\nECG-shaped packets seen in 30s: 0").isEmpty)
+        XCTAssertTrue(ECGReport.answers(from: "something else entirely").isEmpty)
+        XCTAssertNil(ECGReport.headline(from: "something else entirely"))
+    }
+
     /// What the strap's own software concluded about a trace is not Luma's to show. There is no field
     /// to carry it in, and this is the list of the fields there are: adding one is a decision.
     func testNothingTheStrapConcludedHasAFieldToTravelIn() {

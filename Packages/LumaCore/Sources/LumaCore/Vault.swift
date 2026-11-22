@@ -660,6 +660,8 @@ public final class LumaVault: @unchecked Sendable {
         case "glimm.json": return "Glimm"
         case "breaths.json": return "Breathing sittings"
         case "guided.json": return "Workouts to be led through"
+        case "motion-reads.json": return "Counts from motion"
+        case "traces.json": return "Traces from the clasp"
         default: return name
         }
     }

@@ -490,6 +490,10 @@ final class MotionTests: XCTestCase {
         let refused = MotionRead.make(id: "g", startedAt: Date(timeIntervalSince1970: ramped.start), seconds: 120, marks: [], track: ramped.track)
         XCTAssertEqual(refused.problem, MotionRead.seams)
         XCTAssertTrue(refused.parts.isEmpty)
+        // How the seconds joined is kept either way, for the Data check.
+        XCTAssertGreaterThan(try XCTUnwrap(refused.seamRatio), 5)
+        XCTAssertLessThan(try XCTUnwrap(read.seamRatio), 1.4)
+        XCTAssertNil(empty.seamRatio)
     }
 
     func testNamesPointToTheMovementTheyName() {

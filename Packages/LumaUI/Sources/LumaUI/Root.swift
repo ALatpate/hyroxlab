@@ -334,6 +334,8 @@ struct LumaDestinationView: View {
         case .reminders: RemindersScreen()
         case .breathing: BreathScreen()
         case .alarm: AlarmScreen()
+        case .motion(let id): MotionReadScreen(id: id)
+        case .trace: TraceScreen()
         case .dev(let page): DevWidgetsScreen(page: page)
         }
     }
@@ -475,6 +477,18 @@ enum LumaRoute {
         case "you.alarm": r.open(.today, .alarm)
         case "you.breathing": r.open(.today, .breathing)
         case "you.breathing.live": LumaLaunch.page = 1; r.open(.today, .breathing)
+        case "you.motion":
+            if let first = env.motionReads.first { r.open(.today, .motion(first.id)) } else { r.open(.today, .devices) }
+        case "you.trace": r.open(.today, .trace)
+        case "train.workout.motion":
+            r.tab = .train
+            Task {
+                let all = await env.source.loadWorkouts(days: 60)
+                if let w = all.first(where: { $0.kind == .run }) ?? all.first {
+                    LumaDemoStrap.stage(env, sessionFrom: w.start, to: w.end)
+                    r.push(.workout(w.id))
+                }
+            }
         case "today.newbuild":
             env.newerBuild = ListedBuild(version: "12.1.0", build: 22)
             r.tab = .today

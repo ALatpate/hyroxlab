@@ -314,6 +314,7 @@ final class GuidedController: ObservableObject {
         stretchStart = strap.elapsed
         within = 0
         counted = 0
+        if recordingMotion, let now = current { env.device?.markMotion(now.title) }
         voice.say("Back to \(current?.title ?? "the start").")
     }
 

@@ -34,6 +34,8 @@ struct LumaExtras: Codable, Equatable {
     var newBuildListed: Int?
     /// Records the strap's raw motion with each session. Experimental, off until switched on.
     var motion = false
+    /// Counts steps, strokes and reps from those recordings. Experimental, off until switched on.
+    var motionCounts = false
     /// The coach may search the web. Off until switched on.
     var webSearch = false
     /// Glimm's lines are written afresh each day on the athlete's key, and it says its replies aloud.
@@ -45,6 +47,7 @@ struct LumaExtras: Codable, Equatable {
     enum CodingKeys: String, CodingKey {
         case buddyName, buddyOnToday, reminders, easeSettled, bestLift, bestKg, bestAt, doctorNotify
         case zoneGuard, zoneGuardZone, goAgain, newBuild, newBuildAsked, newBuildLookedAt, newBuildListed, motion, webSearch, glimmFresh, glimmAloud
+        case motionCounts
     }
 
     init(from decoder: Decoder) throws {
@@ -67,6 +70,7 @@ struct LumaExtras: Codable, Equatable {
         newBuildLookedAt = try c.decodeIfPresent(Double.self, forKey: .newBuildLookedAt) ?? 0
         newBuildListed = try c.decodeIfPresent(Int.self, forKey: .newBuildListed)
         motion = try c.decodeIfPresent(Bool.self, forKey: .motion) ?? false
+        motionCounts = try c.decodeIfPresent(Bool.self, forKey: .motionCounts) ?? false
         webSearch = try c.decodeIfPresent(Bool.self, forKey: .webSearch) ?? false
         glimmFresh = try c.decodeIfPresent(Bool.self, forKey: .glimmFresh) ?? true
         glimmAloud = try c.decodeIfPresent(Bool.self, forKey: .glimmAloud) ?? false

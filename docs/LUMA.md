@@ -24,7 +24,8 @@ bridge implements them:
 - `LumaDataSource`: days, nights, sessions, heart-rate and HRV series, routes, stress, how far the
   recovery baseline has got, and the plain facts behind the data check.
 - `LumaDeviceControl`: pair, sync, buzz and cue, live heart rate, being on screen, Health access, battery
-  alerts, the wake alarm, heart rate for gym equipment, and the recording of raw motion.
+  alerts, the wake alarm, heart rate for gym equipment, the recording of raw motion and the reading of
+  it back, and the trial of the trace from the clasp.
 - `LumaRecorder`: start, pause and finish a recorded session.
 - `LumaSecrets`: the coach's API key, held in the keychain.
 
@@ -345,12 +346,48 @@ bridge implements them:
   (`LumaBridge.applyBroadcast`), through the strap layer's `HrBroadcaster`, which passes on the heart
   rate the app already has and writes nothing to the strap. It is off until switched on, and the app
   carries the `bluetooth-peripheral` background mode for this alone.
-- **Raw motion is recorded, not read.** With its switch on, a session records the strap's raw motion
-  through the strap layer's collector (its start and stop commands, its files), with a mark where each
-  part of the session starts (`LumaBridge.startMotion`, `markMotion`). Nothing is worked out from it
-  yet: counting reps or strokes waits for recordings to check a method against, as `AGENTS.md`
-  requires of any signal derived from raw sensor data. A recording stays on the phone until it is
-  shared as a file or deleted.
+- **Raw motion is recorded only when asked, and counted from only as an experiment.** With its
+  switch on, a session records the strap's raw motion through the strap layer's collector (its start
+  and stop commands, its files), with a mark where each part of the session starts, including the
+  first and any part gone back to (`LumaBridge.startMotion`, `markMotion`). A recording stays on the
+  phone until it is shared as a file or deleted.
+- **Counting from motion is an experiment and is held to the rule for derived signals**
+  (`LumaCore/Motion.swift`, `MotionCounts.swift`). It is off until switched on. It counts what
+  repeats in a part of a session: steps as a pace, strokes and reps as a count; a session that marked
+  no parts is split by its motion into running, work and rest, and is said to be. A count shows beside
+  the session, labelled an experiment, and changes nothing in the session's record and feeds nothing
+  else: the session's own figures stay the record. The method is tested against made-up motion at
+  several rates for every kind (`MotionTests`), which is what `AGENTS.md` asks of a signal derived from
+  raw sensor data, and is all it has been tested against. The athlete can enter the real number
+  against a count, and the screen states how far off the counts have been (`MotionChecks`): that, not
+  the tests, is what would show it works.
+- **A recording whose pieces do not join up is not counted from.** The strap sends motion a second at
+  a time and the trace from the clasp about a packet a second, each a fixed number of readings. If the
+  pieces do not join, every join repeats once a second, and a method that looks for what repeats
+  answers sixty a minute, which is a believable stroke rate and a believable heart rate. Both readers
+  measure the joins and refuse the recording when they stand out (`MotionTrack.hasSeams`,
+  `ECGReader.seamLimit`), and both test suites show the sixty appearing without the check. The join
+  measure of the last reading is on the Data check, because whether a real strap's pieces join is not
+  known.
+- **The trace from the clasp is a trial, and is instrumentation only** (`LumaCore/ECGTrace.swift`,
+  `TraceScreens.swift`, `LumaBridge` under "Trace from the clasp"). It is offered only on a strap
+  that has said, itself, that it is a WHOOP MG, and is off until switched on. Luma adds no command: it
+  uses the strap layer's own attempt (its opt-in, its checks, its start and its stop), and reads the
+  trace out of the frames that layer keeps meanwhile. Every send follows a tap and a confirmation;
+  the one thing sent without being asked for is a stop, when the trial is switched off, because a
+  strap left generating is worse than an unasked stop. Telling the strap the wrist is its own step
+  with its own confirmation, because the strap may remember it. A trace is not started while the
+  strap is handing over its history or a session is being recorded, since starting one cuts the
+  first short and shares a stream with the second. The setting on the strap that the strap layer
+  keeps behind a second opt-in (`enable_raw_data_w_ecg`) is not offered in Luma.
+- **Luma gives no verdict on a trace.** It finds the beats, and from them a heart rate and how much
+  the time between beats varied. It never shows, stores or passes on what the strap's own software
+  concluded: the packet handed to LumaCore has no field for it (`ECGPacket`), and a test lists the
+  fields there are. Every reason a trace gives no figure is worded about the reading, never about the
+  heart, and a test holds the words to that (`ECGProblem`). How fast the trace is read is measured
+  from the reading itself, by the phone's clock and by the strap's where they agree, because the strap
+  layer's notes say it is not established; the height of the trace has no unit and is drawn as it
+  came. The screen says it is not a check of the heart and to see a doctor about a worry.
 - **A led workout is read, shown, then led** (`GuidedWorkout`, `GuidedReading`). A workout that was
   typed or photographed is read into blocks of steps through a tool with a fixed shape, shown for
   checking, and can be started only when it has no problems (`GuidedWorkout.problems`). It is recorded
@@ -402,8 +439,12 @@ bridge implements them:
   `LumaEnv.lookForNewerBuild`): one read of the public listing a day, with nothing about the athlete
   sent. It is off until switched on, and offered once on Today.
 - **None of the strap features above has been felt on a wrist from the working environment.** Cues,
-  the alarm, sharing heart rate and motion recording are built on the strap layer's own calls and
-  compile; what they do on a strap is known only once it has been tried on one.
+  the alarm, sharing heart rate, motion recording, counting from motion and the trace from the clasp
+  are built on the strap layer's own calls and compile; what they do on a strap is known only once it
+  has been tried on one. For the trace, the strap layer's own notes say its sequence has not been
+  shown to work on this firmware, so an empty reading is a likely first result and is reported as
+  what it is: the screen lists each command with how the strap answered, and says that silence cannot
+  be told apart from a clasp that was not held.
 - **The coach sends data only with consent.** Requests go from the phone straight to Anthropic with
   the athlete's own key; health data is included only while "Share my health data with the coach" is on.
 - **Demo data carries no personal details.** Screenshots are published to a branch of a public

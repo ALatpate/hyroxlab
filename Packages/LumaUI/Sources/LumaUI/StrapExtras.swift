@@ -525,8 +525,11 @@ struct StrapExtras: View {
             toggle("Share heart rate with gym equipment", broadcastLine,
                    Binding(get: { live.broadcast.on }, set: { env.device?.setBroadcast($0) }))
             toggle("Record motion with sessions",
-                   "Experimental. While a session runs, the strap's raw movement is recorded beside it, to work out later how to count reps and strokes. It uses more strap battery. Nothing is read from it yet.",
+                   "Experimental. While a session runs, the strap's raw movement is recorded beside it, so that steps, strokes and reps can be counted from it. It uses more strap battery.",
                    Binding(get: { env.extras.motion }, set: { on in change { $0.motion = on } }))
+            toggle("Count from motion",
+                   "Experimental, and checked so far only against made-up movement. After a session recorded with motion, Luma counts steps a minute, strokes and reps, and splits a session with no parts into runs, work and rest. The counts show beside the session and change nothing in it.",
+                   Binding(get: { env.extras.motionCounts }, set: { on in change { $0.motionCounts = on } }))
             ForEach(recordings) { r in
                 HStack(spacing: 10) {
                     VStack(alignment: .leading, spacing: 2) {
@@ -535,6 +538,10 @@ struct StrapExtras: View {
                             .font(LumaFont.body(12.5)).foregroundStyle(Luma.mist)
                     }
                     Spacer(minLength: 6)
+                    if env.extras.motionCounts {
+                        Button("Counts") { router.push(.motion(r.id)) }
+                            .font(LumaFont.body(14, .semibold)).foregroundStyle(Luma.volt).buttonStyle(.plain)
+                    }
                     if let url = files[r.id] {
                         ShareLink(item: url) { Text("Share").font(LumaFont.body(14, .semibold)).foregroundStyle(Luma.volt) }
                     } else {
@@ -557,6 +564,23 @@ struct StrapExtras: View {
             }
         }
         .task(id: live.motionRecording) { recordings = await env.device?.motionRecordings() ?? [] }
+        if live.strap.hasClasp {
+            LumaSection(title: "From the clasp")
+            LumaGroup {
+                Button { router.push(.trace) } label: {
+                    LumaRow(symbol: "waveform.path.ecg", symbolColor: Luma.coral, title: "Trace from the clasp", subtitle: traceLine, chevron: true)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private var traceLine: String {
+        if live.trace.mayStillRun { return "A trace may still be running. Open to stop it." }
+        if let last = env.traces.first, let rate = last.beatsAMinute {
+            return "A trial. Last: \(rate) beats a minute, \(last.takenAt.formatted(date: .abbreviated, time: .shortened))"
+        }
+        return live.trace.on ? "A trial, switched on" : "A trial: a heart rate counted beat by beat. Off"
     }
 
     private var alarmLine: String {

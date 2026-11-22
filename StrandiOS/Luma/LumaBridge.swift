@@ -5,6 +5,7 @@ import WidgetKit
 import ActivityKit
 import UIKit
 import UserNotifications
+import Compression
 import WhoopProtocol
 import WhoopStore
 import LumaCore
@@ -51,6 +52,20 @@ final class LumaBridge: ObservableObject, LumaDeviceControl {
     private var motionStore: RawDataSessionStore?
     /// The recording being made, if any.
     private var motionSession: String?
+    /// The trace being taken from the clasp: when it was asked for, and whether the strap layer's frame
+    /// capture was already on before Luma switched it on for the trace.
+    private var traceStart: Date?
+    private var traceHadCapture = false
+    private var traceReading = false
+    private var traceTimeout: Task<Void, Never>?
+    /// The strap has been told a wrist and its answer has not come back yet.
+    private var traceAwaitingWrist = false
+    /// What the last attempt came to: each command and its answer, the wrist last told, anything else
+    /// worth saying, and the strap layer's own headline (for the Data check only).
+    private var traceAnswers: [String] = []
+    private var traceWrist: String?
+    private var traceSaid: String?
+    private var traceHeadline: String?
 
     init(model: AppModel, health: HealthKitBridge, liveActivity: LiveActivityController) {
         self.model = model
@@ -220,6 +235,13 @@ final class LumaBridge: ObservableObject, LumaDeviceControl {
             .sink { [weak self] _ in self?.takeBeats() }
             .store(in: &bag)
 
+        // The strap layer's report of a trace attempt: its commands and how the strap answered them. It
+        // arrives when the strap layer has finished listening, which is what ends a trace.
+        model.live.$ecgProbe.removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] text in self?.traceReported(text) }
+            .store(in: &bag)
+
         // The strap layer tells the strap the wake time once a connection has settled. The alarm's reading
         // is taken a turn later, after it has.
         model.live.$connectSettled.dropFirst()
@@ -356,7 +378,10 @@ final class LumaBridge: ObservableObject, LumaDeviceControl {
         strap.hint = Self.plain(state.pairingHint ?? state.reconnectGuide)
         // A WHOOP 5.0 or MG repeats a buzz the number of times asked; a 4.0 makes one buzz longer.
         strap.buzzesByCount = device == nil || model.whoop5Detected
+        // Only a strap that has said, itself, that it is an MG is offered the trace from the clasp.
+        strap.hasClasp = model.ble.isWhoop5MG
         if strap != live.strap { live.strap = strap }
+        refreshTrace()
 
         if scanning {
             let found = model.ble.discoveredWhoops
@@ -727,9 +752,249 @@ final class LumaBridge: ObservableObject, LumaDeviceControl {
     func motionRecordings() async -> [LumaMotionRecording] {
         motion().sessions.compactMap { session in
             guard let end = session.endedAtMs else { return nil }
+            // The marks Luma wrote as the session went: the start of each part, by its name.
+            let marks = session.events.filter { $0.markerType == "start" }.compactMap { event in
+                event.text.map { MotionMark(at: Double(event.atMs) / 1000, text: $0) }
+            }
             return LumaMotionRecording(id: session.id, startedAt: Date(timeIntervalSince1970: Double(session.startedAtMs) / 1000),
-                                       seconds: Double(end - session.startedAtMs) / 1000, note: session.comment)
+                                       seconds: Double(end - session.startedAtMs) / 1000, note: session.comment, marks: marks)
         }
+    }
+
+    /// The seconds of one recording, read back from the strap layer's own files. Those files are packed;
+    /// they are unpacked here, the way that layer packs them, and read away from the screen.
+    func motionSeconds(_ id: String) async -> [MotionSecond] {
+        let store = motion()
+        guard let session = store.sessions.first(where: { $0.id == id }), let end = session.endedAtMs,
+              let bounds = RawDataCollectorView.fullSecondBounds(fromMs: session.startedAtMs, toMs: end) else { return [] }
+        let files = ImuSessionFileStore.shared.exportSegments(id, from: bounds.from, to: bounds.to).map { $0.data }
+        return await Task.detached(priority: .userInitiated) { () -> [MotionSecond] in
+            var out: [MotionSecond] = []
+            for file in files { out.append(contentsOf: MotionFile.seconds(from: file, inflate: { LumaBridge.unpack($0, $1) })) }
+            return out
+        }.value
+    }
+
+    /// Unpacks one block of a motion file to the size the file says it has, or gives nothing.
+    private nonisolated static func unpack(_ packed: Data, _ size: Int) -> Data? {
+        guard !packed.isEmpty, size > 0, size <= 16 * 1024 * 1024 else { return nil }
+        var output = Data(count: size)
+        let written = output.withUnsafeMutableBytes { (to: UnsafeMutableRawBufferPointer) -> Int in
+            packed.withUnsafeBytes { (from: UnsafeRawBufferPointer) -> Int in
+                guard let target = to.bindMemory(to: UInt8.self).baseAddress, let source = from.bindMemory(to: UInt8.self).baseAddress else { return 0 }
+                return compression_decode_buffer(target, size, source, packed.count, nil, COMPRESSION_ZLIB)
+            }
+        }
+        return written == size ? output : nil
+    }
+
+    // MARK: Trace from the clasp
+    //
+    // A trial of the strap layer's own ECG attempt on a WHOOP MG: its commands, its checks, its stop.
+    // Luma adds no command. It asks the strap layer to start, lets it listen for as long as it listens,
+    // asks it to stop, and reads the trace out of the frames the strap layer kept meanwhile (its own
+    // frame capture, switched on for the length of the trace and put back after).
+    //
+    // Nothing here is sent on its own: each call below is the end of a tap and a confirmation on the
+    // trace screen. The stop is the exception in one direction only: it is also sent when the trial is
+    // switched off, because a strap left generating is worse than an unasked stop.
+    //
+    // Never tried on a strap from here. The strap layer's notes say the same of its own sequence.
+
+    /// Why a trace cannot be asked for just now, checked in the strap layer's own order and then for
+    /// what a trace would disturb: a read of the strap's history, which starting one cuts short, and a
+    /// session being recorded.
+    private func traceBlocked() -> String? {
+        let state = model.live
+        guard PuffinExperiment.ecgEnabled else { return "The trial is switched off." }
+        guard state.connected else { return "The strap is not connected." }
+        guard model.ble.isWhoop5MG else { return "The strap has not said it is a WHOOP MG." }
+        guard state.encryptedBond else { return "The strap is connected but not paired." }
+        if state.backfilling { return "The strap is handing over its history. A trace would cut that short: wait until it has finished." }
+        if recorder.isRunning || motionSession != nil { return "A session is being recorded. Finish it first." }
+        if traceAwaitingWrist { return "Waiting for the strap's answer about the wrist. It takes half a minute." }
+        return nil
+    }
+
+    /// The one reading of where the trial stands.
+    private func refreshTrace() {
+        var t = LumaTraceState()
+        t.on = PuffinExperiment.ecgEnabled
+        t.startedAt = traceStart
+        t.reading = traceReading
+        t.blocked = traceBlocked()
+        t.mayStillRun = model.ble.ecgMayBeRunning && traceStart == nil && !traceReading
+        t.answers = traceAnswers
+        t.wristTold = traceWrist
+        t.said = traceSaid
+        if t != live.trace { live.trace = t }
+    }
+
+    func setTraceTrial(_ on: Bool) {
+        if !on {
+            // The strap layer's stop works with the trial off, so it is sent first and the switch thrown after.
+            if traceStart != nil {
+                endTrace()
+            } else if model.ble.ecgMayBeRunning {
+                model.ecgStopCapture(reportsResult: false)
+            }
+        }
+        UserDefaults.standard.set(on, forKey: PuffinExperiment.ecgKey)
+        refreshTrace()
+    }
+
+    /// Tells the strap which wrist it is on: one command, which the strap may remember. The answer comes
+    /// back in the strap layer's report, half a minute later.
+    func tellWrist(left: Bool) {
+        guard traceStart == nil, !traceReading, traceBlocked() == nil, model.live.ecgProbe != BLEManager.ecgProbeWaiting else {
+            refreshTrace()
+            return
+        }
+        traceAnswers = []
+        traceSaid = nil
+        model.ecgSelectWrist(left ? .left : .right)
+        // The strap layer marks a run as open the moment it takes one. No mark: it sent nothing.
+        guard model.live.ecgProbe == BLEManager.ecgProbeWaiting else {
+            traceSaid = "The wrist was not sent. The strap has to be connected and paired."
+            refreshTrace()
+            return
+        }
+        traceWrist = left ? "left" : "right"
+        traceAwaitingWrist = true
+        refreshTrace()
+    }
+
+    func startTrace() {
+        guard traceStart == nil, !traceReading, traceBlocked() == nil, model.live.ecgProbe != BLEManager.ecgProbeWaiting else {
+            refreshTrace()
+            return
+        }
+        let defaults = UserDefaults.standard
+        traceHadCapture = defaults.bool(forKey: PuffinFrameRecorder.enabledKey)
+        defaults.set(true, forKey: PuffinFrameRecorder.enabledKey)
+        traceAnswers = []
+        traceSaid = nil
+        let asked = Date()
+        model.ecgStartCapture()
+        // The strap layer marks a run as open the moment it takes one. No mark: it sent nothing.
+        guard model.live.ecgProbe == BLEManager.ecgProbeWaiting else {
+            defaults.set(traceHadCapture, forKey: PuffinFrameRecorder.enabledKey)
+            traceSaid = "The request was not sent. The strap has to be connected and paired."
+            refreshTrace()
+            return
+        }
+        traceStart = asked
+        // The strap layer stops listening within a minute and a quarter at the longest. If its report
+        // never comes, the trace is ended anyway, so the strap is not left generating.
+        traceTimeout = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 95_000_000_000)
+            guard !Task.isCancelled else { return }
+            self?.endTrace()
+        }
+        refreshTrace()
+    }
+
+    func stopTrace() {
+        if traceStart != nil {
+            endTrace()
+        } else {
+            // A trace left running by an earlier run of the app: there is nothing to read, only to stop.
+            model.ecgStopCapture(reportsResult: false)
+            refreshTrace()
+        }
+    }
+
+    /// The strap layer's report of an attempt has changed. A report in words ends a trace that is
+    /// running; a report withdrawn while one is running means the link went, which ends it too.
+    private func traceReported(_ text: String?) {
+        guard text != BLEManager.ecgProbeWaiting else { return }
+        guard let text else {
+            // The strap layer withdraws its report when the link goes. Anything else that clears it says
+            // nothing about a trace in progress.
+            traceAwaitingWrist = false
+            if traceStart != nil, !model.live.connected { endTrace() } else { refreshTrace() }
+            return
+        }
+        let answers = ECGReport.answers(from: text)
+        if !answers.isEmpty { traceAnswers = answers }
+        traceHeadline = ECGReport.headline(from: text)
+        traceAwaitingWrist = false
+        if traceStart != nil { endTrace() } else { refreshTrace() }
+    }
+
+    /// Ends the trace being taken: asks the strap to stop, then reads what arrived.
+    private func endTrace() {
+        guard let asked = traceStart else { return }
+        traceStart = nil
+        traceTimeout?.cancel()
+        traceTimeout = nil
+        traceReading = true
+        // Stopped before anything is read. If the stop cannot be sent, the strap layer keeps saying a
+        // trace may still be running, and so does the screen.
+        model.ecgStopCapture(reportsResult: false)
+        refreshTrace()
+        let since = LNum.int(asked.timeIntervalSince1970 * 1000) - 500
+        Task { [weak self] in
+            guard let self else { return }
+            // A moment for the last frames to land, then what the strap layer kept is put on disk.
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            await self.model.ble.flushPuffinCaptures()
+            UserDefaults.standard.set(self.traceHadCapture, forKey: PuffinFrameRecorder.enabledKey)
+            let url = self.model.live.puffinCaptureURL
+            let found = await Task.detached(priority: .userInitiated) { () -> (packets: [ECGPacket], wrist: Int?) in
+                LumaBridge.tracePackets(at: url, since: since)
+            }.value
+            self.env.takeTrace(found.packets, wristHeartRate: found.wrist)
+            self.traceReading = false
+            if found.packets.isEmpty {
+                self.traceSaid = "No trace arrived. Whether the strap ignored the request or the clasp was not being held cannot be told apart from here."
+            }
+            self.refreshTrace()
+        }
+    }
+
+    /// The trace's packets out of the strap layer's capture file: every frame since the trace was asked
+    /// for that passes the strap layer's own checks and decodes as the live trace. Only the readings,
+    /// their order and timing, whether the clasp was touched, and the strap's heart rate are taken; what
+    /// its software concluded stays behind. With them, the heart rate the wrist's light sensor gave as
+    /// those frames arrived.
+    private nonisolated static func tracePackets(at url: URL?, since: Int) -> (packets: [ECGPacket], wrist: Int?) {
+        guard let url, let data = try? Data(contentsOf: url),
+              let records = try? JSONDecoder().decode([PuffinCaptureRecord].self, from: data) else { return ([], nil) }
+        var out: [ECGPacket] = []
+        var wrist: [Int] = []
+        for record in records where record.ok && record.tsMs >= since {
+            guard let frame = bytes(hex: record.hex), let r = Whoop5Ecg.r17FromFrame(frame) else { continue }
+            out.append(ECGPacket(sequence: Int(r.sequence), arrivedMs: record.tsMs,
+                                 strapTime: Double(r.strapSeconds) + Double(r.subseconds) / 32768,
+                                 samples: r.samples.map { Int($0) }, contact: r.presence,
+                                 strapHeartRate: r.liveHR > 0 ? Int(r.liveHR) : nil))
+            if let hr = record.hr, hr > 0 { wrist.append(hr) }
+        }
+        wrist.sort()
+        return (out, wrist.isEmpty ? nil : wrist[wrist.count / 2])
+    }
+
+    private nonisolated static func bytes(hex: String) -> [UInt8]? {
+        let digits = Array(hex.utf8)
+        guard digits.count % 2 == 0 else { return nil }
+        func value(_ c: UInt8) -> UInt8? {
+            switch c {
+            case 48...57: return c - 48
+            case 97...102: return c - 87
+            case 65...70: return c - 55
+            default: return nil
+            }
+        }
+        var out: [UInt8] = []
+        out.reserveCapacity(digits.count / 2)
+        var i = 0
+        while i < digits.count {
+            guard let high = value(digits[i]), let low = value(digits[i + 1]) else { return nil }
+            out.append(high << 4 | low)
+            i += 2
+        }
+        return out
     }
 
     /// One recording as a zip to share: the strap layer's own export (its description of the session,
@@ -894,6 +1159,13 @@ final class LumaBridge: ObservableObject, LumaDeviceControl {
         out.append(LFact(sharing, "Note from the broadcaster", Self.plain(broadcaster?.statusNote) ?? "none"))
         out.append(LFact(sharing, "Motion being recorded", yes(motionSession != nil)))
         out.append(LFact(sharing, "Motion recordings kept", motionStore.map { String($0.sessions.count) } ?? "not opened in this run"))
+
+        let trace = "Trace from the clasp"
+        out.append(LFact(trace, "Trial switched on", yes(PuffinExperiment.ecgEnabled)))
+        out.append(LFact(trace, "The strap has said it is an MG", yes(model.ble.isWhoop5MG)))
+        out.append(LFact(trace, "A trace may still be running on the strap", yes(model.ble.ecgMayBeRunning)))
+        out.append(LFact(trace, "The strap layer's frame capture", yes(defaults.bool(forKey: PuffinFrameRecorder.enabledKey))))
+        out.append(LFact(trace, "The strap layer's last word on an attempt", traceHeadline ?? "none in this run"))
 
         let lock = "Lock Screen and widgets"
         out.append(LFact(lock, "Lock Screen card setting", yes(UnitPrefs.liveActivityEnabled())))

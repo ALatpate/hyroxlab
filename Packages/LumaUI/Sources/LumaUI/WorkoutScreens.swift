@@ -34,6 +34,7 @@ struct WorkoutScreen: View {
                     SessionHeartCard(points: hr, start: w.start, end: w.end, step: Double(Self.bucketSeconds(w)))
                 }
                 zonesCard(w)
+                MotionCard(start: Date(timeIntervalSince1970: w.start), end: Date(timeIntervalSince1970: w.end))
                 if let samples = env.runSamples(for: w.id), samples.count > 10 {
                     SplitsCard(laps: RunAnalytics.laps(samples))
                     if let d = RunAnalytics.decouplingPercent(samples) {
@@ -74,6 +75,8 @@ struct WorkoutScreen: View {
         }
         .task(id: id) {
             guard let w = workout else { return }
+            // Counted from the motion recorded with it, when there is any and counting is switched on.
+            Task { await env.countMotion(from: Date(timeIntervalSince1970: w.start), to: Date(timeIntervalSince1970: w.end), other: w.kind == .run ? .run : .work) }
             hr = await env.source.heartRate(from: w.start, to: w.end, bucketSeconds: Self.bucketSeconds(w))
             route = await env.source.route(for: w)
             gpx = route.count >= 2 ? env.gpxFile(for: w, route: route) : nil
@@ -161,6 +164,7 @@ struct SessionReportScreen: View {
         LumaDetailScreen(title: "Race report", tone: .run) {
             if let s = env.sessions.first(where: { $0.id == id }) {
                 SessionReportView(session: s)
+                if !s.isOfficialRace, let end = s.endedAt { MotionCard(start: s.startedAt, end: end) }
                 if s.isComplete { RaceShareButton(session: s) }
                 if s.isOfficialRace {
                     Button("Correct the times") { router.sheet = .raceEntry(s.id) }.buttonStyle(LumaSecondaryButtonStyle())
@@ -173,6 +177,10 @@ struct SessionReportScreen: View {
             } else {
                 LumaCard { LumaEmpty(symbol: "questionmark.circle", title: "Session not found", message: "It may have been removed.") }
             }
+        }
+        .task(id: id) {
+            guard let s = env.sessions.first(where: { $0.id == id }), !s.isOfficialRace, let end = s.endedAt else { return }
+            await env.countMotion(from: s.startedAt, to: end, other: .work)
         }
     }
 }

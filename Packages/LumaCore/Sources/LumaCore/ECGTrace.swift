@@ -377,3 +377,60 @@ public enum ECGReader {
         return (at, stand)
     }
 }
+
+// MARK: - What the strap answered
+
+/// The strap layer writes a report of each attempt for the people who work on it. Two things are taken
+/// from it and put in Luma's words: each command with how the strap answered, and the headline. The
+/// lines that list the packets are never read here: they carry what the strap's own software concluded.
+public enum ECGReport {
+    /// One line for each command sent: what was asked, and how the strap answered.
+    public static func answers(from report: String) -> [String] {
+        var out: [String] = []
+        var inside = false
+        for raw in report.components(separatedBy: "\n") {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            if line == "Commands sent:" { inside = true; continue }
+            guard inside else { continue }
+            if line.isEmpty { break }
+            // "NAME(124): SUCCESS(1) — a note": the number in the first brackets, the answer after the colon.
+            guard let open = line.firstIndex(of: "("), let close = line[open...].firstIndex(of: ")"),
+                  let number = Int(line[line.index(after: open)..<close]) else { continue }
+            let rest = line[line.index(after: close)...]
+            guard rest.hasPrefix(":") else { continue }
+            var answer = rest.dropFirst().trimmingCharacters(in: .whitespaces)
+            if let dash = answer.range(of: " — ") { answer = String(answer[..<dash.lowerBound]) }
+            out.append(asked(number) + ": " + heard(answer))
+        }
+        return out
+    }
+
+    /// The report's headline, as the strap layer worded it. Shown only on the Data check.
+    public static func headline(from report: String) -> String? {
+        for raw in report.components(separatedBy: "\n") where raw.hasPrefix("Verdict: ") {
+            return String(raw.dropFirst("Verdict: ".count))
+        }
+        return nil
+    }
+
+    static func asked(_ command: Int) -> String {
+        switch command {
+        case 123: return "Telling the strap which wrist it is on"
+        case 139: return "Asking for the trace to be sent"
+        case 125: return "Asking the strap to keep its own copy"
+        case 124: return "Starting the reading"
+        default: return "Command \(command)"
+        }
+    }
+
+    static func heard(_ answer: String) -> String {
+        switch answer {
+        case "SUCCESS(1)": return "accepted"
+        case "FAILURE(0)": return "refused"
+        case "PENDING(2)": return "taken, not yet done"
+        case "UNSUPPORTED(3)": return "not something this strap's software does"
+        case "no reply": return "no answer"
+        default: return "an answer Luma does not know"
+        }
+    }
+}

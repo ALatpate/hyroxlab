@@ -195,6 +195,8 @@ final class RunController: ObservableObject {
         env.device?.setLiveHeartRate(true)
         if env.extras.motion, env.device?.startMotion(note: plan.title) == true { recordingMotion = true }
         if plan.mode == .intervals { buildIntervals() }
+        // The first part is marked like the rest, so that the motion recorded has a name from its start.
+        if recordingMotion, let first = phase { env.device?.markMotion(first.label) }
         if env.isDemo { seedDemo() }
         voice.say(plan.mode == .intervals ? "Intervals. Warm up." : "\(plan.title) started.")
         timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect().sink { [weak self] _ in self?.tick() }
@@ -533,6 +535,7 @@ final class RaceController: ObservableObject {
     func undo() {
         recorder.undoLastAdvance()
         env.upsert(recorder.session)
+        if recordingMotion, let now = current { env.device?.markMotion(now.label) }
         voice.say("Undone. Back to \(current?.label ?? "").")
     }
 

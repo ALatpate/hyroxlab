@@ -1,27 +1,16 @@
-The strap does more, the numbers go deeper, the coach and Glimm are smarter.
-Wake alarm, on the Strap screen: one wake time, the days it goes off on, and a plain reading of what
-is set to happen: the notification on the phone, and whether the strap has been told. On a WHOOP 5.0
-or MG the strap's own alarm is a trial behind its own switch. Keep another alarm for anything you
-cannot miss.
-Breathing, on the Strap screen: paced breathing with a buzz in and out, heart rate and beat-to-beat
-variation as you go.
-Buzzes by heart rate (off until you switch them on): above a heart-rate zone in a steady session,
-and "go again" in the rests of an interval run when your heart rate has come down.
-Led workouts: Go, Lead me through a workout. Type it or photograph it, check what Luma read, and it
-leads you through with a buzz and a spoken cue at every change.
-Heart rate for gym equipment (experimental, off until switched on): the phone stands in as a
-heart-rate sensor for a treadmill, a bike or another app, while Luma is on screen or recording.
-Motion recording (experimental, off until switched on): records the strap's raw movement beside a
-session, to work out later how to count reps and strokes. Nothing is read from it yet.
-Trends: HRV against your own normal band, an early word when resting heart rate creeps up over
-several nights, sleep regularity, and your week's load against your own usual week.
-Running: heart rate at your easy pace run by run, critical speed from your fastest efforts, and for
-HYROX sessions where the time went and how heart rate held late on. A run's route exports as GPX.
-Coach: does its sums with a calculator, plans from more of your numbers, and can search the web
-when you switch that on (it keeps you out of the search words and lists what it found).
-Glimm learns by itself: each day it reads your last two weeks, writes down what it has noticed,
-crosses out what no longer holds and says when it has learned something. Take a note out and it is
-not written again. It also has fresh lines each day, small jobs it does on a tap, and you can talk
-to it aloud (speech is turned into words on the phone).
-New builds: Luma can look once a day for a newer build and say so on Today, if you switch it on.
-Not tried on a strap yet: the buzzes, the alarm, sharing heart rate and motion recording.
+Two experiments: counting from wrist motion, and a trace from the clasp.
+Both are off until you switch them on, on the Strap screen. Neither has been tried on a strap yet.
+Counting from motion: with "Record motion with sessions" and "Count from motion" both on, Luma
+counts from the movement of your wrist after a session: steps a minute in a run, strokes on the
+SkiErg and rower, reps at a station. A session with parts (a simulation, intervals, a led workout)
+is counted part by part. A session with none, such as a class recorded as one piece, is split into
+runs, work and rest. The counts show on the session's screen and under each recording on the Strap
+screen, and change nothing in the session itself.
+It is an estimate, checked so far only against made-up movement. Enter your own number beside a
+count and Luma shows how far off it has been. Walking about between sets is counted with them.
+Trace from the clasp (WHOOP MG only): holding the clasp with your other hand for about 40 seconds
+gives a trace of your heartbeat. Luma counts its beats for a heart rate, and shows how much the time
+between beats varied. It is a trial: the strap may not answer on this software, and the screen says
+what the strap answered either way.
+The trace is a recording, not a check of your heart. Luma does not look for rhythm problems and
+shows nothing the strap's own software concluded. See a doctor about any worry.

@@ -782,6 +782,8 @@ public struct MotionRead: Codable, Equatable, Sendable, Identifiable {
     public var fromMotion: Bool
     /// Why nothing was counted, when nothing was.
     public var problem: String?
+    /// How the recording's seconds joined: about one when they do (`MotionTrack.seamRatio`).
+    public var seamRatio: Double?
 
     public init(id: String, startedAt: Date, seconds: Double, parts: [MotionPart] = [], fromMotion: Bool = false, problem: String? = nil) {
         self.id = id; self.startedAt = startedAt; self.seconds = seconds; self.parts = parts
@@ -803,6 +805,7 @@ public struct MotionRead: Codable, Equatable, Sendable, Identifiable {
                             other: MotionKind = .work) -> MotionRead {
         var read = MotionRead(id: id, startedAt: startedAt, seconds: seconds)
         guard !track.isEmpty else { read.problem = noMotion; return read }
+        read.seamRatio = track.seamRatio
         guard !track.hasSeams else { read.problem = seams; return read }
         let start = startedAt.timeIntervalSince1970, end = start + seconds
         let named = marks.filter { $0.at >= start - 5 && $0.at < end }.sorted { $0.at < $1.at }

@@ -64,6 +64,8 @@ public struct LumaStrap: Equatable {
     /// A cue of two or three is that many buzzes on this strap (a WHOOP 5.0 or MG). False for a strap that
     /// buzzes once for longer instead (a WHOOP 4.0).
     public var buzzesByCount = true
+    /// The strap has said, itself, that it is a WHOOP MG: the one whose clasp can take a trace.
+    public var hasClasp = false
 
     public init() {}
 
@@ -174,10 +176,38 @@ public struct LumaMotionRecording: Identifiable, Equatable, Sendable {
     public var startedAt: Date
     public var seconds: Double
     public var note: String
+    /// The moments the session marked while it was recorded: the start of each of its parts.
+    public var marks: [MotionMark]
 
-    public init(id: String, startedAt: Date, seconds: Double, note: String) {
-        self.id = id; self.startedAt = startedAt; self.seconds = seconds; self.note = note
+    public init(id: String, startedAt: Date, seconds: Double, note: String, marks: [MotionMark] = []) {
+        self.id = id; self.startedAt = startedAt; self.seconds = seconds; self.note = note; self.marks = marks
     }
+
+    public var endedAt: Date { startedAt.addingTimeInterval(seconds) }
+}
+
+/// Where the trial of the trace from the clasp stands. One reading of it, kept by the app.
+public struct LumaTraceState: Equatable, Sendable {
+    /// The trial is switched on.
+    public var on = false
+    /// A trace was asked for at this moment and has not ended.
+    public var startedAt: Date?
+    /// The trace that arrived is being read.
+    public var reading = false
+    /// Why a trace cannot be asked for just now. Nil when it can.
+    public var blocked: String?
+    /// A trace was started on the strap and never seen to stop, so it may still be running.
+    public var mayStillRun = false
+    /// Each command of the last attempt and how the strap answered it, in Luma's words.
+    public var answers: [String] = []
+    /// Which wrist the strap was last told it is on, while the app has been open: "left" or "right".
+    public var wristTold: String?
+    /// Something worth saying about the last attempt that is not a figure.
+    public var said: String?
+
+    public init() {}
+
+    public var running: Bool { startedAt != nil }
 }
 
 /// What Luma can ask the strap and the system to do. Implemented by the app over the strap layer.
@@ -223,6 +253,15 @@ public protocol LumaDeviceControl: AnyObject {
     /// One recording as a file that can be shared.
     func motionFile(_ id: String) async -> URL?
     func deleteMotion(_ id: String) async
+    /// The seconds of one recording, as the strap sent them, for counting from.
+    func motionSeconds(_ id: String) async -> [MotionSecond]
+    /// Switches the trial of the trace from the clasp on or off. Off also stops a trace that may be running.
+    func setTraceTrial(_ on: Bool)
+    /// Tells the strap which wrist it is on, which a trace needs. The strap may remember it.
+    func tellWrist(left: Bool)
+    /// Asks the strap for a trace from the clasp, and ends one.
+    func startTrace()
+    func stopTrace()
 }
 
 public struct LumaRoutePoint: Codable, Equatable, Sendable {
@@ -279,6 +318,7 @@ public final class LumaLive: ObservableObject {
     @Published public var broadcast = LumaBroadcast()
     /// The strap's raw motion is being recorded.
     @Published public var motionRecording = false
+    @Published public var trace = LumaTraceState()
     /// Beat-to-beat intervals in milliseconds, as the strap sends them. Not published: only a screen
     /// that asks for them listens, and nothing is redrawn for a beat.
     public let beats = PassthroughSubject<[Double], Never>()
@@ -341,6 +381,9 @@ public enum LumaDest: Hashable {
     /// Paced breathing with the strap, and the strap's wake alarm.
     case breathing
     case alarm
+    /// What was counted from one motion recording, and the trial of the trace from the clasp.
+    case motion(String)
+    case trace
     /// Development only: the widget design sheets.
     case dev(Int)
 }
@@ -602,6 +645,11 @@ public final class LumaEnv: ObservableObject {
     /// Breathing sittings, newest first, and the workouts last read to be led through.
     @Published var breaths: [BreathOutcome] { didSet { if !adopting, breaths != oldValue { disk.save(breaths, "breaths.json") } } }
     @Published var guided: [GuidedWorkout] { didSet { if !adopting, guided != oldValue { disk.save(guided, "guided.json") } } }
+    /// What was counted from motion recordings, and the traces taken from the clasp, newest first.
+    @Published var motionReads: [MotionRead] { didSet { if !adopting, motionReads != oldValue { disk.save(motionReads, "motion-reads.json") } } }
+    @Published var traces: [ECGRead] { didSet { if !adopting, traces != oldValue { disk.save(traces, "traces.json") } } }
+    /// The recordings being counted from just now, by name.
+    @Published var motionReading: Set<String> = []
     /// What the recordings of recent runs add up to: heart rate at the easy pace, and the fastest
     /// efforts with the critical speed they give. Worked out after a reload, away from the first draw.
     @Published var runDepth = RunDepthState()
@@ -685,6 +733,8 @@ public final class LumaEnv: ObservableObject {
         extras = disk.load(LumaExtras.self, "extras.json") ?? LumaExtras()
         breaths = disk.load([BreathOutcome].self, "breaths.json") ?? []
         guided = disk.load([GuidedWorkout].self, "guided.json") ?? []
+        motionReads = disk.load([MotionRead].self, "motion-reads.json") ?? []
+        traces = disk.load([ECGRead].self, "traces.json") ?? []
         doctorReports = disk.load([DoctorReport].self, "doctor.json") ?? []
         glimm = disk.load(GlimmState.self, "glimm.json") ?? GlimmState()
         benchmarks = disk.load(Benchmarks.self, "benchmarks.json") ?? Benchmarks()
@@ -754,6 +804,7 @@ public final class LumaEnv: ObservableObject {
             // An official race from before both simulations, so the race book has one to show.
             env.saveRace(RaceEntrySheet.demoEntry(format: env.profile.format, sex: env.profile.sex))
             LumaDemoNext.stage(env, source: source)
+            LumaDemoStrap.stage(env)
         }
         return env
     }
@@ -796,6 +847,8 @@ public final class LumaEnv: ObservableObject {
         extras = disk.load(LumaExtras.self, "extras.json") ?? LumaExtras()
         breaths = disk.load([BreathOutcome].self, "breaths.json") ?? []
         guided = disk.load([GuidedWorkout].self, "guided.json") ?? []
+        motionReads = disk.load([MotionRead].self, "motion-reads.json") ?? []
+        traces = disk.load([ECGRead].self, "traces.json") ?? []
         doctorReports = disk.load([DoctorReport].self, "doctor.json") ?? []
         glimm = disk.load(GlimmState.self, "glimm.json") ?? GlimmState()
         benchmarks = disk.load(Benchmarks.self, "benchmarks.json") ?? Benchmarks()

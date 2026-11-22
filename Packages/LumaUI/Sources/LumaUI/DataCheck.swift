@@ -228,6 +228,7 @@ struct DataCheckScreen: View {
         out.append(LFact("Luma", "Record all the time", env.profile.continuousRecording ? "on" : "off"))
         if let c = env.calibration { out.append(LFact("Luma", "Recovery baseline", "\(c.have) of \(c.need) nights")) }
         out.append(LFact("Luma", "Nights marked part recorded", env.nightMarks.isEmpty ? "none" : env.nightMarks.map { $0.day }.joined(separator: ", ")))
+        out.append(contentsOf: env.experimentFacts)
         return out
     }
 
