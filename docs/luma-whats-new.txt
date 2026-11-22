@@ -1,9 +1,10 @@
 The strap does more, the numbers go deeper, the coach and Glimm are smarter.
-Wake alarm: You, Your strap, Wake alarm. One wake time, the days it goes off on, and a plain reading
-of what is set to happen: the notification on the phone, and whether the strap has been told. On a
-WHOOP 5.0 or MG the strap's own alarm is a trial behind its own switch. Keep another alarm for
-anything you cannot miss.
-Breathing: paced breathing with a buzz in and out, heart rate and beat-to-beat variation as you go.
+Wake alarm, on the Strap screen: one wake time, the days it goes off on, and a plain reading of what
+is set to happen: the notification on the phone, and whether the strap has been told. On a WHOOP 5.0
+or MG the strap's own alarm is a trial behind its own switch. Keep another alarm for anything you
+cannot miss.
+Breathing, on the Strap screen: paced breathing with a buzz in and out, heart rate and beat-to-beat
+variation as you go.
 Buzzes by heart rate (off until you switch them on): above a heart-rate zone in a steady session,
 and "go again" in the rests of an interval run when your heart rate has come down.
 Led workouts: Go, Lead me through a workout. Type it or photograph it, check what Luma read, and it
