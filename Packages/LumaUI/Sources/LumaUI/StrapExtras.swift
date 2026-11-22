@@ -228,8 +228,8 @@ struct AlarmScreen: View {
                 } else {
                     Text("No day is picked for it to go off on.").font(LumaFont.body(15)).foregroundStyle(Luma.mist)
                 }
-                if a.strapOwesStop {
-                    LumaNote("The strap could not be reached when its alarm was taken off, so it may still buzz at the time it was last given. It is told to stop when it next connects.")
+                if let old = a.strapStillSet {
+                    LumaNote("The strap could not be reached when its alarm was taken off, so it may still buzz at \(old.formatted(.dateTime.weekday(.abbreviated).hour().minute())). It is told to stop when it next connects.")
                 }
             }
         }
@@ -599,7 +599,7 @@ extension LumaStrap {
     func cueText(_ cue: StrapCue) -> String {
         switch cue {
         case .one: return buzzesByCount ? "one buzz" : "a short buzz"
-        case .two: return buzzesByCount ? "two buzzes" : "a longer buzz"
+        case .two: return buzzesByCount ? "two buzzes" : "a medium buzz"
         case .three: return buzzesByCount ? "three buzzes" : "a long buzz"
         }
     }

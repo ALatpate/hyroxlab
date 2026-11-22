@@ -41,10 +41,16 @@ extension LumaEnv {
         var facts = GlimmBrief.facts(analysis: analysis, planned: planned, workouts: workouts, today: today, shareHealth: share)
         if share { facts.insert("How the day looks: \(look.title). \(look.line)", at: 0) }
         let clock = now.formatted(.dateTime.weekday(.wide)) + ", " + now.formatted(date: .omitted, time: .shortened)
-        // Its own notes came from the day's readings: they go, and are added to, only with leave to share those.
+        // Its own notes came from the athlete's records: they go, and are added to or crossed out, only
+        // with leave to share those. What it learns from, the last two weeks a line a day and what the
+        // app's own analysis has found, goes only while it is learning.
+        let learning = glimm.learns && share
+        let sent = share ? Array(glimm.notebook.suffix(GlimmState.noticedLimit)) : []
         let ask = GlimmDaily.request(day: day, clock: clock, name: profile.name, facts: facts,
-                                     notebook: share ? glimm.notebook.map { $0.text } : [],
-                                     wearing: glimmOutfit(for: look.mood, at: now).name, learns: glimm.learns && share)
+                                     diary: learning ? GlimmBrief.diary(days: days, sleeps: sleeps, workouts: workouts, today: today, shareHealth: share) : [],
+                                     patterns: learning ? GlimmBrief.patterns(analysis.insights, shareHealth: share) : [],
+                                     notebook: sent.map { $0.text }, takenOut: learning ? glimm.takenOut : [],
+                                     wearing: glimmOutfit(for: look.mood, at: now).name, learns: learning)
         Task { [weak self] in
             guard let self else { return }
             guard let raw = try? await self.coach.glimmDay(ask), let parsed = GlimmDaily.parse(raw, day: day) else { return }
@@ -52,9 +58,31 @@ extension LumaEnv {
             var g = self.glimm
             g.lines = parsed.lines
             g.linesAsked = day
-            if share { for note in parsed.noticed { g.notice(note) } }
+            if learning {
+                // The answer names notes by their number in the list it was sent; they are crossed out
+                // by name, so a notebook changed in the meantime cannot lose the wrong line.
+                let outdated = parsed.outdated.compactMap { $0 <= sent.count ? sent[$0 - 1].id : nil }
+                g.learn(noticed: parsed.noticed, crossingOut: outdated)
+            }
             self.glimm = g
         }
+    }
+
+    /// Its notebook has been looked at: what is in it now is no longer new.
+    func glimmNotebookSeen(now: Date = Date()) {
+        guard storesReady, !glimm.unseenNotes.isEmpty else { return }
+        var g = glimm
+        g.notebookSeen = now
+        glimm = g
+    }
+
+    /// Something it suggested remembering was turned down: it is not suggested again.
+    func glimmDeclineProposal(_ text: String) {
+        glimmStage.proposal = nil
+        guard storesReady else { return }
+        var g = glimm
+        g.decline(text)
+        glimm = g
     }
 
     // MARK: Its notebook
@@ -238,22 +266,32 @@ struct GlimmNotebook: View {
 
     var body: some View {
         let notes = env.glimm.notebook
+        // What was new when the screen opened stays marked until it is left.
+        let fresh = Set(env.glimm.unseenNotes.map { $0.id })
         LumaSection(title: "What it has worked out")
         LumaGroup {
             Toggle(isOn: Binding(get: { env.glimm.learns }, set: { env.glimmLearns($0) })) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Let \(env.extras.name) learn by itself").font(LumaFont.body(15, .medium)).foregroundStyle(Luma.frost)
-                    Text("Each day it may write down one or two things it has noticed about your days, and use them in what it says.")
+                    Text("Each day it reads your last two weeks and may write down one or two things it has noticed, cross out a note that no longer holds, and use what it knows in what it says.")
                         .font(LumaFont.body(12.5)).foregroundStyle(Luma.mist).fixedSize(horizontal: false, vertical: true)
                 }
             }
             .tint(Luma.volt)
             .padding(.vertical, 10).padding(.horizontal, 16)
+            if env.glimm.daysLearned > 0 {
+                Text(learnt(notes.count))
+                    .font(LumaFont.body(13, .medium)).foregroundStyle(Luma.volt).fixedSize(horizontal: false, vertical: true)
+                    .padding(.vertical, 6).padding(.horizontal, 16)
+            }
             ForEach(notes.reversed()) { note in
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(note.text).font(LumaFont.body(14.5)).foregroundStyle(Luma.frost).fixedSize(horizontal: false, vertical: true)
-                        Text(note.at.formatted(date: .abbreviated, time: .omitted)).font(LumaFont.body(12)).foregroundStyle(Luma.smoke)
+                        HStack(spacing: 6) {
+                            Text(note.at.formatted(date: .abbreviated, time: .omitted)).font(LumaFont.body(12)).foregroundStyle(Luma.smoke)
+                            if fresh.contains(note.id) { LumaPill(text: "New", color: Luma.volt) }
+                        }
                     }
                     Spacer(minLength: 6)
                     Button { env.glimmForget(note.id) } label: {
@@ -274,6 +312,15 @@ struct GlimmNotebook: View {
         if !notes.isEmpty {
             Button("Empty the notebook") { env.glimmClearNotebook() }.buttonStyle(LumaSecondaryButtonStyle(compact: true))
         }
-        LumaNote("These are its own notes, written with the day's lines on your Anthropic key and kept on this phone. They are written, and sent back with a chat, only while sharing health data with the coach is on. At most \(GlimmState.noticedLimit) are kept; the oldest give way.")
+        LumaNote("These are its own notes, written with the day's lines on your Anthropic key and kept on this phone. To learn, that one request a day carries your last two weeks, a line a day: sleep, recovery and sessions. Notes are written, and sent back with a chat, only while sharing health data with the coach is on. Take one out and it is not written again. At most \(GlimmState.noticedLimit) are kept; the oldest give way.")
+    }
+
+    /// How much it has had to learn from, in plain counts: the days it has read, the notes it holds,
+    /// and the ones it has crossed out itself.
+    private func learnt(_ held: Int) -> String {
+        let g = env.glimm
+        var line = "Learning from \(g.daysLearned) day\(g.daysLearned == 1 ? "" : "s") so far: \(held) note\(held == 1 ? "" : "s") kept"
+        if g.crossedOut > 0 { line += ", \(g.crossedOut) crossed out as your days changed" }
+        return line + "."
     }
 }

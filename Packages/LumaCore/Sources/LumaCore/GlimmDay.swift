@@ -90,6 +90,56 @@ public enum GlimmBrief {
         out.append("Sessions so far this week: \(thisWeek).")
         return Array(out.prefix(limit))
     }
+
+    public static let diaryDays = 14
+    public static let patternLimit = 3
+    private static let dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    private static let monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+    /// The last two weeks, a line a day and the oldest first: when its person slept, how the morning
+    /// read, and what they trained and when. One day says little about anyone; this is what Glimm
+    /// learns the shape of a week from. Like the day's facts it comes from the athlete's records, so it
+    /// is empty unless health data is shared. A day with nothing recorded is left out, so nothing is
+    /// said about it either way.
+    public static func diary(days: [LDay], sleeps: [LSleep], workouts: [LWorkout], today: String, shareHealth: Bool,
+                             calendar: Calendar = LDate.calendar) -> [String] {
+        guard shareHealth else { return [] }
+        func clock(_ at: Double) -> String {
+            let c = calendar.dateComponents([.hour, .minute], from: Date(timeIntervalSince1970: at))
+            return String(format: "%d:%02d", c.hour ?? 0, c.minute ?? 0)
+        }
+        func label(_ key: String) -> String {
+            let p = key.split(separator: "-").compactMap { Int($0) }
+            guard p.count == 3, (1...12).contains(p[1]) else { return key }
+            return "\(dayNames[LDate.weekday(key, calendar: calendar) - 1]) \(p[2]) \(monthNames[p[1] - 1])"
+        }
+        var out: [String] = []
+        for key in LDate.range(ending: today, count: diaryDays, calendar: calendar) {
+            var parts: [String] = []
+            let row = days.last { $0.day == key }
+            if let asleep = row?.sleepMin, asleep > 0 {
+                var part = "asleep \(LFormat.hm(minutes: asleep))"
+                if let night = SleepModel.mainBlock(on: key, sleeps: sleeps) { part += ", to bed \(clock(night.start)), up \(clock(night.end))" }
+                parts.append(part)
+            }
+            if let recovery = row?.recovery { parts.append("recovery \(LNum.int(recovery.rounded()))%") }
+            let done = workouts.filter { LDate.key(Date(timeIntervalSince1970: $0.start), calendar: calendar) == key }.sorted { $0.start < $1.start }
+            for session in done.prefix(3) {
+                parts.append("trained \(session.sport.prefix(40)) \(LNum.int((session.durationS / 60).rounded())) min from \(clock(session.start))")
+            }
+            guard !parts.isEmpty else { continue }
+            out.append("\(label(key)): " + parts.joined(separator: "; ") + ".")
+        }
+        return out
+    }
+
+    /// What the app's own analysis has found in the records, each tested against chance before it is
+    /// shown on the Insights screen. Glimm builds on these, which have the numbers behind them, in
+    /// place of guessing a pattern from a single day. Empty unless health data is shared.
+    public static func patterns(_ insights: [Insight], shareHealth: Bool) -> [String] {
+        guard shareHealth else { return [] }
+        return insights.prefix(patternLimit).map { String($0.title.prefix(160)) }
+    }
 }
 
 // MARK: - The day's own lines
@@ -123,11 +173,26 @@ public struct GlimmDayLines: Codable, Equatable, Sendable {
     }
 }
 
-/// The once-a-day request that writes Glimm's lines for the day and lets it add to its notebook.
+/// What one day of learning changed in Glimm's notebook.
+public struct GlimmLearned: Equatable, Sendable {
+    /// Notes written in.
+    public var added: [String] = []
+    /// Notes crossed out because the days no longer bore them out.
+    public var crossedOut: [String] = []
+
+    public init(added: [String] = [], crossedOut: [String] = []) { self.added = added; self.crossedOut = crossedOut }
+
+    public var isEmpty: Bool { added.isEmpty && crossedOut.isEmpty }
+}
+
+/// The once-a-day request that writes Glimm's lines for the day and lets it keep its notebook: add
+/// what is new, and cross out what the days no longer bear out.
 public enum GlimmDaily {
     public static let lineLimit = 160
     public static let widgetLimit = 60
     public static let noticedLimit = 2
+    /// How many of its own notes one day may cross out, so that one odd answer cannot empty the notebook.
+    public static let outdatedLimit = 2
     public static let noteLength = 140
 
     public static let system: String = {
@@ -138,14 +203,17 @@ public enum GlimmDaily {
 
         Manners that never change: no guilt and no nagging; nothing is ever lost or punished because the user was away; no claim that you and the user have a special or exclusive bond; you are a software companion and do not claim a body, a life or real feelings; never diagnose from a reading and never tell the user to push through pain; say nothing happened unless the facts say so. If there are no health facts, do not mention readings at all.
 
-        The notebook holds what you have worked out about the user so far. Let it shape what you say, as a friend who knows them would, without reciting it back.
+        The notebook holds what you have worked out about the user so far, each note with a number. Let it shape what you say, as a friend who knows them would, without reciting it back.
+
+        The diary is the user's last two weeks, a line a day, and the patterns are what the app's own analysis has found in their records. This is what you learn from. A note is worth writing only when several days of the diary, or a pattern, bear it out: one day is not a habit. Notes in taken_out are ones the user removed: never write those, or anything close to them, again.
 
         Return ONLY a JSON object with these fields:
         - morning: {"text": at most \(lineLimit) characters, "mood": one of \(moods)}. For the start of the day.
         - after_training: the same shape. For after a session today. Write it so it still makes sense if the session was a different one from the one planned.
         - evening: the same shape. For winding down.
         - widget: at most \(widgetLimit) characters, for a small widget. No full stop needed.
-        - noticed: a list of at most \(noticedLimit) short sentences, each at most \(noteLength) characters, with something new you have worked out about the user from today's facts that the notebook does not already hold: a pattern, a preference, a rhythm of their week. Never a diagnosis, never a judgement of them. An empty list when nothing is new, or when the request says learning is off.
+        - noticed: a list of at most \(noticedLimit) short sentences, each at most \(noteLength) characters, with something new you have worked out about the user from the diary, the patterns and today's facts that the notebook does not already hold: a rhythm of their week, a preference, what tends to follow what. Never a diagnosis, never a judgement of them. An empty list when nothing is new, or when the request says learning is off.
+        - outdated: a list of at most \(outdatedLimit) numbers of notebook notes that the diary no longer bears out, or that a note you are adding now says better. An empty list when every note still holds, or when the request says learning is off.
         """
     }()
 
@@ -159,19 +227,27 @@ public enum GlimmDaily {
                 "schema": ["type": "object",
                            "properties": ["morning": line, "after_training": line, "evening": line,
                                           "widget": ["type": "string"],
-                                          "noticed": ["type": "array", "items": ["type": "string"]]],
-                           "required": ["morning", "after_training", "evening", "widget", "noticed"],
+                                          "noticed": ["type": "array", "items": ["type": "string"]],
+                                          "outdated": ["type": "array", "items": ["type": "integer"]]],
+                           "required": ["morning", "after_training", "evening", "widget", "noticed", "outdated"],
                            "additionalProperties": false]]
     }()
 
-    /// The request as the model is given it.
-    public static func request(day: String, clock: String, name: String?, facts: [String], notebook: [String], wearing: String,
-                               learns: Bool) -> String {
+    /// The request as the model is given it. The notebook goes numbered from one, oldest first, so the
+    /// answer can name a note that no longer holds.
+    public static func request(day: String, clock: String, name: String?, facts: [String], diary: [String] = [], patterns: [String] = [],
+                               notebook: [String], takenOut: [String] = [], wearing: String, learns: Bool) -> String {
+        let notes: [JSONValue] = notebook.suffix(GlimmState.noticedLimit).enumerated().map { i, text in
+            .object(["n": .number(Double(i + 1)), "text": .string(String(text.prefix(noteLength)))])
+        }
         var body: [String: JSONValue] = [
             "date": .string(day),
             "clock": .string(clock),
             "facts": .array(facts.prefix(12).map { .string(String($0.prefix(240))) }),
-            "notebook": .array(notebook.suffix(30).map { .string(String($0.prefix(noteLength))) }),
+            "diary": .array(diary.suffix(GlimmBrief.diaryDays).map { .string(String($0.prefix(240))) }),
+            "patterns": .array(patterns.prefix(GlimmBrief.patternLimit).map { .string(String($0.prefix(160))) }),
+            "notebook": .array(notes),
+            "taken_out": .array(takenOut.suffix(GlimmState.takenOutKept).map { .string(String($0.prefix(noteLength))) }),
             "wearing": .string(String(wearing.prefix(160))),
             "learning": .string(learns ? "on" : "off"),
         ]
@@ -179,8 +255,9 @@ public enum GlimmDaily {
         return JSONValue.object(body).text
     }
 
-    /// What came back, checked: three lines Glimm can say, and anything new for the notebook.
-    public static func parse(_ raw: String, day: String) -> (lines: GlimmDayLines, noticed: [String])? {
+    /// What came back, checked: three lines Glimm can say, anything new for the notebook, and the
+    /// numbers of the notes it now takes to be out of date.
+    public static func parse(_ raw: String, day: String) -> (lines: GlimmDayLines, noticed: [String], outdated: [Int])? {
         guard let open = raw.firstIndex(of: "{"), let close = raw.lastIndex(of: "}"), open < close,
               let json = JSONValue.parse(String(raw[open...close])) else { return nil }
         func line(_ key: String) -> GlimmSaying? {
@@ -193,6 +270,11 @@ public enum GlimmDaily {
         if let w = widget { widget = w.isEmpty ? nil : GlimmChat.clip(w, widgetLimit) }
         let noticed = (json["noticed"]?.array ?? []).compactMap { $0.string?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }.prefix(noticedLimit).map { String($0.prefix(noteLength)) }
-        return (GlimmDayLines(day: day, morning: morning, afterTraining: after, evening: evening, widget: widget), Array(noticed))
+        var outdated: [Int] = []
+        for value in json["outdated"]?.array ?? [] {
+            guard let n = value.int, n >= 1, !outdated.contains(n), outdated.count < outdatedLimit else { continue }
+            outdated.append(n)
+        }
+        return (GlimmDayLines(day: day, morning: morning, afterTraining: after, evening: evening, widget: widget), Array(noticed), outdated)
     }
 }

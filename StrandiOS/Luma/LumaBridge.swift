@@ -530,8 +530,9 @@ final class LumaBridge: ObservableObject, LumaDeviceControl {
     private func linkSettled() {
         // The strap's alarm was taken off while the strap was out of reach, and the alarm is on with the
         // trial off: the strap layer sets nothing on this strap now, so nothing would replace what the
-        // strap still holds. It is taken off now that the strap can be reached.
-        if model.ble.disarmPending, model.behavior.smartAlarmEnabled, model.whoop5Detected, !PuffinExperiment.isEnabled {
+        // strap still holds. It is taken off now that the strap can be reached. Only when the record
+        // shows there is something to take off: a stop is not sent on every connection for nothing.
+        if strapStillSet(told: false) != nil, model.behavior.smartAlarmEnabled, model.whoop5Detected, !PuffinExperiment.isEnabled {
             model.ble.disableStrapAlarm()
         }
         refreshAlarm()
@@ -554,9 +555,22 @@ final class LumaBridge: ObservableObject, LumaDeviceControl {
                                                      overrides: WindDownNudge.perDayWakeOverrides)
             alarm.strap = strapAlarm(for: alarm.next)
         }
-        // An alarm the strap has since been given takes the place of the one it was to drop.
-        alarm.strapOwesStop = model.ble.disarmPending && alarm.strap != .told
+        alarm.strapStillSet = strapStillSet(told: alarm.strap == .told)
         if alarm != live.alarm { live.alarm = alarm }
+    }
+
+    /// A wake time the strap may still hold although its alarm was taken off. The strap layer notes a
+    /// stop that found no link whether or not anything was ever set, so that note alone says nothing
+    /// about the strap. It is said only when the same layer's record also shows a wake time that did
+    /// reach this strap and is still to come, and the strap has not been given a newer one since.
+    private func strapStillSet(told: Bool) -> Date? {
+        guard model.ble.disarmPending, !told else { return nil }
+        let defaults = UserDefaults.standard
+        guard defaults.bool(forKey: "alarm.lastArmConnected"),
+              defaults.string(forKey: "alarm.lastArmDeviceId") == model.ble.deviceId,
+              let sent = defaults.object(forKey: "alarm.lastArmSentEpoch") as? Int else { return nil }
+        let time = Date(timeIntervalSince1970: Double(sent))
+        return time > Date() ? time : nil
     }
 
     /// Where the strap stands with a wake time. "Told" is said only on the strap layer's own record of
@@ -870,7 +884,8 @@ final class LumaBridge: ObservableObject, LumaDeviceControl {
         let sent = defaults.object(forKey: "alarm.lastArmSentEpoch") as? Int
         out.append(LFact(wake, "Wake time last sent to a strap", sent.map { stamp(Double($0)) } ?? "none sent"))
         out.append(LFact(wake, "That send had a link to travel on", sent == nil ? "none sent" : yes(defaults.bool(forKey: "alarm.lastArmConnected"))))
-        out.append(LFact(wake, "A stop still owed to the strap", yes(model.ble.disarmPending)))
+        out.append(LFact(wake, "A stop tried with no link, in this run", yes(model.ble.disarmPending)))
+        out.append(LFact(wake, "A wake time the strap may still hold", live.alarm.strapStillSet.map { stamp($0.timeIntervalSince1970) } ?? "none"))
 
         let sharing = "Sharing and motion"
         out.append(LFact(sharing, "Heart rate for gym equipment switched on", yes(HrBroadcaster.isEnabled)))

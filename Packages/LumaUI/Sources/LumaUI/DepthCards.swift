@@ -174,7 +174,7 @@ struct EasyPaceCard: View {
                              color: read.direction == .falling ? Luma.mint : (read.direction == .rising ? Luma.amber : Luma.mist))
                 }
                 LumaLineChart(values: read.points.map { $0.hr }, labels: read.points.map { LumaText.shortDay($0.day) }, color: Luma.coral,
-                              fill: false, height: 130, format: { String(format: "%.0f bpm", $0) })
+                              fill: false, height: 130, format: { String(format: "%.0f", $0) })
                 Text(read.headline).font(LumaFont.heading(16)).foregroundStyle(Luma.frost)
                 LumaNote(read.detail)
                 LumaNote("Read from steady four-minute stretches at your own easy pace in recorded runs, one point a day. The same pace at a lower heart rate means fitter; of the heart-rate measures used to follow training, this one stands out most clearly from its day-to-day noise.")

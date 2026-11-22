@@ -412,7 +412,7 @@ final class GlimmTests: XCTestCase {
 
     func testEveryMomentHasWordsAndNoneStatesAFigure() {
         var moments: [GlimmMoment] = BuddyMood.allCases.map { .state($0) }
-        moments += [.greeting(0), .greeting(1), .greeting(2), .back, .outfitNew, .complimented, .remembered, .forgot, .quietOn, .quietOff, .noKey, .chatFailed]
+        moments += [.greeting(0), .greeting(1), .greeting(2), .back, .outfitNew, .complimented, .remembered, .forgot, .quietOn, .quietOff, .noKey, .chatFailed, .learned]
         moments += [.outfit(.changed), .outfit(.lucky), .outfit(.phase("butter")), .outfit(.favourite("zip-hoodie")), .outfit(.fancy)]
         moments += GlimmContext.allCases.map { .outfit(.setting($0)) }
         moments += ["leaf", "head", "cheek", "belly", "feet", "hand", "hug"].map { .tap($0) }

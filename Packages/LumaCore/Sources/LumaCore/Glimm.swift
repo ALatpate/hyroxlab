@@ -716,10 +716,24 @@ public struct GlimmState: Codable, Equatable, Sendable {
     /// The lines written for one day, and the day they were last asked for.
     public var lines: GlimmDayLines?
     public var linesAsked: String?
+    /// Notes of its own that its person took out, newest last. One is never written again, and the
+    /// day's request names them so nothing close to them is written either.
+    public var takenOut: [String] = []
+    /// How many days it has looked over its person's records with learning on.
+    public var daysLearned = 0
+    /// How many of its own notes it has crossed out itself, because the days stopped bearing them out.
+    public var crossedOut = 0
+    /// When its notebook was last looked at. A note written after that is new to its person.
+    public var notebookSeen: Date?
+    /// Marks of what it suggested remembering and was told not to, so the same thing is not asked
+    /// twice. A mark is a number worked out from the words; the words themselves are not kept.
+    public var declined: [String] = []
 
     /// The source of a line it worked out by itself.
     public static let noticed = "noticed"
     public static let noticedLimit = 30
+    public static let takenOutKept = 20
+    public static let declinedKept = 40
 
     public static let memoryLimit = 60
     public static let memoryLength = 200
@@ -732,6 +746,7 @@ public struct GlimmState: Codable, Equatable, Sendable {
     // wears is its own choice, and a file that still holds one is read as if it did not.
     enum CodingKeys: String, CodingKey {
         case taste, chosen, salts, day, recentTops, feel, lucky, luckyDay, memories, said, chat, quiet, learns, lines, linesAsked
+        case takenOut, daysLearned, crossedOut, notebookSeen, declined
     }
 
     public init(from decoder: Decoder) throws {
@@ -751,6 +766,11 @@ public struct GlimmState: Codable, Equatable, Sendable {
         learns = try c.decodeIfPresent(Bool.self, forKey: .learns) ?? true
         lines = try? c.decodeIfPresent(GlimmDayLines.self, forKey: .lines)
         linesAsked = try c.decodeIfPresent(String.self, forKey: .linesAsked)
+        takenOut = try c.decodeIfPresent([String].self, forKey: .takenOut) ?? []
+        daysLearned = try c.decodeIfPresent(Int.self, forKey: .daysLearned) ?? 0
+        crossedOut = try c.decodeIfPresent(Int.self, forKey: .crossedOut) ?? 0
+        notebookSeen = try c.decodeIfPresent(Date.self, forKey: .notebookSeen)
+        declined = try c.decodeIfPresent([String].self, forKey: .declined) ?? []
         // A piece the wardrobe no longer holds is not worn.
         chosen = chosen.filter { $0.value.isValid }
     }
@@ -855,13 +875,23 @@ public struct GlimmState: Codable, Equatable, Sendable {
         return true
     }
 
-    public mutating func forget(_ id: String) { memories.removeAll { $0.id == id } }
+    /// Takes one line out. One of its own notes taken out by its person is also put on the list of
+    /// what not to write again: taking a note out is how it is told that a note was wrong or unwanted.
+    public mutating func forget(_ id: String) {
+        if let note = memories.first(where: { $0.id == id }), note.source == GlimmState.noticed {
+            takenOut = Array((takenOut.filter { $0.lowercased() != note.text.lowercased() } + [note.text]).suffix(GlimmState.takenOutKept))
+        }
+        memories.removeAll { $0.id == id }
+    }
 
-    /// Something it worked out by itself. Kept only while learning is on, and only so many: the oldest
-    /// of its own notes give way, never what its person told it.
+    /// Something it worked out by itself. Kept only while learning is on, never when its person has
+    /// taken the same note out before, and only so many: the oldest of its own notes give way, never
+    /// what its person told it.
     @discardableResult
     public mutating func notice(_ text: String, now: Date = Date()) -> Bool {
-        guard learns, remember(text, source: GlimmState.noticed, now: now) else { return false }
+        let clean = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard learns, !takenOut.contains(where: { $0.lowercased() == clean }),
+              remember(text, source: GlimmState.noticed, now: now) else { return false }
         // The oldest of its own notes go first, by place and not by name: two notes can share a name.
         var extra = memories.filter { $0.source == GlimmState.noticed }.count - GlimmState.noticedLimit
         guard extra > 0 else { return true }
@@ -880,8 +910,59 @@ public struct GlimmState: Codable, Equatable, Sendable {
     /// Its own notes, oldest first.
     public var notebook: [GlimmMemory] { memories.filter { $0.source == GlimmState.noticed } }
 
-    /// Forget everything it worked out by itself. What it was told stays.
-    public mutating func clearNotebook() { memories.removeAll { $0.source == GlimmState.noticed } }
+    /// One day's learning, applied. The notes it now takes to be out of date are crossed out, by name
+    /// so that a notebook changed since the request was written cannot lose the wrong line; then what
+    /// is new is written in. Only its own notes can be crossed out, and only so many in a day. Nothing
+    /// changes while learning is off. The day counts as a day of learning whether or not it found
+    /// anything.
+    @discardableResult
+    public mutating func learn(noticed: [String], crossingOut ids: [String] = [], now: Date = Date()) -> GlimmLearned {
+        guard learns else { return GlimmLearned() }
+        daysLearned += 1
+        var change = GlimmLearned()
+        for id in ids.prefix(GlimmDaily.outdatedLimit) {
+            guard let i = memories.firstIndex(where: { $0.id == id && $0.source == GlimmState.noticed }) else { continue }
+            change.crossedOut.append(memories[i].text)
+            memories.remove(at: i)
+        }
+        crossedOut += change.crossedOut.count
+        for note in noticed.prefix(GlimmDaily.noticedLimit) {
+            guard notice(note, now: now), let kept = memories.last else { continue }
+            change.added.append(kept.text)
+        }
+        return change
+    }
+
+    /// Its own notes written since its person last looked at the notebook.
+    public var unseenNotes: [GlimmMemory] {
+        guard let seen = notebookSeen else { return notebook }
+        return notebook.filter { $0.at > seen }
+    }
+
+    /// Forget everything it worked out by itself and start again: its notes, what it was told not to
+    /// write, and its counts. What it was told to remember stays.
+    public mutating func clearNotebook() {
+        memories.removeAll { $0.source == GlimmState.noticed }
+        takenOut = []
+        daysLearned = 0
+        crossedOut = 0
+    }
+
+    /// Something it suggested remembering was turned down: it does not suggest the same again.
+    public mutating func decline(_ text: String) {
+        let mark = GlimmState.mark(text)
+        declined = Array((declined.filter { $0 != mark } + [mark]).suffix(GlimmState.declinedKept))
+    }
+
+    public func wasDeclined(_ text: String) -> Bool { declined.contains(GlimmState.mark(text)) }
+
+    /// The mark kept for a suggestion that was turned down: a number worked out from its letters and
+    /// digits, the same on every run. It is the number that is kept, not the words.
+    static func mark(_ text: String) -> String {
+        var words = String.UnicodeScalarView()
+        for scalar in text.lowercased().unicodeScalars where CharacterSet.alphanumerics.contains(scalar) { words.append(scalar) }
+        return String(GlimmStylist.seed(String(words)), radix: 16)
+    }
 
     public mutating func noteSaid(_ id: String) { said = Array((said + [id]).suffix(GlimmState.saidKept)) }
 

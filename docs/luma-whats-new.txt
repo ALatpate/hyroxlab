@@ -18,7 +18,9 @@ Running: heart rate at your easy pace run by run, critical speed from your faste
 HYROX sessions where the time went and how heart rate held late on. A run's route exports as GPX.
 Coach: does its sums with a calculator, plans from more of your numbers, and can search the web
 when you switch that on (it keeps you out of the search words and lists what it found).
-Glimm: fresh lines each day, a notebook of what it has noticed that you can read and empty, small
-jobs it can do on a tap, and you can talk to it aloud (speech is turned into words on the phone).
+Glimm learns by itself: each day it reads your last two weeks, writes down what it has noticed,
+crosses out what no longer holds and says when it has learned something. Take a note out and it is
+not written again. It also has fresh lines each day, small jobs it does on a tap, and you can talk
+to it aloud (speech is turned into words on the phone).
 New builds: Luma can look once a day for a newer build and say so on Today, if you switch it on.
 Not tried on a strap yet: the buzzes, the alarm, sharing heart rate and motion recording.

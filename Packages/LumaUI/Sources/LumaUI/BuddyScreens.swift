@@ -150,6 +150,12 @@ struct BuddyStrip: View {
                     Text(said ?? env.glimmAside(look, now: now))
                         .font(LumaFont.body(13)).foregroundStyle(Luma.mist).fixedSize(horizontal: false, vertical: true)
                         .multilineTextAlignment(.leading)
+                    // It has written in its notebook since that was last looked at.
+                    if env.glimm.learns, !env.glimm.unseenNotes.isEmpty {
+                        Label("Learned something new", systemImage: "book.pages")
+                            .font(LumaFont.body(12, .semibold)).foregroundStyle(Luma.volt)
+                            .padding(.top, 2)
+                    }
                 }
                 Spacer(minLength: 4)
                 Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Luma.smoke)
@@ -206,6 +212,8 @@ private struct BuddyStage: View {
             ears.stop()
             // The next time its screen opens it says how the day stands again.
             stage.greeted = nil
+            // Its notebook has been in front of its person: what was new in it is new no longer.
+            env.glimmNotebookSeen()
         }
         // What is heard is put in the box as it is heard, to be looked at and sent.
         .onChange(of: ears.heard) { _, text in if ears.listening || !text.isEmpty { draft = text } }
@@ -430,7 +438,7 @@ private struct BuddyStage: View {
                         stage.proposal = nil
                     }
                     .buttonStyle(LumaPrimaryButtonStyle(compact: true))
-                    Button("Not this") { stage.proposal = nil }.buttonStyle(LumaSecondaryButtonStyle(compact: true))
+                    Button("Not this") { env.glimmDeclineProposal(proposal) }.buttonStyle(LumaSecondaryButtonStyle(compact: true))
                 }
             }
         }

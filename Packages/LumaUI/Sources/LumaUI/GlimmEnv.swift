@@ -128,6 +128,10 @@ extension LumaEnv {
         g.notice("Trains hardest on Tuesdays and Thursdays.", now: now.addingTimeInterval(-5 * 86_400))
         g.notice("Sleeps about forty minutes longer at weekends.", now: now.addingTimeInterval(-3 * 86_400))
         g.notice("Likes the morning class better than the evening one.", now: now.addingTimeInterval(-86_400))
+        // Three weeks of learning behind it, one note crossed out along the way, the newest not yet looked at.
+        g.daysLearned = 23
+        g.crossedOut = 1
+        g.notebookSeen = now.addingTimeInterval(-2 * 86_400)
         g.lines = GlimmDayLines(day: c.day,
                                 morning: GlimmSaying(text: "Morning. You slept like someone with plans. Shall we go and do them?", mood: .focused),
                                 afterTraining: GlimmSaying(text: "That is the work done. Eat something proper, then let the legs be.", mood: .proud),
@@ -154,7 +158,13 @@ extension LumaEnv {
     /// Not before the day's numbers are in: "no score yet" would be said of a day that has one.
     func glimmGreet(_ look: BuddyLook) {
         guard loaded, glimmStage.greeted != look.mood else { return }
+        let first = glimmStage.greeted == nil
         glimmStage.greeted = look.mood
+        // It has written in its notebook since that was last looked at: it says so, once, as its screen opens.
+        if first, glimm.learns, !glimm.quiet, !glimm.unseenNotes.isEmpty {
+            glimmSay(.learned)
+            return
+        }
         // A line written for today, when one fits the state it is in; its own fixed lines otherwise.
         if let saying = glimmDayLine(for: look) {
             glimmStage.line = GlimmLine(id: "day-" + look.mood.rawValue, text: saying.text)
@@ -296,7 +306,9 @@ extension LumaEnv {
             } else if reply.complimented {
                 self.glimmStage.cue = GlimmCue(name: "shy", at: Date())
             }
-            if let keep = reply.remember, !self.glimm.memories.contains(where: { $0.text.lowercased() == keep.lowercased() }) {
+            // Something already kept, or already turned down, is not asked about again.
+            if let keep = reply.remember, !self.glimm.wasDeclined(keep),
+               !self.glimm.memories.contains(where: { $0.text.lowercased() == keep.lowercased() }) {
                 self.glimmStage.proposal = keep
             }
         }

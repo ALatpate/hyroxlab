@@ -326,7 +326,9 @@ bridge implements them:
   `BLEManager.armStrapAlarm` send the wake time to such a strap. A second reader of that flag,
   arriving with a merge from upstream, would ride on a consent given for the alarm alone: check for
   one at every merge. Switching the trial off takes the strap's alarm off. A stop the strap could not
-  be reached for is said on the screen (`strapOwesStop`) and sent when the strap is next reachable.
+  be reached for is said on the screen and sent when the strap is next reachable, and only on
+  evidence (`LumaBridge.strapStillSet`): the strap layer notes a stop that found no link whether or
+  not anything was ever set, so that note alone is not a reason to say the strap may still buzz.
 - **A cue is felt, so there are few of them** (`StrapCue`): one for breathe in; two for a change
   inside a session, go again, back in the zone, and breathe out; three for ease off. They are the
   strap layer's cue buzz with its count (`AppModel.buzz(loops:)`). On a 5.0 or MG the count is the
@@ -382,6 +384,20 @@ bridge implements them:
   number of lines and each can be read and taken out (`GlimmNotebook`). What it is told is kept only
   once confirmed. A small job it offers (logging water, opening a screen) is done only on a tap
   (`glimmPerform`). Speech is turned into words on the phone or not at all (`GlimmEars`).
+- **Glimm's learning is a notebook kept honest, not a model changed.** Each day's request carries
+  what there is to learn from: the last two weeks, a line a day (`GlimmBrief.diary`), and what the
+  app's own analysis has found in the records (`GlimmBrief.patterns`). Both go only while learning and
+  the sharing of health data are on. The answer may write at most two notes and name at most two of
+  its own notes as out of date, which are then crossed out by name, so that a notebook changed in the
+  meantime cannot lose the wrong line (`GlimmState.learn`). It is told that one day is not a habit.
+  A note its person takes out is never written again, and the request names those so that nothing
+  close to them is written either (`GlimmState.takenOut`); a suggestion its person turns down is not
+  made again, and what is kept of it is a number worked out from its words, not the words
+  (`GlimmState.decline`). What it
+  was told to remember is never crossed out by it. Its screen states in counts what the learning
+  rests on (days read, notes kept, notes crossed out), marks what is new since the notebook was last
+  looked at and says so once, and Today carries a word when there is something new. Emptying the
+  notebook starts all of it again.
 - **A newer build is looked for only when that is switched on** (`NewBuild`,
   `LumaEnv.lookForNewerBuild`): one read of the public listing a day, with nothing about the athlete
   sent. It is off until switched on, and offered once on Today.

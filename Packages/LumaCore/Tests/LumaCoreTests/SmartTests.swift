@@ -240,7 +240,8 @@ final class SmartTests: XCTestCase {
          "after_training":{"text":"That is the work done.","mood":"proud"},
          "evening":{"text":"Wind down, then bed.","mood":"sleepy"},
          "widget":"Tempo day",
-         "noticed":["Trains hardest on Tuesdays.","  ","Prefers the morning for runs.","A third thing."]}
+         "noticed":["Trains hardest on Tuesdays.","  ","Prefers the morning for runs.","A third thing."],
+         "outdated":[3,3,0,"x",7,9]}
         ```
         """#
         let parsed = GlimmDaily.parse(raw, day: today)!
@@ -251,6 +252,8 @@ final class SmartTests: XCTestCase {
         XCTAssertEqual(parsed.lines.widget, "Tempo day")
         // At most two new notes a day, and an empty one is not a note.
         XCTAssertEqual(parsed.noticed, ["Trains hardest on Tuesdays.", "Prefers the morning for runs."])
+        // At most two notes crossed out a day: a number once, never nought or less, never a word.
+        XCTAssertEqual(parsed.outdated, [3, 7])
 
         // The line for the point of the day.
         XCTAssertEqual(parsed.lines.line(hour: 9, trainedToday: false), parsed.lines.morning)
@@ -264,6 +267,7 @@ final class SmartTests: XCTestCase {
         XCTAssertNil(loose.lines.widget)
         XCTAssertLessThanOrEqual(loose.lines.evening.text.count, GlimmDaily.lineLimit)
         XCTAssertTrue(loose.noticed.isEmpty)
+        XCTAssertTrue(loose.outdated.isEmpty)
 
         // A line missing, or no JSON at all: nothing is used, and the fixed lines stay.
         XCTAssertNil(GlimmDaily.parse(#"{"morning":{"text":"Hello.","mood":"steady"},"evening":{"text":"Bye.","mood":"steady"}}"#, day: today))
@@ -278,18 +282,138 @@ final class SmartTests: XCTestCase {
         XCTAssertEqual(json?["first_name"]?.string, "Alex")
         XCTAssertEqual(json?["learning"]?.string, "off")
         XCTAssertEqual(json?["facts"]?.array?.count, 1)
-        XCTAssertEqual(json?["notebook"]?.array?.first?.string, "Trains hardest on Tuesdays.")
+        // The notebook goes numbered from one, so the answer can name a note.
+        XCTAssertEqual(json?["notebook"]?.array?.first?["n"]?.int, 1)
+        XCTAssertEqual(json?["notebook"]?.array?.first?["text"]?.string, "Trains hardest on Tuesdays.")
+        XCTAssertEqual(json?["diary"]?.array?.count, 0)
+        XCTAssertEqual(json?["taken_out"]?.array?.count, 0)
+        let full = JSONValue.parse(GlimmDaily.request(day: today, clock: "Monday morning", name: nil, facts: [],
+                                                      diary: ["Mon 16 Nov: asleep 7h 10m."], patterns: ["Rest day costs your sleep"],
+                                                      notebook: ["One.", "Two."], takenOut: ["Skips Fridays."], wearing: "", learns: true))
+        XCTAssertEqual(full?["diary"]?.array?.first?.string, "Mon 16 Nov: asleep 7h 10m.")
+        XCTAssertEqual(full?["patterns"]?.array?.first?.string, "Rest day costs your sleep")
+        XCTAssertEqual(full?["notebook"]?.array?.last?["n"]?.int, 2)
+        XCTAssertEqual(full?["taken_out"]?.array?.first?.string, "Skips Fridays.")
         let nameless = JSONValue.parse(GlimmDaily.request(day: today, clock: "Monday morning", name: "  ", facts: [], notebook: [], wearing: "", learns: true))
         XCTAssertNil(nameless?["first_name"])
         XCTAssertEqual(nameless?["learning"]?.string, "on")
 
         // The shape the answer is held to names every line.
         XCTAssertEqual(GlimmDaily.format["type"]?.string, "json_schema")
-        XCTAssertEqual(GlimmDaily.format["schema"]?["required"]?.array?.count, 5)
+        XCTAssertEqual(GlimmDaily.format["schema"]?["required"]?.array?.count, 6)
         XCTAssertEqual(GlimmDaily.format["schema"]?["additionalProperties"]?.bool, false)
         // Its manners are in the instructions, not left to chance.
         XCTAssertTrue(GlimmDaily.system.contains("no guilt"))
         XCTAssertTrue(GlimmDaily.system.contains("Never a diagnosis"))
+        // And so is what counts as learnt, and what must not come back.
+        XCTAssertTrue(GlimmDaily.system.contains("one day is not a habit"))
+        XCTAssertTrue(GlimmDaily.system.contains("taken_out"))
+    }
+
+    // MARK: Glimm: what it learns from
+
+    func testTheDiaryIsALineADayAndNeedsLeaveToShare() {
+        let cal = utc()
+        func at(_ day: String, _ hour: Int, _ minute: Int = 0) -> Double {
+            (LDate.startOfDay(day, calendar: cal)?.timeIntervalSince1970 ?? 0) + Double(hour * 3600 + minute * 60)
+        }
+        // 2026-11-16 is a Monday.
+        let days = [LDay(day: "2026-11-15", sleepMin: 505, recovery: 71.4),
+                    LDay(day: "2026-11-16", sleepMin: 430, recovery: 62),
+                    LDay(day: "2026-11-18")]
+        let sleeps = [LSleep(start: at("2026-11-15", 23, 20), end: at("2026-11-16", 6, 45), day: "2026-11-16")]
+        let workouts = [LWorkout(start: at("2026-11-16", 18, 30), end: at("2026-11-16", 19, 18), sport: "Strength", source: "strap", durationS: 2880),
+                        LWorkout(start: at("2026-11-17", 7, 5), end: at("2026-11-17", 7, 45), sport: "Running", source: "strap", durationS: 2400)]
+        let diary = GlimmBrief.diary(days: days, sleeps: sleeps, workouts: workouts, today: "2026-11-18", shareHealth: true, calendar: cal)
+        XCTAssertEqual(diary, [
+            "Sun 15 Nov: asleep 8h 25m; recovery 71%.",
+            "Mon 16 Nov: asleep 7h 10m, to bed 23:20, up 6:45; recovery 62%; trained Strength 48 min from 18:30.",
+            "Tue 17 Nov: trained Running 40 min from 7:05.",
+        ])
+        // A day with nothing recorded is left out, and nothing is older than two weeks.
+        XCTAssertFalse(diary.contains { $0.hasPrefix("Wed 18 Nov") })
+        let later = GlimmBrief.diary(days: days, sleeps: sleeps, workouts: workouts, today: "2026-11-30", shareHealth: true, calendar: cal)
+        XCTAssertEqual(later, ["Tue 17 Nov: trained Running 40 min from 7:05."])
+        // It is the athlete's record: without leave to share, none of it goes.
+        XCTAssertTrue(GlimmBrief.diary(days: days, sleeps: sleeps, workouts: workouts, today: "2026-11-18", shareHealth: false, calendar: cal).isEmpty)
+
+        let found = [Insight(id: "a", topic: .sleep, tone: .caution, title: "Rest day costs your sleep", body: "", evidence: .none, priority: 4),
+                     Insight(id: "b", topic: .habits, tone: .neutral, title: "Late caffeine, lighter sleep", body: "", evidence: .none, priority: 3),
+                     Insight(id: "c", topic: .body, tone: .good, title: "HRV is rising", body: "", evidence: .none, priority: 2),
+                     Insight(id: "d", topic: .body, tone: .good, title: "A fourth", body: "", evidence: .none, priority: 1)]
+        XCTAssertEqual(GlimmBrief.patterns(found, shareHealth: true), ["Rest day costs your sleep", "Late caffeine, lighter sleep", "HRV is rising"])
+        XCTAssertTrue(GlimmBrief.patterns(found, shareHealth: false).isEmpty)
+    }
+
+    func testADaysLearningCrossesOutAddsAndCounts() throws {
+        let t = Date(timeIntervalSince1970: 1_795_000_000)
+        var state = GlimmState()
+        state.remember("Likes the Thursday class", source: "told", now: t)
+        state.notice("Trains hardest on Tuesdays.", now: t)
+        state.notice("Sleeps longer at weekends.", now: t.addingTimeInterval(1))
+        let told = state.memories[0].id, tuesdays = state.notebook[0].id
+
+        // The day crossed one note out and wrote one in. What it was told cannot be crossed out, and a
+        // name that is no longer there changes nothing.
+        let change = state.learn(noticed: ["Runs in the morning, lifts in the evening."], crossingOut: [told, tuesdays, "gone"], now: t.addingTimeInterval(60))
+        XCTAssertEqual(change, GlimmLearned(added: ["Runs in the morning, lifts in the evening."], crossedOut: ["Trains hardest on Tuesdays."]))
+        XCTAssertEqual(state.notebook.map { $0.text }, ["Sleeps longer at weekends.", "Runs in the morning, lifts in the evening."])
+        XCTAssertTrue(state.memories.contains { $0.text == "Likes the Thursday class" })
+        XCTAssertEqual(state.daysLearned, 1)
+        XCTAssertEqual(state.crossedOut, 1)
+
+        // A day that finds nothing is still a day of learning; at most two notes go in a day.
+        XCTAssertTrue(state.learn(noticed: [], now: t.addingTimeInterval(120)).isEmpty)
+        XCTAssertEqual(state.daysLearned, 2)
+        let many = state.learn(noticed: ["A.", "B.", "C."], crossingOut: state.notebook.map { $0.id }, now: t.addingTimeInterval(180))
+        XCTAssertEqual(many.added, ["A.", "B."])
+        XCTAssertEqual(many.crossedOut.count, GlimmDaily.outdatedLimit)
+
+        // With learning off the day changes nothing and is not counted.
+        state.learns = false
+        let before = state
+        XCTAssertTrue(state.learn(noticed: ["D."], crossingOut: state.notebook.map { $0.id }, now: t).isEmpty)
+        XCTAssertEqual(state, before)
+        state.learns = true
+
+        // A note its person takes out is not written again, however it is cased; one it crossed out
+        // itself may come back if the days bear it out again.
+        let a = try XCTUnwrap(state.notebook.first { $0.text == "A." })
+        state.forget(a.id)
+        XCTAssertEqual(state.takenOut, ["A."])
+        XCTAssertFalse(state.notice("a.", now: t))
+        XCTAssertTrue(state.learn(noticed: ["A.", "Trains hardest on Tuesdays."], now: t.addingTimeInterval(240)).added == ["Trains hardest on Tuesdays."])
+        // Taking out what it was told is not a lesson about its own notes.
+        state.forget(told)
+        XCTAssertEqual(state.takenOut, ["A."])
+
+        // What is new to its person: everything written since the notebook was last looked at.
+        XCTAssertEqual(state.unseenNotes.count, state.notebook.count)
+        state.notebookSeen = t.addingTimeInterval(200)
+        XCTAssertEqual(state.unseenNotes.map { $0.text }, ["Trains hardest on Tuesdays."])
+
+        // A suggestion turned down is not made again, and it is a number that is kept, not its words.
+        XCTAssertFalse(state.wasDeclined("Prefers oat milk."))
+        state.decline("Prefers oat milk.")
+        XCTAssertTrue(state.wasDeclined("prefers OAT milk"))
+        XCTAssertFalse(state.wasDeclined("Prefers soya milk."))
+        XCTAssertFalse(state.declined.contains { $0.lowercased().contains("oat") })
+
+        // All of it survives being saved, and a file from before reads as nothing learnt yet.
+        let back = try JSONDecoder().decode(GlimmState.self, from: JSONEncoder().encode(state))
+        XCTAssertEqual(back, state)
+        let old = try JSONDecoder().decode(GlimmState.self, from: Data("{}".utf8))
+        XCTAssertEqual(old.daysLearned, 0)
+        XCTAssertTrue(old.takenOut.isEmpty)
+        XCTAssertNil(old.notebookSeen)
+
+        // Emptying the notebook starts again: the notes, what not to write, and the counts.
+        state.clearNotebook()
+        XCTAssertTrue(state.notebook.isEmpty)
+        XCTAssertTrue(state.takenOut.isEmpty)
+        XCTAssertEqual(state.daysLearned, 0)
+        XCTAssertEqual(state.crossedOut, 0)
+        XCTAssertTrue(state.notice("A.", now: t))
     }
 
     // MARK: Glimm: the notebook

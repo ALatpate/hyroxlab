@@ -24,6 +24,8 @@ public enum GlimmMoment: Hashable, Sendable {
     /// Something kind was said about its clothes.
     case complimented
     case remembered, forgot, quietOn, quietOff, noKey, chatFailed
+    /// It has written something new in its own notebook since its person last looked.
+    case learned
 
     var key: String {
         switch self {
@@ -40,6 +42,7 @@ public enum GlimmMoment: Hashable, Sendable {
         case .quietOff: return "quiet.off"
         case .noKey: return "nokey"
         case .chatFailed: return "chat.failed"
+        case .learned: return "learned"
         }
     }
 }
@@ -301,6 +304,12 @@ public enum GlimmVoice {
         "quiet.off": ["Words are back. I'll use them wisely. Mostly."],
         "nokey": ["My words come from my own little notebook for now. Connect your key and we can talk properly."],
         "chat.failed": ["My thoughts got tangled on the way out. Try me again?"],
+        "learned": [
+            "New page in my notebook. I'm getting the hang of your weeks.",
+            "I wrote something down about your days. Rub it out if I've got it wrong.",
+            "I've been reading your days again. A new note is in, further down.",
+            "Learned a little more about how your weeks go. It's in the notebook.",
+        ],
     ]
 
     /// A line for a moment: one not said lately where there is a choice, picked by `seed` so the same

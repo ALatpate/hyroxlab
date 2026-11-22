@@ -142,9 +142,10 @@ public struct LumaAlarmState: Equatable, Sendable {
     public var trialOn = false
     /// The phone will show a notification then.
     public var phoneWillNotify = false
-    /// The strap could not be reached when its alarm was taken off, so it may still buzz at the time
-    /// it was last told. It is told to stop when it next connects.
-    public var strapOwesStop = false
+    /// A wake time the strap was told earlier and may still hold, because it could not be reached when
+    /// that alarm was taken off. It is told to stop when it next connects. Nil when there is no such
+    /// time on record: an alarm that was never sent cannot be owed a stop.
+    public var strapStillSet: Date?
 
     public init() {}
 
