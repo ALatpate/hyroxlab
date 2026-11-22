@@ -330,6 +330,7 @@ struct TraceChart: View {
 
 /// A made-up trace and a made-up count, for the gallery's pictures of these screens. The trace is a
 /// drawn heartbeat at a steady rate, read by the same code a real one would be.
+@MainActor
 enum LumaDemoStrap {
     static func stage(_ env: LumaEnv) {
         var e = env.extras
